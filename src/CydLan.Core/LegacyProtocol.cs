@@ -32,10 +32,14 @@ public static class LegacyProtocol
         var root = XElement.Load(reader);
         if (root.Name != "lmcmessage" || root.Element("head") is not { } head || root.Element("body") is not { } body)
             throw new InvalidDataException("Invalid LAN Messenger XML.");
-        var from = (string?)head.Element("from") ?? "";
+        // LAN Messenger reuses one message object when sending a group message to several people and
+        // appends a fresh header for each recipient, so later copies carry several from/to/messageid/type
+        // elements. The last of each belongs to this copy.
+        string Last(string name) => (string?)head.Elements(name).LastOrDefault() ?? "";
+        var from = Last("from");
         if (from.Length is < 1 or > 61) throw new InvalidDataException("Invalid peer identifier.");
-        return new((string?)head.Element("type") ?? "", from, (string?)head.Element("to") ?? "",
-            (string?)head.Element("messageid") ?? "", body.Elements().GroupBy(e => e.Name.LocalName).ToDictionary(g => g.Key, g => g.First().Value));
+        return new(Last("type"), from, Last("to"), Last("messageid"),
+            body.Elements().GroupBy(e => e.Name.LocalName).ToDictionary(g => g.Key, g => g.First().Value));
     }
 
     public static async Task WriteFrameAsync(Stream stream, string type, byte[] payload, CancellationToken ct)

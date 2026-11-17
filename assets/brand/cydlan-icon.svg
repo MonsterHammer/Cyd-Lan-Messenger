@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <title>CydLan app icon</title>
+  <rect width="64" height="64" rx="15" fill="#202729"/>
+  <path d="M44 17C40 13 35 11 30 11C18 11 10 20 10 32C10 39 13 45 18 49L15 57L29 53C35 53 40 51 44 47" stroke="#85B1BF" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M32 32H44" stroke="#85B1BF" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="50" cy="32" r="5" fill="#EDF4F6"/>
+</svg>

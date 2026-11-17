@@ -5,6 +5,7 @@
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>../../assets/brand/cydlan.ico</ApplicationIcon>
     <AssemblyName>CydLan</AssemblyName>
     <Version>0.1.0</Version>
     <Product>CydLan</Product>
@@ -12,4 +13,5 @@
     <NoWarn>$(NoWarn);WFO0003</NoWarn>
   </PropertyGroup>
   <ItemGroup><ProjectReference Include="../CydLan.Core/CydLan.Core.csproj" /></ItemGroup>
+  <ItemGroup><Resource Include="../../assets/brand/cydlan.ico" Link="Assets/cydlan.ico" /></ItemGroup>
 </Project>

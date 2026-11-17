@@ -14,6 +14,7 @@ public partial class TrayMenuWindow : Window
     public TrayMenuWindow(MainWindow mainWindow, MainViewModel model)
     {
         InitializeComponent(); this.mainWindow = mainWindow; this.model = model;
+        DataContext = model;
         Deactivated += (_, _) => Close();
         PreviewKeyDown += (_, args) => { if (args.Key == Key.Escape) { args.Handled = true; Close(); } };
     }
@@ -36,7 +37,7 @@ public partial class TrayMenuWindow : Window
     }
     private void Open_Click(object sender, RoutedEventArgs e) { Close(); App.ShowWindow(mainWindow); }
     private void Transfers_Click(object sender, RoutedEventArgs e) { model.TransfersOpen = true; Close(); App.ShowWindow(mainWindow); }
-    private void Settings_Click(object sender, RoutedEventArgs e) { Close(); App.ShowWindow(mainWindow); new SettingsWindow(model) { Owner = mainWindow }.ShowDialog(); }
+    private void Settings_Click(object sender, RoutedEventArgs e) { Close(); App.ShowWindow(mainWindow); PopupHost.ShowModal(mainWindow, new SettingsWindow(model)); }
     private async void Quit_Click(object sender, RoutedEventArgs e) { Close(); await ((App)System.Windows.Application.Current).QuitAsync(); }
 
     [StructLayout(LayoutKind.Sequential)]

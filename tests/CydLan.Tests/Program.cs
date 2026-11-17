@@ -7,6 +7,8 @@ using System.Text;
 using System.Xml.Linq;
 using CydLan.Core;
 
+if (args.Contains("--experiment-peer")) return await NetworkExperiment.RunPeerAsync(args);
+
 var tests = new (string Name, Func<Task> Run)[] {
     ("Legacy XML fixtures, escaping and Unicode", TestXml),
     ("Reject external entities and malformed packets", TestInvalidXml),
@@ -18,6 +20,15 @@ var tests = new (string Name, Func<Task> Run)[] {
     ("Legacy fixture peer: inbound handshake, deduplication, numeric IDs", TestLegacyPeer),
     ("Legacy fixture acceptor: outbound 1024-bit RSA session and receipt", TestLegacyAcceptor),
     ("Simultaneous peer connections converge without a relay", TestSimultaneous),
+    ("Directed UDP discovery and reconnect after a peer restarts", TestDiscoveryReconnect),
+    ("Occupied legacy TCP port falls back to an advertised port", TestPortCoexistence),
+    ("Dual-stack legacy listener keeps its IPv4 connections", TestLegacyDualStackPort),
+    ("User IDs fit LAN Messenger's 64-byte file greeting", TestLegacyFileGreeting),
+    ("Version passes LAN Messenger's chat-room check", TestLegacyRoomVersion),
+    ("Profile details and pictures travel like LAN Messenger avatars", TestProfileAndAvatar),
+    ("Saved contact reconnects automatically without multicast", TestSavedContactRecovery),
+    ("Concurrent bidirectional chat and duplicate suppression", TestConcurrentChat),
+    ("Separate-process peers: Unicode replies and binary files both ways", NetworkExperiment.RunAsync),
     ("File offers, approval, binary transfer and empty files", TestFiles),
     ("Local persistence, stable identity and corrupt history recovery", TestStore)
 };
@@ -27,7 +38,7 @@ foreach (var (name, run) in tests)
     try { await run().WaitAsync(TimeSpan.FromSeconds(25)); Console.WriteLine("PASS  " + name); }
     catch (Exception e) { failures++; Console.WriteLine("FAIL  " + name + "\n" + e); }
 }
-Console.WriteLine($"\n{tests.Length - failures}/{tests.Length} test groups passed. All sockets are loopback-only; no LAN announcements were sent.");
+Console.WriteLine($"\n{tests.Length - failures}/{tests.Length} test groups passed. Connections use loopback only (one listener briefly binds all interfaces); no LAN announcements were sent.");
 return failures == 0 ? 0 : 1;
 
 static void Check(bool condition, string description) { if (!condition) throw new Exception(description); }
@@ -41,6 +52,10 @@ static Task TestXml()
     Check(message.Get("message") == "<hello> & 你好\n🙂", "Message text must survive XML escaping and UTF-8.");
     var announce = LegacyProtocol.Decode(Encoding.UTF8.GetBytes("<lmcmessage><head><from>001122334455OldUser</from><messageid>0</messageid><type>announce</type></head><body/></lmcmessage>"));
     Check(announce.Get("tcpport") == "", "Old clients announce without an advertised port.");
+    // Captured from LAN Messenger 1.2.39: the second recipient of a group message gets the first recipient's header too.
+    var group = LegacyProtocol.Decode(Encoding.UTF8.GetBytes("<lmcmessage>  <head>   <from>00155DC89F4Dmagba</from>   <to>b46b70b87f7046079525e6c3</to>   <messageid>155</messageid>   <type>groupmessage</type>   <from>00155DC89F4Dmagba</from>   <to>probe0123456789abcdef</to>   <messageid>155</messageid>   <type>groupmessage</type>  </head>  <body>   <thread>probe0123456789abcdef98f313c8bb9541049077604243d8711d</thread>   <groupmsgop>join</groupmsgop>  </body> </lmcmessage>"));
+    Check(group.To == "probe0123456789abcdef" && group.From == "00155DC89F4Dmagba" && group.Type == "groupmessage" && group.Get("groupmsgop") == "join",
+        "Repeated legacy group headers must resolve to this recipient's copy.");
     return Task.CompletedTask;
 }
 static Task TestInvalidXml()
@@ -146,10 +161,24 @@ static async Task TestLegacyPeer()
     await Until(() => count == 1);
     for (int i = 0; i < 2; i++)
     {
-        var ack = await RawRead(stream); var ackXml = XElement.Parse(Encoding.UTF8.GetString(aes.DecryptCbc(ack.Payload, aes.IV)));
+        var ackXml = await ReadMessage(stream, aes);
         Check((string?)ackXml.Element("body")?.Element("messageid") == "22", "Each retry is acknowledged with the original numeric ID.");
     }
     Check(count == 1, "A legacy retry must not duplicate the message.");
+
+    // LAN Messenger group sends stack one header per recipient; a copy for someone else must not end the session.
+    string? groupText = null; service.GroupMessageReceived += (_, _, op, text) => { if (op == "message") groupText = text; };
+    async Task SendHeads(string[] recipients, params XElement[] body)
+    {
+        var head = new XElement("head", recipients.SelectMany(to => new[] { new XElement("from", id), new XElement("to", to), new XElement("messageid", "60"), new XElement("type", "groupmessage") }));
+        await RawWrite(stream, "MESSAG", aes.EncryptCbc(Encoding.UTF8.GetBytes(new XElement("lmcmessage", head, new XElement("body", body)).ToString()), aes.IV));
+    }
+    await SendHeads(["someoneelse0123456789"], new XElement("thread", "room-1"), new XElement("groupmsgop", "message"), new XElement("message", "not for us"));
+    await SendHeads(["someoneelse0123456789", settings.UserId], new XElement("thread", "room-1"), new XElement("groupmsgop", "message"), new XElement("message", "Room hello 🙂"));
+    await Until(() => groupText is not null);
+    Check(groupText == "Room hello 🙂", "A stacked-header group message addressed to us must be delivered.");
+    await Send("message", "23", new XElement("message", "Still connected"));
+    await Until(() => count == 2);
 }
 static async Task TestLegacyAcceptor()
 {
@@ -176,9 +205,12 @@ static async Task TestLegacyAcceptor()
             await Send("userdata", new("userid", oldId), new("queryop", "get"), new("name", "Old acceptor"), new("status", "chat"), new("version", "1.2.35"));
             var profile = await RawRead(stream); var xml = XElement.Parse(Encoding.UTF8.GetString(aes.DecryptCbc(profile.Payload, aes.IV)));
             Check((string?)xml.Element("body")?.Element("queryop") == "result", "Initiator replies to the old acceptor's user-data request.");
-            var message = await RawRead(stream); xml = XElement.Parse(Encoding.UTF8.GetString(aes.DecryptCbc(message.Payload, aes.IV)));
+            xml = await ReadMessage(stream, aes);
             Check((string?)xml.Element("body")?.Element("message") == "Hello from CydLan", "The old acceptor can decrypt a new message.");
             var id = (string?)xml.Element("head")?.Element("messageid"); Check(long.TryParse(id, out _), "New message IDs are decimal int64 values.");
+            // Lose the first receipt. The retry must reuse its original identity.
+            var retryXml = await ReadMessage(stream, aes);
+            Check((string?)retryXml.Element("head")?.Element("messageid") == id, "A lost receipt must retry with the same message ID.");
             await Send("acknowledge", new XElement("messageid", id));
             await Task.Delay(100);
         });
@@ -226,9 +258,171 @@ static async Task TestFiles()
             await Until(() => outgoing.Progress == 100);
         }
         var declined = await one.OfferFileAsync(b.UserId, Path.Combine(directory, "source-0.bin")); await Until(() => !offers.IsEmpty); offers.TryDequeue(out var offer);
-        await two.DeclineFileAsync(offer!); await Until(() => declined.State == "Declined / cancelled");
+        await two.DeclineFileAsync(offer!); await Until(() => declined.State == "Declined");
+        string existing = Path.Combine(directory, "existing.bin"); await File.WriteAllTextAsync(existing, "Keep this file");
+        await one.OfferFileAsync(b.UserId, Path.Combine(directory, "source-190123.bin")); await Until(() => !offers.IsEmpty); offers.TryDequeue(out var overwrite);
+        await two.AcceptFileAsync(overwrite!, existing); await Until(() => overwrite!.State.StartsWith("Failed"));
+        Check(await File.ReadAllTextAsync(existing) == "Keep this file", "Even the transport must never overwrite an existing destination.");
+        string changedPath = Path.Combine(directory, "changing.bin"); await File.WriteAllBytesAsync(changedPath, [1, 2, 3]);
+        var changed = await one.OfferFileAsync(b.UserId, changedPath); await Until(() => !offers.IsEmpty); offers.TryDequeue(out var interrupted);
+        await File.WriteAllBytesAsync(changedPath, [1]);
+        string incomplete = Path.Combine(directory, "incomplete.bin"); await two.AcceptFileAsync(interrupted!, incomplete);
+        await Until(() => changed.State.StartsWith("Failed") && interrupted!.State.StartsWith("Failed"));
+        Check(!File.Exists(incomplete) && !Directory.EnumerateFiles(directory, "*.partial").Any(), "An interrupted transfer must not expose an incomplete destination or leave partial bytes.");
     }
     finally { DeleteTestDirectory(directory); }
+}
+static async Task TestDiscoveryReconnect()
+{
+    var a = Settings("Discovery A"); var b = Settings("Discovery B");
+    await using var one = new LanService(a);
+    int online = 0, offline = 0, received = 0;
+    one.PeerOnline += _ => Interlocked.Increment(ref online);
+    one.PeerOffline += _ => Interlocked.Increment(ref offline);
+    one.MessageReceived += _ => Interlocked.Increment(ref received);
+    await one.StartAsync(true, IPAddress.Loopback);
+    await using (var two = new LanService(b))
+    {
+        await two.StartAsync(true, IPAddress.Loopback);
+        await one.DiscoverAsync(IPAddress.Loopback, two.DiscoveryPort);
+        await Until(() => online == 1);
+        Check(await two.SendChatAsync(a.UserId, "Before restart", "601"), "UDP discovery must establish encrypted chat without knowing a peer ID.");
+        await Until(() => received == 1);
+    }
+    await Until(() => offline == 1);
+    await using var restarted = new LanService(b);
+    await restarted.StartAsync(true, IPAddress.Loopback);
+    await one.DiscoverAsync(IPAddress.Loopback, restarted.DiscoveryPort);
+    await Until(() => online == 2);
+    Check(await restarted.SendChatAsync(a.UserId, "Before restart", "601"), "A retransmission after reconnect must still be acknowledged.");
+    Check(await restarted.SendChatAsync(a.UserId, "After restart", "602"), "Chat must resume with the same stable identity on a new endpoint.");
+    await Until(() => received == 2);
+    Check(received == 2, "A reconnect must not duplicate a message already received by the surviving peer.");
+}
+static async Task TestPortCoexistence()
+{
+    var occupied = new TcpListener(IPAddress.Loopback, 0); occupied.Start();
+    try
+    {
+        int port = ((IPEndPoint)occupied.LocalEndpoint).Port;
+        var a = Settings("Coexisting"); a.Port = port;
+        var b = Settings("Discoverer");
+        await using var one = new LanService(a); await using var two = new LanService(b);
+        int online = 0; two.PeerOnline += _ => Interlocked.Increment(ref online);
+        await one.StartAsync(true, IPAddress.Loopback); await two.StartAsync(true, IPAddress.Loopback);
+        Check(one.ListeningPort != port && one.DiscoveryPort == port, "TCP fallback must preserve the configured UDP discovery port.");
+        await one.DiscoverAsync(IPAddress.Loopback, two.DiscoveryPort);
+        await Until(() => online == 1);
+        Check(await two.SendChatAsync(a.UserId, "Hello alternate port", "701"), "Discovery must route to the advertised fallback TCP port.");
+    }
+    finally { occupied.Stop(); }
+}
+static async Task TestLegacyDualStackPort()
+{
+    // LAN Messenger (Qt) listens on [::] dual-stack without exclusive use. CydLan must not add a 0.0.0.0
+    // listener on the same port, which would take every IPv4 connection meant for the old client.
+    var legacy = new TcpListener(IPAddress.IPv6Any, 0); legacy.Server.DualMode = true; legacy.Start();
+    try
+    {
+        int port = ((IPEndPoint)legacy.LocalEndpoint).Port;
+        var settings = Settings("Same PC"); settings.Port = port;
+        await using var service = new LanService(settings);
+        await service.StartAsync(false); // all interfaces, no discovery traffic
+        Check(service.ListeningPort != port, "A port held by a dual-stack legacy listener must trigger the fallback port.");
+        using var probe = new TcpClient(); await probe.ConnectAsync(IPAddress.Loopback, port);
+        using var accepted = await legacy.AcceptTcpClientAsync().WaitAsync(TimeSpan.FromSeconds(3));
+        Check(accepted.Connected, "IPv4 connections to the legacy port must still reach the legacy client.");
+    }
+    finally { legacy.Stop(); }
+}
+static Task TestLegacyFileGreeting()
+{
+    // LAN Messenger reads the file greeting once, 64 bytes: "FILE" + 32-character file ID + sender ID.
+    for (int i = 0; i < 100; i++)
+    {
+        var settings = new AppSettings(); var fileId = Guid.NewGuid().ToString("N").ToUpperInvariant();
+        var greeting = Encoding.ASCII.GetBytes("FILE" + fileId + settings.UserId);
+        Check(Encoding.ASCII.GetString(greeting, 36, Math.Min(64, greeting.Length) - 36) == settings.UserId, "Legacy must read the complete sender ID from the file greeting.");
+    }
+    bool rejected = false;
+    try { _ = new LanService(new AppSettings { UserId = Guid.NewGuid().ToString("N") }); } catch (ArgumentException) { rejected = true; }
+    Check(rejected, "IDs longer than legacy's file greeting allows must be rejected.");
+    return Task.CompletedTask;
+}
+static async Task TestProfileAndAvatar()
+{
+    var directory = Path.Combine(Path.GetTempPath(), "CydLan-avatar-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(directory);
+    try
+    {
+        // A tiny but real PNG: signature + IHDR is enough for the receiver's image check.
+        var picture = Path.Combine(directory, "me.png");
+        File.WriteAllBytes(picture, [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, .. Enumerable.Range(0, 200).Select(i => (byte)i)]);
+        var a = Settings("Alex"); a.FirstName = "Alex"; a.LastName = "Rivera"; a.About = "Front desk 🙂"; a.AvatarPath = picture;
+        var b = Settings("Jamie");
+        await using var one = new LanService(a); await using var two = new LanService(b) { AvatarDirectory = Path.Combine(directory, "avatars") };
+        string? avatar = null; (string First, string Last, string About)? profile = null; int files = 0;
+        two.AvatarReceived += (id, path) => { if (id == a.UserId) avatar = path; };
+        two.ProfileReceived += (id, first, last, about) => { if (id == a.UserId) profile = (first, last, about); };
+        two.TransferChanged += _ => Interlocked.Increment(ref files);
+        await one.StartAsync(false, IPAddress.Loopback); await two.StartAsync(false, IPAddress.Loopback);
+        await one.ConnectAsync(b.UserId, "127.0.0.1", two.ListeningPort);
+        await Until(() => avatar is not null && profile is not null);
+        Check(File.ReadAllBytes(avatar!).SequenceEqual(File.ReadAllBytes(picture)), "The profile picture must arrive intact.");
+        Check(Path.GetDirectoryName(avatar) == Path.Combine(directory, "avatars"), "Profile pictures are stored in the avatar folder under our own name.");
+        Check(profile == ("Alex", "Rivera", "Front desk 🙂"), "First name, last name and About must arrive in the query reply.");
+        Check(files == 0, "Profile pictures must not appear as file transfers.");
+    }
+    finally { try { Directory.Delete(directory, true); } catch (IOException) { } }
+}
+static Task TestLegacyRoomVersion()
+{
+    // LAN Messenger 1.2.39 chatroomwindow.cpp: compareVersions(version, "1.2.10") <= 0 keeps a user out of rooms.
+    // It reads the first three dot-separated parts with toInt() and no bounds check.
+    var parts = LanService.WireVersion.Split('.', StringSplitOptions.RemoveEmptyEntries);
+    Check(parts.Length >= 3 && parts.Take(3).All(p => int.TryParse(p, out _)), "The first three version parts must be numbers.");
+    int Compare(int[] a, int[] b) { for (int i = 0; i < 3; i++) if (a[i] != b[i]) return a[i] - b[i]; return 0; }
+    Check(Compare(parts.Take(3).Select(int.Parse).ToArray(), [1, 2, 10]) > 0, "LAN Messenger must treat CydLan as newer than 1.2.10.");
+    Check(LanService.IsCydLanVersion(LanService.DisplayVersion(LanService.WireVersion)), "CydLan peers must still recognise each other.");
+    Check(LanService.DisplayVersion("1.2.39") == "1.2.39", "Legacy versions are shown unchanged.");
+    return Task.CompletedTask;
+}
+static async Task TestConcurrentChat()
+{
+    var a = Settings("Concurrent A"); var b = Settings("Concurrent B");
+    await using var one = new LanService(a); await using var two = new LanService(b);
+    int online = 0, inboundA = 0, inboundB = 0;
+    one.PeerOnline += _ => Interlocked.Increment(ref online); two.PeerOnline += _ => Interlocked.Increment(ref online);
+    one.MessageReceived += _ => Interlocked.Increment(ref inboundA); two.MessageReceived += _ => Interlocked.Increment(ref inboundB);
+    await one.StartAsync(false, IPAddress.Loopback); await two.StartAsync(false, IPAddress.Loopback);
+    await one.ConnectAsync(b.UserId, "127.0.0.1", two.ListeningPort); await Until(() => online == 2);
+    var receipts = await Task.WhenAll(Enumerable.Range(0, 40).SelectMany(i => new[] {
+        one.SendChatAsync(b.UserId, $"A → B {i} 你好 🙂", (8000 + i).ToString()),
+        two.SendChatAsync(a.UserId, $"B → A {i}\n& <test>", (9000 + i).ToString()) }));
+    Check(receipts.All(r => r), "All 80 concurrent messages must receive real delivery acknowledgments.");
+    await Until(() => inboundA == 40 && inboundB == 40);
+    Check(await one.SendChatAsync(b.UserId, "A → B 0 你好 🙂", "8000"), "An explicit retry must receive a receipt.");
+    Check(inboundB == 40, "An explicit retry must not create a duplicate.");
+}
+static async Task TestSavedContactRecovery()
+{
+    var a = Settings("Saved-contact A"); var b = Settings("Saved-contact B");
+    await using var two = new LanService(b);
+    await two.StartAsync(false, IPAddress.Loopback);
+    int originalPort = two.ListeningPort;
+    var saved = new Peer { Id = b.UserId, Name = "Saved B", Address = "127.0.0.1", Port = originalPort };
+    await using var one = new LanService(a, [saved]);
+    int connections = 0;
+    var recovered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+    one.PeerOnline += _ => { if (Interlocked.Increment(ref connections) == 2) recovered.TrySetResult(); };
+    bool offline = false; one.PeerOffline += _ => offline = true;
+    await one.StartAsync(true, IPAddress.Loopback);
+    await Until(() => connections == 1);
+    Check(await one.SendChatAsync(b.UserId, "Restored contact", "15001"), "Saved contacts must reconnect without an announcement.");
+    await two.DisposeAsync(); await Until(() => offline);
+    b.Port = originalPort;
+    await using var restarted = new LanService(b); await restarted.StartAsync(false, IPAddress.Loopback);
+    await recovered.Task.WaitAsync(TimeSpan.FromSeconds(20));
+    Check(await one.SendChatAsync(b.UserId, "Automatic recovery", "15002"), "The periodic recovery loop must restore chat without pressing refresh.");
 }
 static Task TestStore()
 {
@@ -238,6 +432,8 @@ static Task TestStore()
         var store = new LocalStore(directory); var settings = store.LoadSettings(); store.SaveSettings(settings);
         Check(store.LoadSettings().UserId == settings.UserId, "Identity must remain stable across restarts.");
         store.SaveHistory([new() { Text = "Saved locally", PeerId = "test" }]); Check(store.LoadHistory().Single().Text == "Saved locally", "History must round-trip.");
+        store.SaveDrafts(new Dictionary<string, string> { ["test"] = "Unsent draft 你好", ["empty"] = "" });
+        Check(store.LoadDrafts().Count == 1 && store.LoadDrafts()["test"] == "Unsent draft 你好", "Only nonempty per-contact drafts should survive a restart.");
         File.WriteAllText(Path.Combine(directory, "history.json"), "broken json"); Check(store.LoadHistory().Count == 0, "Corrupt history must not prevent startup.");
         Check(Directory.EnumerateFiles(directory, "*.corrupt-*").Any(), "Corrupt history must be preserved for recovery.");
     }
@@ -258,6 +454,15 @@ static void DeleteTestDirectory(string directory)
     var temp = Path.GetFullPath(Path.GetTempPath()).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
     if (!full.StartsWith(temp, StringComparison.OrdinalIgnoreCase) || !Path.GetFileName(full).StartsWith("CydLan-", StringComparison.Ordinal)) throw new InvalidOperationException("Refusing to delete outside the test directory.");
     Directory.Delete(full, true);
+}
+/// <summary>Next encrypted message, skipping the profile query and picture offer a new session starts with.</summary>
+static async Task<XElement> ReadMessage(Stream stream, Aes aes)
+{
+    while (true)
+    {
+        var frame = await RawRead(stream); var xml = XElement.Parse(Encoding.UTF8.GetString(aes.DecryptCbc(frame.Payload, aes.IV)));
+        if ((string?)xml.Element("head")?.Element("type") is not ("query" or "avatar")) return xml;
+    }
 }
 static async Task<(string Type, byte[] Payload)> RawRead(Stream stream)
 {

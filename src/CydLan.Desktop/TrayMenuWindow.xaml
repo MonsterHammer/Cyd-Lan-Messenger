@@ -1,33 +1,34 @@
 <Window x:Class="CydLan.Desktop.TrayMenuWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:CydLan.Desktop"
         Style="{StaticResource {x:Type Window}}" Title="CydLan tray menu" WindowStyle="None" ResizeMode="NoResize" AllowsTransparency="True"
-        Background="Transparent" ShowInTaskbar="False" Topmost="True" Width="236" SizeToContent="Height" WindowStartupLocation="Manual">
+        Background="Transparent" ShowInTaskbar="False" Topmost="True" Width="250" SizeToContent="Height" WindowStartupLocation="Manual">
   <Window.Resources>
     <Style x:Key="TrayAction" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
       <Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="Padding" Value="10,8"/><Setter Property="Margin" Value="0,1"/>
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
         <Border x:Name="Row" Background="Transparent" CornerRadius="5" Padding="{TemplateBinding Padding}"><ContentPresenter HorizontalAlignment="Stretch"/></Border>
         <ControlTemplate.Triggers>
-          <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Row" Property="Background" Value="{StaticResource AccentSoft}"/></Trigger>
-          <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Row" Property="Background" Value="{StaticResource AccentSoft}"/></Trigger>
+          <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Row" Property="Background" Value="{DynamicResource AccentSoft}"/></Trigger>
+          <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Row" Property="Background" Value="{DynamicResource AccentSoft}"/></Trigger>
         </ControlTemplate.Triggers>
       </ControlTemplate></Setter.Value></Setter>
     </Style>
   </Window.Resources>
-  <Border Background="{StaticResource Sidebar}" CornerRadius="10" BorderBrush="{StaticResource Line}" BorderThickness="1" Padding="8">
+  <Border Background="{DynamicResource Sidebar}" CornerRadius="10" BorderBrush="{DynamicResource Line}" BorderThickness="1" Padding="8">
     <StackPanel>
       <Grid Margin="8,6,8,11">
         <Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-        <Border Width="26" Height="26" Background="{StaticResource Accent}" CornerRadius="8" HorizontalAlignment="Left"><TextBlock Text="c" Foreground="{StaticResource AccentInk}" FontSize="21" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,-5,0,0"/></Border>
-        <StackPanel Grid.Column="1"><TextBlock Text="cydlan" FontSize="14" FontWeight="SemiBold"/><TextBlock Text="Offline design mode" FontSize="9" Foreground="{StaticResource Faint}" Margin="0,2,0,0"/></StackPanel>
+        <Image Width="28" Height="28" Source="{DynamicResource BrandMark}" HorizontalAlignment="Left"/>
+        <StackPanel Grid.Column="1"><TextBlock Text="CydLan" FontSize="15" FontWeight="SemiBold"/><TextBlock Text="{Binding ConnectionSummary}" FontSize="11" Foreground="{DynamicResource Faint}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/></StackPanel>
       </Grid>
-      <Border Background="{StaticResource Line}" Height="1" Margin="3,0,3,5"/>
-      <Button x:Name="OpenAction" Style="{StaticResource TrayAction}" Click="Open_Click"><Grid><TextBlock Text="&#xE8BD;" FontFamily="Segoe MDL2 Assets" Foreground="{StaticResource Accent}" VerticalAlignment="Center"/><TextBlock Text="Open CydLan" Margin="27,0,0,0" FontSize="11" FontWeight="SemiBold"/></Grid></Button>
-      <Button Style="{StaticResource TrayAction}" Click="Transfers_Click"><Grid><TextBlock Text="&#xE898;" FontFamily="Segoe MDL2 Assets" Foreground="{StaticResource Muted}" VerticalAlignment="Center"/><TextBlock Text="File transfers" Margin="27,0,0,0" FontSize="11"/></Grid></Button>
-      <Button Style="{StaticResource TrayAction}" Click="Settings_Click"><Grid><TextBlock Text="&#xE713;" FontFamily="Segoe MDL2 Assets" Foreground="{StaticResource Muted}" VerticalAlignment="Center"/><TextBlock Text="Preferences" Margin="27,0,0,0" FontSize="11"/></Grid></Button>
-      <Border Background="{StaticResource Line}" Height="1" Margin="3,5,3,5"/>
-      <Button Style="{StaticResource TrayAction}" Click="Quit_Click"><Grid><TextBlock Text="&#xE7E8;" FontFamily="Segoe MDL2 Assets" Foreground="{StaticResource Danger}" VerticalAlignment="Center"/><TextBlock Text="Quit CydLan" Margin="27,0,0,0" FontSize="11" Foreground="{StaticResource Danger}"/></Grid></Button>
+      <Border Background="{DynamicResource Line}" Height="1" Margin="3,0,3,5"/>
+      <Button x:Name="OpenAction" Style="{StaticResource TrayAction}" Click="Open_Click"><Grid><local:Glyph Data="{StaticResource IconChat}" Size="16" Foreground="{DynamicResource Accent}" HorizontalAlignment="Left"/><TextBlock Text="Open CydLan" Margin="27,0,0,0" FontSize="12" FontWeight="SemiBold"/></Grid></Button>
+      <Button Style="{StaticResource TrayAction}" Click="Transfers_Click"><Grid><local:Glyph Data="{StaticResource IconTransfer}" Size="16" Foreground="{DynamicResource Muted}" HorizontalAlignment="Left"/><TextBlock Text="File transfers" Margin="27,0,0,0" FontSize="12"/></Grid></Button>
+      <Button Style="{StaticResource TrayAction}" Click="Settings_Click"><Grid><local:Glyph Data="{StaticResource IconSettings}" Size="16" Foreground="{DynamicResource Muted}" HorizontalAlignment="Left"/><TextBlock Text="Preferences" Margin="27,0,0,0" FontSize="12"/></Grid></Button>
+      <Border Background="{DynamicResource Line}" Height="1" Margin="3,5,3,5"/>
+      <Button Style="{StaticResource TrayAction}" Click="Quit_Click"><Grid><local:Glyph Data="{StaticResource IconQuit}" Size="16" Foreground="{DynamicResource Danger}" HorizontalAlignment="Left"/><TextBlock Text="Quit CydLan" Margin="27,0,0,0" FontSize="12" Foreground="{DynamicResource Danger}"/></Grid></Button>
     </StackPanel>
   </Border>
 </Window>

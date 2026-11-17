@@ -15,30 +15,33 @@ public partial class App : System.Windows.Application
     private TrayMenuWindow? trayMenu;
     private MainViewModel? model;
     private bool quitting;
+    internal bool IsQuitting => quitting;
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
-        // Design phase: all desktop entry points stay offline, even if an old
-        // shortcut supplies network-related arguments. The transport is retained
-        // in Core for a later, explicitly authorized networking phase.
         bool captureTray = e.Args.Contains("--tray-screenshot");
         bool captureSettings = e.Args.Contains("--settings-screenshot");
         bool capturing = captureTray || captureSettings || e.Args.Contains("--screenshot");
+        bool preview = capturing || e.Args.Contains("--preview") || e.Args.Contains("--empty-preview");
         if (!capturing)
         {
             mutex = new Mutex(true, "Local\\CydLan.Desktop", out var first);
-            if (!first) { System.Windows.MessageBox.Show("CydLan is already running. Open it from the system tray.", "CydLan"); Shutdown(); return; }
+            if (!first) { System.Windows.MessageBox.Show("CydLan is already running.", "CydLan"); Shutdown(); return; }
         }
         try
         {
-            model = new MainViewModel(preview: true, seedPreview: !e.Args.Contains("--empty-preview"));
+            model = new MainViewModel(preview, seedPreview: !e.Args.Contains("--empty-preview"));
+            int themeArg = Array.IndexOf(e.Args, "--theme");
+            if (preview && themeArg >= 0 && themeArg + 1 < e.Args.Length) model.Settings.Theme = ThemeManager.Normalize(e.Args[themeArg + 1]); // preview/screenshot override only
+            ThemeManager.Apply(model.Settings.Theme);
             var window = new MainWindow(model);
             if (e.Args.Contains("--compact")) { window.Width = window.MinWidth; window.Height = window.MinHeight; }
-            window.Title = "CydLan · Offline design mode";
+            window.Title = preview ? "CydLan · Offline preview" : "CydLan · LAN messenger";
             if (e.Args.Contains("--transfers")) model.TransfersOpen = true;
+            if (e.Args.Contains("--groups")) { model.GroupsOpen = true; model.SelectedGroup = model.Groups.FirstOrDefault(); }
             MainWindow = window;
             if (!capturing) CreateTray(window);
-            if (!captureTray) window.Show();
+            if (!captureTray && (capturing || preview || !model.Settings.StartMinimized)) window.Show();
             if (e.Args.Contains("--details")) window.ShowConnectionDetails();
             await model.StartAsync();
             Window captureWindow = window;
@@ -50,8 +53,12 @@ public partial class App : System.Windows.Application
             }
             if (captureSettings)
             {
-                var settingsWindow = new SettingsWindow(model) { Owner = window };
+                var settingsWindow = new SettingsWindow(model);
+                PopupHost.Attach(window, settingsWindow);
+                window.SetScrim(true);
                 settingsWindow.Show();
+                int pageArg = Array.IndexOf(e.Args, "--settings-page");
+                if (pageArg >= 0 && pageArg + 1 < e.Args.Length) settingsWindow.ShowPage(e.Args[pageArg + 1] + "Page");
                 captureWindow = settingsWindow;
             }
             int capture = Array.IndexOf(e.Args, captureTray ? "--tray-screenshot" : captureSettings ? "--settings-screenshot" : "--screenshot");
@@ -62,6 +69,7 @@ public partial class App : System.Windows.Application
                 captureWindow.UpdateLayout();
                 var bitmap = new RenderTargetBitmap((int)Math.Ceiling(captureWindow.ActualWidth), (int)Math.Ceiling(captureWindow.ActualHeight), 96, 96, PixelFormats.Pbgra32);
                 bitmap.Render(captureWindow);
+                if (captureSettings) bitmap = Composite(window, captureWindow);
                 var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap));
                 var path = Path.GetFullPath(e.Args[capture + 1]); Directory.CreateDirectory(Path.GetDirectoryName(path)!);
                 using (var file = File.Create(path)) encoder.Save(file);
@@ -77,7 +85,7 @@ public partial class App : System.Windows.Application
     }
     private void CreateTray(MainWindow window)
     {
-        tray = new Forms.NotifyIcon { Text = "CydLan · Offline design mode", Icon = MakeIcon(), Visible = true };
+        tray = new Forms.NotifyIcon { Text = model!.Preview ? "CydLan · Offline preview" : "CydLan · LAN messenger", Icon = MakeIcon(), Visible = true };
         tray.MouseClick += (_, args) => {
             if (args.Button != Forms.MouseButtons.Right) return;
             Dispatcher.Invoke(() => {
@@ -89,26 +97,36 @@ public partial class App : System.Windows.Application
         tray.DoubleClick += (_, _) => ShowWindow(window);
         tray.BalloonTipClicked += (_, _) => ShowWindow(window);
         model!.Notify += (name, text) => {
-            if (!model.Settings.Notifications || model.Settings.Status == "dnd" || (window.IsVisible && window.IsActive)) return;
+            if (window.IsVisible && window.IsActive) return;
+            if (model.ShouldPlaySound) System.Media.SystemSounds.Asterisk.Play();
+            if (!model.ShouldAlert) return;
             tray.BalloonTipTitle = name; tray.BalloonTipText = text.Length > 160 ? text[..160] + "…" : text;
             tray.ShowBalloonTip(4000);
         };
     }
     private static Icon MakeIcon()
     {
-        using var bitmap = new Bitmap(32, 32);
-        using var graphics = Graphics.FromImage(bitmap);
-        graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-        using var background = new SolidBrush(System.Drawing.Color.FromArgb(133, 177, 191));
-        graphics.FillEllipse(background, 1, 1, 30, 30);
-        using var pen = new System.Drawing.Pen(System.Drawing.Color.FromArgb(19, 38, 46), 3);
-        graphics.DrawArc(pen, 8, 8, 16, 16, 45, 270);
-        var handle = bitmap.GetHicon();
-        try { using var original = Icon.FromHandle(handle); return (Icon)original.Clone(); }
-        finally { DestroyIcon(handle); }
+        using var stream = GetResourceStream(new Uri("pack://application:,,,/CydLan;component/Assets/cydlan.ico")).Stream;
+        using var icon = new Icon(stream, 32, 32);
+        return (Icon)icon.Clone();
     }
-    [System.Runtime.InteropServices.DllImport("user32.dll")] [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
-    private static extern bool DestroyIcon(IntPtr handle);
+    // Draws the popup over the main window at its real offset, so the screenshot shows the backdrop too.
+    private static RenderTargetBitmap Composite(Window main, Window popup)
+    {
+        main.UpdateLayout();
+        var origin = main.PointToScreen(new System.Windows.Point(0, 0));
+        var target = PresentationSource.FromVisual(main)!.CompositionTarget!.TransformFromDevice;
+        origin = target.Transform(origin);
+        var visual = new DrawingVisual();
+        using (var dc = visual.RenderOpen())
+        {
+            dc.DrawRectangle(new VisualBrush(main), null, new Rect(0, 0, main.ActualWidth, main.ActualHeight));
+            dc.DrawRectangle(new VisualBrush(popup), null, new Rect(popup.Left - origin.X, popup.Top - origin.Y, popup.ActualWidth, popup.ActualHeight));
+        }
+        var bitmap = new RenderTargetBitmap((int)Math.Ceiling(main.ActualWidth), (int)Math.Ceiling(main.ActualHeight), 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(visual);
+        return bitmap;
+    }
     internal static void ShowWindow(MainWindow window) { window.Show(); window.WindowState = WindowState.Normal; window.Activate(); }
     public async Task QuitAsync()
     {

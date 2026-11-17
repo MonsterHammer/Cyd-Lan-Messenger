@@ -1,245 +1,277 @@
 <Window x:Class="CydLan.Desktop.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:CydLan.Desktop"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
-        Style="{StaticResource {x:Type Window}}" Title="CydLan" Width="860" Height="580" MinWidth="680" MinHeight="460"
-        WindowStartupLocation="CenterScreen" WindowStyle="None" ResizeMode="CanResize">
+        Style="{StaticResource {x:Type Window}}" Title="CydLan" Width="800" Height="560" MinWidth="800" MinHeight="560"
+        WindowStartupLocation="CenterScreen" WindowStyle="None" ResizeMode="CanResize" AllowDrop="True">
   <shell:WindowChrome.WindowChrome><shell:WindowChrome CaptionHeight="0" ResizeBorderThickness="5" GlassFrameThickness="0" CornerRadius="0"/></shell:WindowChrome.WindowChrome>
   <Window.Resources>
     <BooleanToVisibilityConverter x:Key="Bool"/>
-    <Style x:Key="Caption" TargetType="TextBlock">
-      <Setter Property="Foreground" Value="{StaticResource Faint}"/><Setter Property="FontSize" Value="9"/><Setter Property="FontWeight" Value="SemiBold"/>
-    </Style>
+    <local:ImagePathConverter x:Key="ImageFile"/>
+    <local:AvatarPathConverter x:Key="AvatarFile"/>
+    <Style x:Key="Caption" TargetType="TextBlock"><Setter Property="Foreground" Value="{DynamicResource Faint}"/><Setter Property="FontSize" Value="11"/><Setter Property="FontWeight" Value="SemiBold"/></Style>
     <DataTemplate x:Key="MessageTemplate">
-      <Grid Margin="0,0,0,12">
-        <Grid.Style><Style TargetType="Grid"><Setter Property="HorizontalAlignment" Value="Left"/>
-          <Style.Triggers><DataTrigger Binding="{Binding Outgoing}" Value="True"><Setter Property="HorizontalAlignment" Value="Right"/></DataTrigger></Style.Triggers>
-        </Style></Grid.Style>
-        <StackPanel MaxWidth="420">
-          <Border Padding="12,9" CornerRadius="3,10,10,10">
-            <Border.Style><Style TargetType="Border"><Setter Property="Background" Value="{StaticResource Surface}"/>
-              <Style.Triggers><DataTrigger Binding="{Binding Outgoing}" Value="True"><Setter Property="Background" Value="{StaticResource AccentSoft}"/><Setter Property="CornerRadius" Value="10,3,10,10"/></DataTrigger></Style.Triggers>
-            </Style></Border.Style>
+      <Grid Margin="0,0,0,24">
+        <Grid.Style><Style TargetType="Grid"><Setter Property="HorizontalAlignment" Value="Left"/><Style.Triggers><DataTrigger Binding="{Binding Outgoing}" Value="True"><Setter Property="HorizontalAlignment" Value="Right"/></DataTrigger></Style.Triggers></Style></Grid.Style>
+        <StackPanel MaxWidth="540">
+          <TextBlock Text="{Binding SenderName}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource Muted}" Margin="4,0,0,5" Visibility="{Binding ShowSender, Converter={StaticResource Bool}}"/>
+          <Image Source="{Binding ImagePath, Converter={StaticResource ImageFile}}" MaxWidth="320" MaxHeight="320" Stretch="Uniform" local:Rounded.Radius="14" Cursor="Hand"
+                 Visibility="{Binding HasImage, Converter={StaticResource Bool}}" MouseLeftButtonUp="MessageImage_Click" ToolTip="Open image" HorizontalAlignment="{Binding HorizontalAlignment, RelativeSource={RelativeSource AncestorType=Grid}}"/>
+          <Border Padding="14,11" CornerRadius="14" Visibility="{Binding HasFile, Converter={StaticResource Bool}}">
+            <Border.Style><Style TargetType="Border"><Setter Property="Background" Value="{DynamicResource Surface}"/><Style.Triggers><DataTrigger Binding="{Binding Outgoing}" Value="True"><Setter Property="Background" Value="{DynamicResource AccentSoft}"/></DataTrigger></Style.Triggers></Style></Border.Style>
+            <StackPanel Orientation="Horizontal"><local:Glyph Data="{StaticResource IconFile}" Size="20" Foreground="{DynamicResource Accent}" Margin="0,0,10,0"/><TextBlock Text="{Binding FileName}" FontSize="14" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="360"/></StackPanel>
+          </Border>
+          <Border Padding="17,13" CornerRadius="15" Visibility="{Binding HasText, Converter={StaticResource Bool}}">
+            <Border.Style><Style TargetType="Border"><Setter Property="Background" Value="{DynamicResource Surface}"/><Style.Triggers><DataTrigger Binding="{Binding Outgoing}" Value="True"><Setter Property="Background" Value="{DynamicResource AccentSoft}"/></DataTrigger></Style.Triggers></Style></Border.Style>
             <StackPanel>
-              <TextBlock Text="ANNOUNCEMENT" Foreground="{StaticResource Accent}" FontWeight="SemiBold" FontSize="9" Margin="0,0,0,5" Visibility="{Binding Broadcast, Converter={StaticResource Bool}}"/>
-              <TextBlock Text="{Binding Text}" TextWrapping="Wrap" LineHeight="19" FontSize="12"/>
+              <TextBlock Text="ANNOUNCEMENT" Foreground="{DynamicResource Accent}" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,6" Visibility="{Binding Broadcast, Converter={StaticResource Bool}}"/>
+              <TextBox Text="{Binding Text, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" FontSize="{DynamicResource MessageFontSize}" FontFamily="{DynamicResource MessageFontFamily}" Background="Transparent" BorderThickness="0" Padding="0"/>
             </StackPanel>
           </Border>
-          <StackPanel Orientation="Horizontal" Margin="3,4,3,0">
-            <TextBlock Text="{Binding TimeLabel}" FontSize="9" Foreground="{StaticResource Faint}"/>
-            <TextBlock Text=" · " FontSize="9" Foreground="{StaticResource Faint}"/>
-            <TextBlock Text="{Binding Delivery}" FontSize="9" Foreground="{StaticResource Faint}"/>
+          <StackPanel Orientation="Horizontal" Margin="4,7,4,0">
+            <TextBlock Text="{Binding TimeLabel}" FontSize="11" Foreground="{DynamicResource Faint}"/>
+            <TextBlock Text=" · " FontSize="11" Foreground="{DynamicResource Faint}"/>
+            <TextBlock Text="{Binding Delivery}" FontSize="11" MaxWidth="360" TextTrimming="CharacterEllipsis" ToolTip="{Binding Delivery}">
+              <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Foreground" Value="{DynamicResource Faint}"/><Style.Triggers><DataTrigger Binding="{Binding DeliveryProblem}" Value="True"><Setter Property="Foreground" Value="{DynamicResource Danger}"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+            </TextBlock>
+            <Button Content="Retry" Padding="8,0" FontSize="11" Foreground="{DynamicResource Accent}" Click="Retry_Click" Visibility="{Binding CanRetry, Converter={StaticResource Bool}}" ToolTip="Retry"/>
           </StackPanel>
         </StackPanel>
       </Grid>
     </DataTemplate>
   </Window.Resources>
-  <Border BorderBrush="{StaticResource Line}" BorderThickness="1">
+  <Border x:Name="RootBorder" BorderBrush="{DynamicResource Line}" BorderThickness="1" Background="{DynamicResource Rail}">
     <Grid>
-      <Grid.ColumnDefinitions><ColumnDefinition Width="48"/><ColumnDefinition x:Name="PeopleColumn" Width="208"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-      <!-- Small desktop targets with room between each action. -->
-      <Border Background="{StaticResource Rail}">
+      <Grid.RowDefinitions><RowDefinition Height="38"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+      <Grid Background="Transparent" MouseLeftButtonDown="TitleBar_MouseDown">
+        <StackPanel Orientation="Horizontal" Margin="15,0,0,0" VerticalAlignment="Center">
+          <Image Source="{DynamicResource BrandMark}" Width="20" Height="20" Margin="0,0,9,0"/>
+          <TextBlock Text="CydLan" FontSize="13" Foreground="{DynamicResource Muted}" VerticalAlignment="Center"/>
+          <Button Style="{StaticResource Icon}" Width="32" Height="30" Margin="14,0,0,0" Click="ToggleSidebar_Click" ToolTip="Conversations" AutomationProperties.Name="Toggle conversations sidebar"><local:Glyph Data="{StaticResource IconSidebar}" Size="17"/></Button>
+        </StackPanel>
+        <!-- Window controls drawn like Windows' own caption buttons: square, full height, red Close. -->
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Stretch">
+          <Button Style="{StaticResource CaptionButton}" Content="&#xE921;" ToolTip="Minimize" Click="Minimize_Click" AutomationProperties.Name="Minimize"/>
+          <Button x:Name="MaximizeButton" Style="{StaticResource CaptionButton}" Content="&#xE922;" ToolTip="Maximize" Click="Maximize_Click" AutomationProperties.Name="Maximize"/>
+          <Button Style="{StaticResource CaptionCloseButton}" Content="&#xE8BB;" ToolTip="Close" Click="Close_Click" AutomationProperties.Name="Close"/>
+        </StackPanel>
+      </Grid>
+      <Grid Grid.Row="1">
+        <Grid.ColumnDefinitions><ColumnDefinition Width="52"/><ColumnDefinition x:Name="PeopleColumn" Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
         <Grid>
-          <Grid.RowDefinitions><RowDefinition Height="60"/><RowDefinition Height="*"/><RowDefinition Height="88"/></Grid.RowDefinitions>
-          <Border Width="28" Height="28" CornerRadius="9" Background="{StaticResource Accent}" VerticalAlignment="Center">
-            <TextBlock Text="c" Foreground="{StaticResource AccentInk}" FontSize="23" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,-5,0,0"/>
-          </Border>
+          <Grid.RowDefinitions><RowDefinition Height="10"/><RowDefinition Height="*"/><RowDefinition Height="106"/></Grid.RowDefinitions>
           <StackPanel Grid.Row="1" Margin="0,7,0,0">
-            <Button x:Name="ChatNav" Content="&#xE8BD;" ToolTip="Conversations" Click="Chat_Click">
-              <Button.Style><Style TargetType="Button" BasedOn="{StaticResource NavIcon}"><Style.Triggers>
-                <DataTrigger Binding="{Binding IsConversationSection}" Value="True"><Setter Property="Background" Value="{StaticResource AccentSoft}"/><Setter Property="Foreground" Value="{StaticResource Accent}"/></DataTrigger>
-              </Style.Triggers></Style></Button.Style>
+            <Button x:Name="ChatNav" ToolTip="Chats" Click="Chat_Click" AutomationProperties.Name="Conversations">
+              <local:Glyph Data="{StaticResource IconChat}" Size="19"/>
+              <Button.Style><Style TargetType="Button" BasedOn="{StaticResource NavIcon}"><Style.Triggers><DataTrigger Binding="{Binding IsConversationSection}" Value="True"><Setter Property="Background" Value="{DynamicResource NavSelected}"/><Setter Property="Foreground" Value="{DynamicResource Accent}"/></DataTrigger></Style.Triggers></Style></Button.Style>
             </Button>
-            <Button Content="&#xE77B;" Style="{StaticResource NavIcon}" ToolTip="Find people" Click="People_Click"/>
-            <Button Content="&#xE898;" ToolTip="File transfers" Click="Transfers_Click">
-              <Button.Style><Style TargetType="Button" BasedOn="{StaticResource NavIcon}"><Style.Triggers>
-                <DataTrigger Binding="{Binding TransfersOpen}" Value="True"><Setter Property="Background" Value="{StaticResource AccentSoft}"/><Setter Property="Foreground" Value="{StaticResource Accent}"/></DataTrigger>
-              </Style.Triggers></Style></Button.Style>
+            <Button ToolTip="Groups" Click="Groups_Click" AutomationProperties.Name="Group chats">
+              <local:Glyph Data="{StaticResource IconUsers}" Size="19"/>
+              <Button.Style><Style TargetType="Button" BasedOn="{StaticResource NavIcon}"><Style.Triggers><DataTrigger Binding="{Binding IsGroupsSection}" Value="True"><Setter Property="Background" Value="{DynamicResource NavSelected}"/><Setter Property="Foreground" Value="{DynamicResource Accent}"/></DataTrigger></Style.Triggers></Style></Button.Style>
             </Button>
-            <Button Content="&#xE789;" ToolTip="Broadcast preview" Click="Broadcast_Click">
-              <Button.Style><Style TargetType="Button" BasedOn="{StaticResource NavIcon}"><Style.Triggers>
-                <DataTrigger Binding="{Binding IsBroadcastSection}" Value="True"><Setter Property="Background" Value="{StaticResource AccentSoft}"/><Setter Property="Foreground" Value="{StaticResource Accent}"/></DataTrigger>
-              </Style.Triggers></Style></Button.Style>
+            <Button ToolTip="Files" Click="Transfers_Click" AutomationProperties.Name="Files">
+              <local:Glyph Data="{StaticResource IconFolder}" Size="19"/>
+              <Button.Style><Style TargetType="Button" BasedOn="{StaticResource NavIcon}"><Style.Triggers><DataTrigger Binding="{Binding IsFilesSection}" Value="True"><Setter Property="Background" Value="{DynamicResource NavSelected}"/><Setter Property="Foreground" Value="{DynamicResource Accent}"/></DataTrigger></Style.Triggers></Style></Button.Style>
+            </Button>
+            <Button ToolTip="Broadcast" Click="Broadcast_Click" AutomationProperties.Name="Broadcast announcement">
+              <local:Glyph Data="{StaticResource IconMegaphone}" Size="19"/>
+              <Button.Style><Style TargetType="Button" BasedOn="{StaticResource NavIcon}"><Style.Triggers><DataTrigger Binding="{Binding IsBroadcastSection}" Value="True"><Setter Property="Background" Value="{DynamicResource NavSelected}"/><Setter Property="Foreground" Value="{DynamicResource Accent}"/></DataTrigger></Style.Triggers></Style></Button.Style>
             </Button>
           </StackPanel>
-          <StackPanel Grid.Row="2" VerticalAlignment="Bottom" Margin="0,0,0,10">
-            <Button Content="&#xE713;" Style="{StaticResource NavIcon}" ToolTip="Preferences" Click="Settings_Click"/>
-            <Button Padding="0" Width="28" Height="28" Background="{StaticResource Avatar}" Click="Settings_Click" ToolTip="Your profile">
-              <TextBlock Text="{Binding ProfileInitial}" Foreground="{StaticResource Accent}" FontWeight="SemiBold" FontSize="12"/>
-            </Button>
+          <StackPanel Grid.Row="2" VerticalAlignment="Bottom" Margin="0,0,0,18">
+            <Button Style="{StaticResource NavIcon}" ToolTip="Preferences" Click="Settings_Click" AutomationProperties.Name="Preferences"><local:Glyph Data="{StaticResource IconSettings}" Size="19"/></Button>
+            <Button Width="32" Height="32" Padding="0" Background="{DynamicResource Avatar}" Click="Settings_Click" ToolTip="Your profile"><Grid Width="32" Height="32"><TextBlock Text="{Binding ProfileInitial}" Foreground="{DynamicResource Accent}" FontSize="13" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/><Image Source="{Binding ProfileAvatar, Converter={StaticResource AvatarFile}}" Stretch="UniformToFill" local:Rounded.Radius="8"/></Grid></Button>
           </StackPanel>
         </Grid>
-      </Border>
-      <Border Grid.Column="1" Background="{StaticResource Sidebar}" BorderBrush="{StaticResource Line}" BorderThickness="0,0,1,0">
-        <Grid>
-          <Grid.RowDefinitions><RowDefinition Height="60"/><RowDefinition Height="46"/><RowDefinition Height="34"/><RowDefinition Height="*"/><RowDefinition Height="48"/></Grid.RowDefinitions>
-          <Grid Margin="14,0" VerticalAlignment="Center">
-            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-            <TextBlock Text="cydlan" FontSize="21" FontWeight="SemiBold"/>
-            <Border Grid.Column="1" Background="{StaticResource AccentSoft}" CornerRadius="4" Padding="5,3" VerticalAlignment="Center">
-              <TextBlock Text="PREVIEW" Foreground="{StaticResource Accent}" FontSize="8" FontWeight="SemiBold"/>
+        <Border x:Name="SidebarPanel" Grid.Column="1" Width="274" ClipToBounds="True" HorizontalAlignment="Left" Background="{DynamicResource Sidebar}">
+          <Grid x:Name="SidebarContent" Width="274" HorizontalAlignment="Left">
+            <Grid.RowDefinitions><RowDefinition Height="74"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="52"/></Grid.RowDefinitions>
+            <Grid Margin="17,0,16,0" VerticalAlignment="Center">
+              <StackPanel Orientation="Horizontal"><TextBlock Text="{Binding SectionTitle}" FontSize="20" FontWeight="SemiBold"/><TextBlock Text="{Binding ModeBadge}" FontSize="11" Foreground="{DynamicResource Faint}" Margin="9,7,0,0"/></StackPanel>
+              <Button HorizontalAlignment="Right" Click="SidebarPlus_Click" AutomationProperties.Name="New">
+                <local:Glyph Data="{StaticResource IconPlus}" Size="18"/>
+                <Button.Style><Style TargetType="Button" BasedOn="{StaticResource Icon}"><Setter Property="ToolTip" Value="Connect"/><Style.Triggers>
+                  <DataTrigger Binding="{Binding IsGroupsSection}" Value="True"><Setter Property="ToolTip" Value="New group"/></DataTrigger>
+                  <DataTrigger Binding="{Binding IsFilesSection}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+                </Style.Triggers></Style></Button.Style>
+              </Button>
+            </Grid>
+            <Border Grid.Row="1" Height="38" Background="{DynamicResource Surface}" CornerRadius="8" Margin="13,0,13,12" Visibility="{Binding ChatOpen, Converter={StaticResource Bool}}">
+              <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="31"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                <local:Glyph Data="{StaticResource IconSearch}" Size="15" Foreground="{DynamicResource Faint}"/>
+                <TextBox x:Name="PeopleSearch" Grid.Column="1" Text="{Binding Search, UpdateSourceTrigger=PropertyChanged}" Background="Transparent" BorderThickness="0" FontSize="13" Padding="0,9,8,9" ToolTip="Search" AutomationProperties.Name="Search conversations"/>
+                <TextBlock Grid.Column="1" Text="Search conversations" FontSize="13" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" IsHitTestVisible="False"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Search}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+              </Grid>
+            </Border>
+            <Grid Grid.Row="2" Height="40" Margin="18,0,13,3" Visibility="{Binding ChatOpen, Converter={StaticResource Bool}}">
+              <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Visibility="{Binding ShowPeopleList, Converter={StaticResource Bool}}"><TextBlock Text="People" Style="{StaticResource Caption}"/><TextBlock Text="{Binding OnlineCount}" FontSize="12" Foreground="{DynamicResource Faint}" Margin="8,0,0,0"/></StackPanel>
+              <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Visibility="{Binding ShowGroupList, Converter={StaticResource Bool}}"><TextBlock Text="Groups" Style="{StaticResource Caption}"/><TextBlock Text="{Binding Groups.Count}" FontSize="12" Foreground="{DynamicResource Faint}" Margin="8,0,0,0"/></StackPanel>
+              <Button Style="{StaticResource Icon}" Width="28" Height="28" HorizontalAlignment="Right" Visibility="{Binding ShowPeopleList, Converter={StaticResource Bool}}" ToolTip="Refresh LAN discovery" Click="Refresh_Click" AutomationProperties.Name="Refresh LAN discovery"><local:Glyph Data="{StaticResource IconRefresh}" Size="15"/></Button>
+            </Grid>
+            <Grid Grid.Row="3">
+              <ListBox ItemsSource="{Binding People}" SelectedItem="{Binding SelectedPeer}" ScrollViewer.VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Conversations" Visibility="{Binding ShowPeopleList, Converter={StaticResource Bool}}">
+                <ListBox.ItemTemplate><DataTemplate>
+                  <Grid Margin="10,7,8,7">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="40"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <Grid Width="30" Height="30" HorizontalAlignment="Left">
+                      <Border Background="{DynamicResource Avatar}" CornerRadius="15"><TextBlock Text="{Binding Initials}" FontSize="12" Foreground="{DynamicResource Accent}" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                      <Image Source="{Binding AvatarPath, Converter={StaticResource AvatarFile}}" Stretch="UniformToFill" local:Rounded.Radius="15"/>
+                      <Ellipse Width="9" Height="9" Stroke="{DynamicResource Sidebar}" StrokeThickness="2" HorizontalAlignment="Right" VerticalAlignment="Bottom"><Ellipse.Style><Style TargetType="Ellipse"><Setter Property="Fill" Value="{DynamicResource Faint}"/><Style.Triggers><DataTrigger Binding="{Binding Online}" Value="True"><Setter Property="Fill" Value="{DynamicResource Online}"/></DataTrigger><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding Online}" Value="True"/><Condition Binding="{Binding Status}" Value="away"/></MultiDataTrigger.Conditions><Setter Property="Fill" Value="{DynamicResource Away}"/></MultiDataTrigger><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding Online}" Value="True"/><Condition Binding="{Binding Status}" Value="busy"/></MultiDataTrigger.Conditions><Setter Property="Fill" Value="{DynamicResource Away}"/></MultiDataTrigger></Style.Triggers></Style></Ellipse.Style></Ellipse>
+                    </Grid>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,5,0"><TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding Preview}" FontSize="12" Foreground="{DynamicResource Faint}" TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/></StackPanel>
+                    <Border Grid.Column="2" Background="{DynamicResource Accent}" CornerRadius="8" Height="18" MinWidth="18" Padding="4,0" VerticalAlignment="Center"><Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Visible"/><Style.Triggers><DataTrigger Binding="{Binding Unread}" Value="0"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Border.Style><TextBlock Text="{Binding Unread}" FontSize="11" Foreground="{DynamicResource AccentInk}" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                  </Grid>
+                </DataTemplate></ListBox.ItemTemplate>
+              </ListBox>
+              <ListBox ItemsSource="{Binding Groups}" SelectedItem="{Binding SelectedGroup}" ScrollViewer.VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Group chats" Visibility="{Binding ShowGroupList, Converter={StaticResource Bool}}">
+                <ListBox.ItemTemplate><DataTemplate>
+                  <Grid Margin="10,7,8,7">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="40"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <Border Width="30" Height="30" CornerRadius="10" Background="{DynamicResource Avatar}" HorizontalAlignment="Left"><local:Glyph Data="{StaticResource IconUsers}" Size="16" Foreground="{DynamicResource Accent}"/></Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,5,0"><TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding Preview}" FontSize="12" Foreground="{DynamicResource Faint}" TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/></StackPanel>
+                    <Border Grid.Column="2" Background="{DynamicResource Accent}" CornerRadius="8" Height="18" MinWidth="18" Padding="4,0" VerticalAlignment="Center"><Border.Style><Style TargetType="Border"><Style.Triggers><DataTrigger Binding="{Binding Unread}" Value="0"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Border.Style><TextBlock Text="{Binding Unread}" FontSize="11" Foreground="{DynamicResource AccentInk}" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                  </Grid>
+                </DataTemplate></ListBox.ItemTemplate>
+              </ListBox>
+              <TextBlock Text="No groups yet" FontSize="13" Foreground="{DynamicResource Faint}" Margin="22,14,22,0"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding ShowGroupList}" Value="True"/><Condition Binding="{Binding Groups.Count}" Value="0"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+              <StackPanel Margin="8,0" Visibility="{Binding IsFilesSection, Converter={StaticResource Bool}}">
+                <RadioButton Style="{StaticResource FilterRow}" Tag="all" Checked="TransferFilter_Checked" IsChecked="True"><Grid><TextBlock Text="All files"/><TextBlock Text="{Binding Transfers.Count}" Foreground="{DynamicResource Faint}" HorizontalAlignment="Right"/></Grid></RadioButton>
+                <RadioButton Style="{StaticResource FilterRow}" Tag="received" Checked="TransferFilter_Checked"><Grid><TextBlock Text="Received"/><TextBlock Text="{Binding ReceivedCount}" Foreground="{DynamicResource Faint}" HorizontalAlignment="Right"/></Grid></RadioButton>
+                <RadioButton Style="{StaticResource FilterRow}" Tag="sent" Checked="TransferFilter_Checked"><Grid><TextBlock Text="Sent"/><TextBlock Text="{Binding SentCount}" Foreground="{DynamicResource Faint}" HorizontalAlignment="Right"/></Grid></RadioButton>
+                <Button Content="Open received folder" Style="{StaticResource Secondary}" HorizontalAlignment="Left" Margin="8,14,0,0" Click="OpenReceivedFolder_Click"/>
+              </StackPanel>
+            </Grid>
+            <Border Grid.Row="4" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Margin="16,0" Padding="0,15">
+              <StackPanel><StackPanel Orientation="Horizontal"><Ellipse Width="6" Height="6" Fill="{DynamicResource Accent}" Margin="0,0,8,0"/><TextBlock Text="{Binding ConnectionSummary}" FontSize="12" Foreground="{DynamicResource Muted}"/></StackPanel></StackPanel>
             </Border>
           </Grid>
-          <Border Grid.Row="1" Margin="12,3,12,9" Background="{StaticResource Input}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="6">
-            <Grid>
-              <TextBlock Text="&#xE721;" FontFamily="Segoe MDL2 Assets" FontSize="11" Foreground="{StaticResource Faint}" VerticalAlignment="Center" Margin="9,0,0,0"/>
-              <TextBox x:Name="PeopleSearch" Text="{Binding Search, UpdateSourceTrigger=PropertyChanged}" Margin="24,0,0,0" Background="Transparent" BorderThickness="0" Padding="5,7" FontSize="11" ToolTip="Search people or message history"/>
-              <TextBlock Text="Search conversations" Margin="30,0,0,0" FontSize="11" Foreground="{StaticResource Faint}" VerticalAlignment="Center" IsHitTestVisible="False">
-                <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Search}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
-              </TextBlock>
+        </Border>
+        <Border Grid.Column="2" Background="{DynamicResource Canvas}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="12,0,0,0">
+          <Grid>
+            <Grid.RowDefinitions><RowDefinition Height="74"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+            <Grid Margin="26,0,22,0">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+              <StackPanel VerticalAlignment="Center"><TextBlock x:Name="ConversationTitle" Text="{Binding ChatTitle}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding ChatSubtitle}" FontSize="12" Foreground="{DynamicResource Faint}" Margin="0,6,0,0" TextTrimming="CharacterEllipsis"><TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers><DataTrigger Binding="{Binding ChatSubtitle}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock></StackPanel>
+              <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0" Visibility="{Binding ChatOpen, Converter={StaticResource Bool}}"><Border x:Name="SearchPill" Width="32" Height="32" CornerRadius="8" Background="Transparent" Margin="0,0,2,0" ClipToBounds="True">
+                  <Grid>
+                    <Button Style="{StaticResource Icon}" Focusable="False" HorizontalAlignment="Left" ToolTip="Search messages" Click="SearchMessages_Click" AutomationProperties.Name="Search this conversation"><local:Glyph Data="{StaticResource IconSearch}" Size="17"/></Button>
+                    <TextBox x:Name="MessageSearchBox" Text="{Binding MessageSearch, UpdateSourceTrigger=PropertyChanged}" Visibility="Collapsed" Opacity="0" Margin="30,0,6,0" Padding="0,7" Background="Transparent" BorderThickness="0" VerticalAlignment="Center" LostKeyboardFocus="MessageSearch_LostFocus" AutomationProperties.Name="Search message text"/>
+                    <TextBlock x:Name="SearchHint" Text="Search messages" Margin="32,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Faint}" IsHitTestVisible="False" Opacity="{Binding Opacity, ElementName=MessageSearchBox}"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding MessageSearch}" Value=""/><Condition Binding="{Binding Visibility, ElementName=MessageSearchBox}" Value="Visible"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+                  </Grid>
+                </Border><Button Style="{StaticResource Icon}" ToolTip="Contact details" Click="Details_Click" IsEnabled="{Binding HasDetails}" AutomationProperties.Name="Contact details"><local:Glyph Data="{StaticResource IconInfo}" Size="18"/></Button></StackPanel>
             </Grid>
-          </Border>
-          <Grid Grid.Row="2" Margin="14,0,8,5">
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-              <TextBlock Text="MESSAGES" Style="{StaticResource Caption}"/>
-              <TextBlock Text="{Binding OnlineCount}" Foreground="{StaticResource Accent}" FontSize="9" Margin="7,0,0,0"/>
-            </StackPanel>
-            <Button Content="&#xE72C;" Style="{StaticResource Icon}" HorizontalAlignment="Right" Width="24" Height="24" FontSize="11" ToolTip="Refresh preview" Click="Refresh_Click"/>
-          </Grid>
-          <ListBox Grid.Row="3" ItemsSource="{Binding People}" SelectedItem="{Binding SelectedPeer}" ScrollViewer.VerticalScrollBarVisibility="Auto">
-            <ListBox.ItemTemplate><DataTemplate>
-              <Grid Margin="9,11">
-                <Grid.ColumnDefinitions><ColumnDefinition Width="39"/><ColumnDefinition Width="*"/><ColumnDefinition Width="17"/></Grid.ColumnDefinitions>
-                <Grid Width="30" Height="30" HorizontalAlignment="Left">
-                  <Border Background="{StaticResource Avatar}" CornerRadius="9"><TextBlock Text="{Binding Initials}" Foreground="{StaticResource Accent}" FontSize="10" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
-                  <Ellipse Width="8" Height="8" Stroke="{StaticResource Sidebar}" StrokeThickness="2" HorizontalAlignment="Right" VerticalAlignment="Bottom">
-                    <Ellipse.Style><Style TargetType="Ellipse"><Setter Property="Fill" Value="{StaticResource Faint}"/>
-                      <Style.Triggers>
-                        <DataTrigger Binding="{Binding Online}" Value="True"><Setter Property="Fill" Value="{StaticResource Online}"/></DataTrigger>
-                        <DataTrigger Binding="{Binding Status}" Value="busy"><Setter Property="Fill" Value="{StaticResource Away}"/></DataTrigger>
-                        <DataTrigger Binding="{Binding Status}" Value="away"><Setter Property="Fill" Value="{StaticResource Away}"/></DataTrigger>
-                      </Style.Triggers>
-                    </Style></Ellipse.Style>
-                  </Ellipse>
+            <Grid Grid.Row="1" Visibility="{Binding ChatOpen, Converter={StaticResource Bool}}">
+              <Grid x:Name="ChatContentGrid">
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                <Grid Grid.Row="1">
+                  <ScrollViewer x:Name="MessageScroller" VerticalScrollBarVisibility="Auto" Padding="26,20,26,4"><StackPanel MaxWidth="760" HorizontalAlignment="Stretch"><ItemsControl ItemsSource="{Binding Messages}" ItemTemplate="{StaticResource MessageTemplate}" HorizontalContentAlignment="Stretch"/></StackPanel></ScrollViewer>
+                  <StackPanel MaxWidth="370" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="25" Visibility="{Binding NoPeer, Converter={StaticResource Bool}}">
+                    <Image Source="{DynamicResource BrandMark}" Width="64" Height="64"/>
+                    <Button Content="Connect" Foreground="{DynamicResource Accent}" Margin="0,16,0,0" Click="Settings_Click"/>
+                  </StackPanel>
+                  <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding NoGroup, Converter={StaticResource Bool}}">
+                    <local:Glyph Data="{StaticResource IconUsers}" Size="40" StrokeThickness="2" Foreground="{DynamicResource Accent}"/>
+                    <Button Content="New group" Style="{StaticResource Primary}" Margin="0,18,0,0" HorizontalAlignment="Center" Click="NewGroup_Click"/>
+                  </StackPanel>
+                  <local:Glyph Data="{StaticResource IconMegaphone}" Size="40" StrokeThickness="2.2" Foreground="{DynamicResource Accent}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding Broadcasting, Converter={StaticResource Bool}}"/>
                 </Grid>
-                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                  <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                  <TextBlock Text="{Binding Preview}" Foreground="{StaticResource Muted}" FontSize="10" TextTrimming="CharacterEllipsis" Margin="0,4,0,0"/>
+                <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="32,0,32,6">
+                  <TextBlock Text="{Binding SelectedPeer.Typing}" FontSize="12" Foreground="{DynamicResource Muted}"/>
                 </StackPanel>
-                <Border Grid.Column="2" Background="{StaticResource Accent}" CornerRadius="6" VerticalAlignment="Center" Height="16">
-                  <Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Visible"/><Style.Triggers><DataTrigger Binding="{Binding Unread}" Value="0"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Border.Style>
-                  <TextBlock Text="{Binding Unread}" Foreground="{StaticResource AccentInk}" FontSize="9" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                <Border x:Name="ComposerSurface" Grid.Row="3" MaxWidth="760" Background="{DynamicResource Input}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="12" Padding="6" Margin="26,0,26,14" HorizontalAlignment="Stretch">
+                  <StackPanel>
+                    <ItemsControl ItemsSource="{Binding Attachments}" Margin="6,6,6,4" Visibility="{Binding HasAttachments, Converter={StaticResource Bool}}" AutomationProperties.Name="Attachments">
+                      <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate><DataTemplate>
+                        <Grid Margin="0,4,10,4" ToolTip="{Binding Name}">
+                          <Border Width="60" Height="60" CornerRadius="10" Background="{DynamicResource Surface}" Visibility="{Binding IsImage, Converter={StaticResource Bool}}">
+                            <Image Source="{Binding Thumbnail}" Stretch="UniformToFill" local:Rounded.Radius="10"/>
+                          </Border>
+                          <Border Height="60" MaxWidth="220" CornerRadius="10" Background="{DynamicResource Surface}" Padding="12,0,26,0">
+                            <Border.Style><Style TargetType="Border"><Style.Triggers><DataTrigger Binding="{Binding IsImage}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Border.Style>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                              <local:Glyph Data="{StaticResource IconFile}" Size="20" Foreground="{DynamicResource Accent}" Margin="0,0,10,0"/>
+                              <StackPanel><TextBlock Text="{Binding Name}" FontSize="13" TextTrimming="CharacterEllipsis" MaxWidth="140"/><TextBlock Text="{Binding SizeLabel}" FontSize="11" Foreground="{DynamicResource Faint}" Margin="0,2,0,0"/></StackPanel>
+                            </StackPanel>
+                          </Border>
+                          <Button Width="20" Height="20" Padding="0" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-6,-6,0" Background="{DynamicResource Ink}" Foreground="{DynamicResource Canvas}" Click="RemoveAttachment_Click" ToolTip="Remove" AutomationProperties.Name="Remove attachment"><local:Glyph Data="{StaticResource IconClose}" Size="11" StrokeThickness="2.2"/></Button>
+                        </Grid>
+                      </DataTemplate></ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Grid>
+                      <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                      <Button Style="{StaticResource Icon}" Width="34" Height="34" VerticalAlignment="Bottom" ToolTip="Attachments" Click="Attach_Click" IsEnabled="{Binding CanAttach}" AutomationProperties.Name="Attach files"><local:Glyph Data="{StaticResource IconPlus}" Size="19"/></Button>
+                      <Button Grid.Column="1" Style="{StaticResource Icon}" Width="34" Height="34" VerticalAlignment="Bottom" ToolTip="Emoji" Click="Emoji_Click" AutomationProperties.Name="Insert a smile"><local:Glyph Data="{StaticResource IconSmile}" Size="19"/></Button>
+                      <Grid Grid.Column="2" Margin="4,0" VerticalAlignment="Center">
+                        <TextBox x:Name="Composer" Text="{Binding Draft, UpdateSourceTrigger=PropertyChanged}" Background="Transparent" BorderThickness="0" FontSize="{DynamicResource MessageFontSize}" FontFamily="{DynamicResource MessageFontFamily}" Padding="4,7" MinHeight="34" MaxHeight="160" AcceptsReturn="True" TextWrapping="Wrap" MaxLength="32000" VerticalScrollBarVisibility="Auto" IsEnabled="{Binding CanCompose}" PreviewKeyDown="Composer_KeyDown" TextChanged="Composer_TextChanged" ToolTip="Message" AutomationProperties.Name="Message composer"/>
+                        <TextBlock Text="Message…" FontSize="15" Foreground="{DynamicResource Muted}" Margin="6,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Draft}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+                      </Grid>
+                      <Button Grid.Column="3" Style="{StaticResource SendIcon}" VerticalAlignment="Bottom" IsEnabled="{Binding CanSend}" Click="Send_Click" ToolTip="Send" AutomationProperties.Name="Send message"><local:Glyph Data="{StaticResource IconSend}" Size="19" StrokeThickness="2.2"/></Button>
+                    </Grid>
+                  </StackPanel>
+                </Border>
+                <Border x:Name="DropOverlay" Grid.RowSpan="4" Margin="18,8,18,10" CornerRadius="16" Background="{DynamicResource AccentSoft}" Visibility="Collapsed" IsHitTestVisible="False">
+                  <Grid>
+                    <Rectangle RadiusX="16" RadiusY="16" Stroke="{DynamicResource Accent}" StrokeThickness="2" StrokeDashArray="5 4"/>
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                      <local:Glyph Data="{StaticResource IconTransfer}" Size="34" StrokeThickness="2" Foreground="{DynamicResource Accent}"/>
+                    </StackPanel>
+                  </Grid>
                 </Border>
               </Grid>
-            </DataTemplate></ListBox.ItemTemplate>
-          </ListBox>
-          <Border Grid.Row="4" BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="14,9">
-            <StackPanel><StackPanel Orientation="Horizontal"><Ellipse Width="5" Height="5" Fill="{StaticResource Accent}" Margin="0,0,7,0"/><TextBlock Text="Offline design" Foreground="{StaticResource Muted}" FontSize="10"/></StackPanel><TextBlock Text="Sample contacts only" Foreground="{StaticResource Faint}" FontSize="9" Margin="12,3,0,0"/></StackPanel>
-          </Border>
-        </Grid>
-      </Border>
-      <Grid Grid.Column="2">
-        <Grid.RowDefinitions><RowDefinition Height="30"/><RowDefinition Height="58"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-        <Grid Background="{StaticResource Canvas}" MouseLeftButtonDown="TitleBar_MouseDown">
-          <TextBlock Text="WORKSPACE" Style="{StaticResource Caption}" FontSize="8" Margin="16,0,0,0" VerticalAlignment="Center"/>
-          <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button Content="&#xE921;" Style="{StaticResource Icon}" Width="32" Height="28" FontSize="9" ToolTip="Minimize" Click="Minimize_Click"/>
-            <Button Content="&#xE922;" Style="{StaticResource Icon}" Width="32" Height="28" FontSize="9" ToolTip="Maximize / restore" Click="Maximize_Click"/>
-            <Button Content="&#xE8BB;" Style="{StaticResource Icon}" Width="32" Height="28" FontSize="9" ToolTip="Close to tray" Click="Close_Click"/>
-          </StackPanel>
-        </Grid>
-        <Border Grid.Row="1" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
-          <Grid Margin="16,0,12,9">
-            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-            <StackPanel VerticalAlignment="Center">
-              <TextBlock Text="{Binding ChatTitle}" FontWeight="SemiBold" FontSize="16" TextTrimming="CharacterEllipsis"/>
-              <TextBlock Text="{Binding ChatSubtitle}" FontSize="10" Foreground="{StaticResource Muted}" Margin="0,5,0,0" TextTrimming="CharacterEllipsis"/>
-            </StackPanel>
-            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
-              <Button Content="&#xE721;" Style="{StaticResource Icon}" ToolTip="Search this conversation" Click="SearchMessages_Click"/>
-              <Button Content="&#xE946;" Style="{StaticResource Icon}" ToolTip="Show / hide contact details" Click="Details_Click" IsEnabled="{Binding HasPeer}"/>
+              <Border x:Name="DetailsPanel" Width="242" Visibility="Collapsed" HorizontalAlignment="Right" Background="{DynamicResource Sidebar}" BorderBrush="{DynamicResource Line}" BorderThickness="1,0,0,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="20,16">
+                  <Grid><TextBlock Text="Contact details" Style="{StaticResource Caption}" VerticalAlignment="Center"/><Button Style="{StaticResource Icon}" Width="28" Height="28" HorizontalAlignment="Right" Click="Details_Click" ToolTip="Close details"><local:Glyph Data="{StaticResource IconClose}" Size="15"/></Button></Grid>
+                  <Grid Width="56" Height="56" Margin="0,28,0,16"><Border CornerRadius="18" Background="{DynamicResource Avatar}"><TextBlock Text="{Binding SelectedPeer.Initials}" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource Accent}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><Image Source="{Binding SelectedPeer.AvatarPath, Converter={StaticResource AvatarFile}}" Stretch="UniformToFill" local:Rounded.Radius="18"/></Grid>
+                  <TextBlock Text="{Binding SelectedPeer.Name}" FontSize="16" FontWeight="SemiBold" TextAlignment="Center" TextWrapping="Wrap"/>
+                  <TextBlock Text="{Binding SelectedPeer.Presence}" FontSize="13" Foreground="{DynamicResource Accent}" HorizontalAlignment="Center" Margin="0,7,0,22"/>
+                  <TextBlock Text="Full name" Style="{StaticResource Caption}" Margin="0,4,0,8" Visibility="{Binding SelectedPeer.HasFullName, Converter={StaticResource Bool}}"/><TextBlock Text="{Binding SelectedPeer.FullName}" FontSize="13" TextWrapping="Wrap" Visibility="{Binding SelectedPeer.HasFullName, Converter={StaticResource Bool}}"/>
+                  <TextBlock Text="About" Style="{StaticResource Caption}" Margin="0,22,0,8" Visibility="{Binding SelectedPeer.HasAbout, Converter={StaticResource Bool}}"/><TextBlock Text="{Binding SelectedPeer.About}" FontSize="13" TextWrapping="Wrap" Visibility="{Binding SelectedPeer.HasAbout, Converter={StaticResource Bool}}"/>
+                  <TextBlock Text="Device address" Style="{StaticResource Caption}" Margin="0,26,0,8"/><TextBlock Text="{Binding SelectedPeer.Address}" FontSize="13"/>
+                  <TextBlock Text="Client" Style="{StaticResource Caption}" Margin="0,22,0,8"/><TextBlock Text="{Binding SelectedPeer.Version}" FontSize="13" TextWrapping="Wrap"/>
+                </StackPanel></ScrollViewer>
+              </Border>
+              <Border x:Name="GroupPanel" Width="242" Visibility="Collapsed" HorizontalAlignment="Right" Background="{DynamicResource Sidebar}" BorderBrush="{DynamicResource Line}" BorderThickness="1,0,0,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="20,16">
+                  <Grid><TextBlock Text="Group" Style="{StaticResource Caption}" VerticalAlignment="Center"/><Button Style="{StaticResource Icon}" Width="28" Height="28" HorizontalAlignment="Right" Click="Details_Click" ToolTip="Close"><local:Glyph Data="{StaticResource IconClose}" Size="15"/></Button></Grid>
+                  <TextBlock Text="Name" Style="{StaticResource Caption}" Margin="0,18,0,6"/>
+                  <TextBox x:Name="GroupNameBox" Text="{Binding SelectedGroup.Name, Mode=OneWay}" MaxLength="80" KeyDown="GroupName_KeyDown" LostKeyboardFocus="GroupName_LostFocus" AutomationProperties.Name="Group name"/>
+                  <TextBlock Text="{Binding SelectedGroup.MemberLabel}" Style="{StaticResource Caption}" Margin="0,22,0,8"/>
+                  <ItemsControl x:Name="GroupMembersList" ItemsSource="{Binding SelectedGroupMembers}">
+                    <ItemsControl.ItemTemplate><DataTemplate>
+                      <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                        <Grid Width="26" Height="26"><Border CornerRadius="13" Background="{DynamicResource Avatar}"><TextBlock Text="{Binding Initials}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Accent}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><Image Source="{Binding AvatarPath, Converter={StaticResource AvatarFile}}" Stretch="UniformToFill" local:Rounded.Radius="13"/></Grid>
+                        <StackPanel Margin="10,0,0,0" VerticalAlignment="Center"><TextBlock Text="{Binding Name}" FontSize="13"/><TextBlock Text="{Binding Presence}" FontSize="11" Foreground="{DynamicResource Faint}"/></StackPanel>
+                      </StackPanel>
+                    </DataTemplate></ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                  <Button Content="Add people" Style="{StaticResource Secondary}" HorizontalAlignment="Stretch" Margin="0,8,0,0" Click="AddPeople_Click"/>
+                  <Button Content="Leave group" Foreground="{DynamicResource Danger}" HorizontalAlignment="Stretch" Margin="0,8,0,0" Click="LeaveGroup_Click"/>
+                </StackPanel></ScrollViewer>
+              </Border>
+            </Grid>
+            <Grid Grid.Row="1" Visibility="{Binding TransfersOpen, Converter={StaticResource Bool}}" Margin="26,12,26,16">
+              <ScrollViewer VerticalScrollBarVisibility="Auto"><ItemsControl ItemsSource="{Binding TransfersView}" MaxWidth="760"><ItemsControl.ItemTemplate><DataTemplate>
+                <Border Background="{DynamicResource Surface}" CornerRadius="12" Padding="16,14" Margin="0,0,0,10"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="40"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                  <local:Glyph Data="{StaticResource IconFile}" Size="26" HorizontalAlignment="Left" VerticalAlignment="Top" Foreground="{DynamicResource Accent}"/>
+                  <StackPanel Grid.Column="1"><TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding DirectionLabel}" FontSize="13" Foreground="{DynamicResource Muted}" Margin="0,7,0,0"/><TextBlock FontSize="12" Foreground="{DynamicResource Faint}" Margin="0,5,0,10" TextWrapping="Wrap"><Run Text="{Binding SizeLabel, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding State, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding TimeLabel, Mode=OneWay}"/></TextBlock><ProgressBar Value="{Binding Progress}" Height="3" BorderThickness="0" Foreground="{DynamicResource Accent}" Background="{DynamicResource Hover}"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0"><StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding State}" Value="Waiting for approval"/><Condition Binding="{Binding Outgoing}" Value="False"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers></Style></StackPanel.Style><Button Content="Decline" Style="{StaticResource Secondary}" Margin="0,0,8,0" Click="DeclineFile_Click"/><Button Content="Save file" Style="{StaticResource Primary}" Click="AcceptFile_Click"/></StackPanel>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0"><StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding State}" Value="Waiting for approval"/><Condition Binding="{Binding Outgoing}" Value="True"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers></Style></StackPanel.Style><Button Content="Cancel offer" Style="{StaticResource Secondary}" Click="CancelOffer_Click"/></StackPanel>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0"><StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding State}" Value="Received"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding State}" Value="Sent · receipt unavailable"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></StackPanel.Style><Button Content="Show in folder" Style="{StaticResource Secondary}" Margin="0,0,8,0" Click="ShowFile_Click"/><Button Content="Open" Style="{StaticResource Secondary}" Click="OpenFile_Click"/></StackPanel>
+                  </StackPanel>
+                </Grid></Border>
+              </DataTemplate></ItemsControl.ItemTemplate></ItemsControl></ScrollViewer>
+              <TextBlock Text="No files" Foreground="{DynamicResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding NoTransfersShown}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+            </Grid>
+            <StackPanel Grid.Row="2">
+              <Border Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Line}" BorderThickness="1" Padding="13,10" Margin="26,0,26,10" CornerRadius="10" MaxWidth="760"><Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Visible"/><Style.Triggers><DataTrigger Binding="{Binding Toast}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Border.Style><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="24"/></Grid.ColumnDefinitions><TextBlock Text="{Binding Toast}" FontSize="12" Foreground="{DynamicResource Muted}" TextWrapping="Wrap" VerticalAlignment="Center"/><Button Grid.Column="1" Style="{StaticResource Icon}" Width="24" Height="24" Click="DismissToast_Click" ToolTip="Dismiss notification"><local:Glyph Data="{StaticResource IconClose}" Size="13"/></Button></Grid></Border>
             </StackPanel>
           </Grid>
         </Border>
-        <Grid Grid.Row="2" Visibility="{Binding ChatOpen, Converter={StaticResource Bool}}">
-          <Grid x:Name="ChatContentGrid">
-            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-            <TextBox x:Name="MessageSearchBox" Text="{Binding MessageSearch, UpdateSourceTrigger=PropertyChanged}" Margin="16,10,16,0" Visibility="Collapsed" ToolTip="Search messages in this conversation"/>
-            <Grid Grid.Row="1">
-              <ScrollViewer x:Name="MessageScroller" VerticalScrollBarVisibility="Auto" Padding="16,18,16,8">
-                <StackPanel>
-                  <TextBlock Text="SAMPLE CONVERSATION" Foreground="{StaticResource Faint}" FontSize="8" HorizontalAlignment="Center" Margin="0,0,0,18" Visibility="{Binding HasPeer, Converter={StaticResource Bool}}"/>
-                  <ItemsControl ItemsSource="{Binding Messages}" ItemTemplate="{StaticResource MessageTemplate}"/>
-                </StackPanel>
-              </ScrollViewer>
-              <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="300" Visibility="{Binding NoPeer, Converter={StaticResource Bool}}" Margin="22">
-                <Border Background="{StaticResource AccentSoft}" CornerRadius="16" Width="56" Height="56"><TextBlock Text="&#xE8F2;" FontFamily="Segoe MDL2 Assets" FontSize="24" Foreground="{StaticResource Accent}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
-                <TextBlock Text="Start a conversation." FontSize="19" FontWeight="SemiBold" TextAlignment="Center" Margin="0,18,0,9"/>
-                <TextBlock Text="Choose a sample contact to explore the design." TextAlignment="Center" Foreground="{StaticResource Muted}" FontSize="12" LineHeight="20" TextWrapping="Wrap"/>
-                <TextBlock Text="Offline preview · no LAN connection" FontSize="10" Foreground="{StaticResource Faint}" HorizontalAlignment="Center" Margin="0,16,0,0"/>
-              </StackPanel>
-              <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="300" Visibility="{Binding Broadcasting, Converter={StaticResource Bool}}" Margin="22">
-                <TextBlock Text="&#xE789;" FontFamily="Segoe MDL2 Assets" Foreground="{StaticResource Accent}" FontSize="30" HorizontalAlignment="Center"/>
-                <TextBlock Text="Let everyone know." FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,18,0,10"/>
-                <TextBlock Text="Preview an announcement. Nothing is sent to the network." TextWrapping="Wrap" TextAlignment="Center" LineHeight="20" Foreground="{StaticResource Muted}"/>
-              </StackPanel>
-            </Grid>
-            <TextBlock Grid.Row="2" Text="{Binding SelectedPeer.Typing}" Foreground="{StaticResource Muted}" FontSize="10" Margin="20,0,20,3"/>
-            <Border Grid.Row="3" Background="{StaticResource Input}" Margin="14,0,14,12" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="8" Padding="5">
-              <Grid>
-                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="30"/></Grid.RowDefinitions>
-                <TextBox x:Name="Composer" Text="{Binding Draft, UpdateSourceTrigger=PropertyChanged}" Background="Transparent" BorderThickness="0" Padding="8,8" MinHeight="34" MaxHeight="96" AcceptsReturn="True" TextWrapping="Wrap" MaxLength="32000" VerticalScrollBarVisibility="Auto" IsEnabled="{Binding CanCompose}" PreviewKeyDown="Composer_KeyDown" TextChanged="Composer_TextChanged" ToolTip="Enter sends; Shift+Enter starts a new line."/>
-                <TextBlock Text="Write a message…" Foreground="{StaticResource Faint}" Margin="8,8,0,0" IsHitTestVisible="False">
-                  <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Draft}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
-                </TextBlock>
-                <Grid Grid.Row="1">
-                  <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                  <StackPanel Orientation="Horizontal"><Button Content="&#xE723;" Style="{StaticResource Icon}" Width="28" Height="28" ToolTip="File sharing preview" Click="Attach_Click" IsEnabled="{Binding HasPeer}"/><Button Content="&#xE899;" Style="{StaticResource Icon}" Width="28" Height="28" ToolTip="Insert a smile" Click="Emoji_Click"/></StackPanel>
-                  <TextBlock Grid.Column="1" Text="Enter to send" FontSize="9" Foreground="{StaticResource Faint}" VerticalAlignment="Center" Margin="8,0" TextTrimming="CharacterEllipsis"/>
-                  <Button Grid.Column="2" Content="Send ↗" Style="{StaticResource Primary}" Padding="12,4" Height="28" FontSize="11" IsEnabled="{Binding CanCompose}" Click="Send_Click"/>
-                </Grid>
-              </Grid>
-            </Border>
-          </Grid>
-          <!-- An optional drawer; never reserves space until requested. -->
-          <Border x:Name="DetailsPanel" Visibility="Collapsed" Width="220" HorizontalAlignment="Right" Background="{StaticResource Sidebar}" BorderBrush="{StaticResource Line}" BorderThickness="1,0,0,0">
-            <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="16,14">
-              <Grid><TextBlock Text="CONTACT DETAILS" Style="{StaticResource Caption}" VerticalAlignment="Center"/><Button Content="&#xE8BB;" Style="{StaticResource Icon}" Width="24" Height="24" FontSize="10" HorizontalAlignment="Right" ToolTip="Close details" Click="Details_Click"/></Grid>
-              <Border Width="46" Height="46" Background="{StaticResource Avatar}" CornerRadius="14" Margin="0,18,0,12"><TextBlock Text="{Binding SelectedPeer.Initials}" Foreground="{StaticResource Accent}" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
-              <TextBlock Text="{Binding SelectedPeer.Name}" FontSize="14" FontWeight="SemiBold" TextAlignment="Center"/>
-              <TextBlock Text="{Binding SelectedPeer.Presence}" Foreground="{StaticResource Accent}" FontSize="10" HorizontalAlignment="Center" Margin="0,5,0,16"/>
-              <Border Background="{StaticResource AccentSoft}" Padding="8,7" CornerRadius="5"><TextBlock Text="{Binding ConnectionLabel}" FontSize="10" Foreground="{StaticResource Accent}" TextAlignment="Center"/></Border>
-              <TextBlock Text="DEVICE ADDRESS" Style="{StaticResource Caption}" Margin="0,20,0,6"/><TextBlock Text="{Binding SelectedPeer.Address}" FontSize="11"/>
-              <TextBlock Text="CLIENT" Style="{StaticResource Caption}" Margin="0,18,0,6"/><TextBlock Text="{Binding SelectedPeer.Version}" FontSize="11" TextWrapping="Wrap"/>
-              <TextBlock Text="PRIVACY" Style="{StaticResource Caption}" Margin="0,18,0,6"/><TextBlock Text="{Binding ConnectionPrivacy}" TextWrapping="Wrap" FontSize="11" Foreground="{StaticResource Muted}" LineHeight="18"/>
-            </StackPanel></ScrollViewer>
-          </Border>
-        </Grid>
-        <Grid Grid.Row="2" Visibility="{Binding TransfersOpen, Converter={StaticResource Bool}}">
-          <Grid.RowDefinitions><RowDefinition Height="74"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-          <StackPanel Margin="16,16,16,0"><TextBlock Text="File transfers" FontSize="19" FontWeight="SemiBold"/><TextBlock Text="Sample files · nothing is sent or downloaded" Foreground="{StaticResource Muted}" FontSize="11" Margin="0,7,0,0"/></StackPanel>
-          <ScrollViewer Grid.Row="1" Padding="14,0,14,14" VerticalScrollBarVisibility="Auto">
-            <ItemsControl ItemsSource="{Binding Transfers}"><ItemsControl.ItemTemplate><DataTemplate>
-              <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="8" Margin="0,0,0,10" Padding="12">
-                <Grid>
-                  <Grid.ColumnDefinitions><ColumnDefinition Width="30"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                  <TextBlock Text="&#xE8A5;" FontFamily="Segoe MDL2 Assets" FontSize="20" Foreground="{StaticResource Accent}" VerticalAlignment="Top"/>
-                  <StackPanel Grid.Column="1">
-                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                    <TextBlock Text="{Binding DirectionLabel}" FontSize="10" Foreground="{StaticResource Muted}" Margin="0,5,0,0"/>
-                    <TextBlock FontSize="10" Foreground="{StaticResource Faint}" Margin="0,4,0,8" TextWrapping="Wrap"><Run Text="{Binding SizeLabel, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding State, Mode=OneWay}"/></TextBlock>
-                    <ProgressBar Value="{Binding Progress}" Height="3" BorderThickness="0" Foreground="{StaticResource Accent}" Background="{StaticResource Hover}"/>
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
-                      <StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding State}" Value="Waiting for approval"/><Condition Binding="{Binding Outgoing}" Value="False"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers></Style></StackPanel.Style>
-                      <Button Content="Decline" FontSize="11" Click="DeclineFile_Click"/><Button Content="Save file" Style="{StaticResource Primary}" FontSize="11" Click="AcceptFile_Click"/>
-                    </StackPanel>
-                  </StackPanel>
-                </Grid>
-              </Border>
-            </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
-          </ScrollViewer>
-          <TextBlock Grid.Row="1" Text="No transfers yet." HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{StaticResource Muted}">
-            <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Transfers.Count}" Value="0"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
-          </TextBlock>
-        </Grid>
-        <StackPanel Grid.Row="3">
-          <Border Background="{StaticResource AccentSoft}" Padding="10,8" Margin="14,0,14,8" CornerRadius="6">
-            <Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Visible"/><Style.Triggers><DataTrigger Binding="{Binding Toast}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Border.Style>
-            <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="24"/></Grid.ColumnDefinitions><TextBlock Text="{Binding Toast}" Foreground="{StaticResource Accent}" FontSize="10" TextWrapping="Wrap" VerticalAlignment="Center"/><Button Grid.Column="1" Content="×" Padding="4,0" Click="DismissToast_Click"/></Grid>
-          </Border>
-          <Border BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="16,6"><TextBlock Text="OFFLINE PREVIEW · NO LAN CONNECTION" FontSize="8" Foreground="{StaticResource Faint}"/></Border>
-        </StackPanel>
       </Grid>
+      <!-- Dims everything behind an open popup so the popup reads as a separate layer. -->
+      <Border x:Name="Scrim" Grid.RowSpan="2" Background="{DynamicResource Scrim}" Visibility="Collapsed" Opacity="0"/>
     </Grid>
   </Border>
 </Window>
