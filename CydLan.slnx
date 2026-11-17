@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/CydLan.Core/CydLan.Core.csproj" />
+    <Project Path="src/CydLan.Desktop/CydLan.Desktop.csproj" />
+  </Folder>
+  <Folder Name="/tests/"><Project Path="tests/CydLan.Tests/CydLan.Tests.csproj" /></Folder>
+</Solution>
