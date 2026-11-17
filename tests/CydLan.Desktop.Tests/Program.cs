@@ -138,7 +138,7 @@ internal static class Program
                 await model.ConnectByAddressAsync($"127.0.0.1:{peer.DiscoveryPort}");
                 await Until(() => model.OnlineCount == 1);
                 model.SelectedPeer = model.Peers.Single();
-                model.ConversationFocused = true;
+                model.Replying = true;
                 var received = new TaskCompletionSource<ChatMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
                 int peerMessageCount = 0;
                 peer.MessageReceived += message => { Interlocked.Increment(ref peerMessageCount); received.TrySetResult(message); };
@@ -157,8 +157,10 @@ internal static class Program
                 Check(await peer.SendChatAsync(model.Settings.UserId, "A message while viewing file transfers", "14003"), "Transfers view stopped receiving chat.");
                 await Until(() => model.SelectedPeer.Unread == 1);
                 model.TransfersOpen = false;
-                Check(model.SelectedPeer.Unread == 0, "Returning to the focused conversation must clear its unread count.");
-                model.ConversationFocused = false;
+                Check(model.SelectedPeer.Unread == 1, "Opening a conversation must not mark it read before the user replies.");
+                model.Replying = true;
+                Check(model.SelectedPeer.Unread == 0, "Engaging the composer must clear the unread count.");
+                model.Replying = false;
                 Check(await peer.SendChatAsync(model.Settings.UserId, "A message while the window is inactive", "14002"), "Inactive window stopped receiving chat.");
                 await Until(() => model.SelectedPeer.Unread == 1);
                 Check(model.PeopleSummary.Contains("1 unread"), "Unread totals did not update.");
@@ -221,8 +223,25 @@ internal static class Program
                 Check(File.Exists(model.Messages.Last().ImagePath) && model.Transfers.All(t => t.Inline), "An inline image from a CydLan peer should appear in the conversation.");
                 await peer.OfferFileAsync(model.Settings.UserId, png);
                 await Until(() => model.Transfers.Any(t => !t.Inline));
-                Check(model.Transfers.Single(t => !t.Inline).State == "Waiting for approval", "Ordinary file offers must still wait for the user to accept.");
-                Console.WriteLine("PASS  Inline images both ways; ordinary file offers still need approval");
+                var offer = model.Transfers.Single(t => !t.Inline);
+                Check(offer.State == "Waiting for approval", "Ordinary file offers must still wait for the user to accept.");
+                // Accepting saves straight into the received files folder, naming a copy "name [1].ext" like LAN Messenger.
+                Check(model.ReceivedFilesFolder == Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Received Files"), "Received files default to LAN Messenger's Documents\\Received Files.");
+                string receivedFolder = Path.Combine(directory, "Received Files"); Directory.CreateDirectory(receivedFolder);
+                File.WriteAllText(Path.Combine(receivedFolder, offer.Name), "already here");
+                model.Settings.ReceivedFilesFolder = receivedFolder;
+                await model.AcceptFileAsync(offer);
+                await Until(() => offer.State == "Received");
+                string expectedCopy = Path.Combine(receivedFolder, Path.GetFileNameWithoutExtension(offer.Name) + " [1]" + Path.GetExtension(offer.Name));
+                Check(offer.Path == expectedCopy && File.ReadAllBytes(expectedCopy).SequenceEqual(File.ReadAllBytes(png)) && File.ReadAllText(Path.Combine(receivedFolder, offer.Name)) == "already here",
+                    "An accepted file must be saved as \"name [1].ext\" beside an existing one.");
+                // The conversation's files panel: Received and Sent tabs for the open person only.
+                model.ConversationFilesSent = false;
+                Check(model.ConversationFiles.Cast<FileTransfer>().Any() && model.ConversationFiles.Cast<FileTransfer>().All(t => !t.Outgoing && t.PeerId == model.SelectedPeer!.Id), "The Received tab lists only files from this person.");
+                model.ConversationFilesSent = true;
+                Check(model.ConversationFiles.Cast<FileTransfer>().All(t => t.Outgoing) && model.ConversationSentCount == model.Transfers.Count(t => t.Outgoing), "The Sent tab lists only files sent to this person.");
+                model.ConversationFilesSent = false;
+                Console.WriteLine("PASS  Inline images both ways; accepted files saved like LAN Messenger; files panel tabs");
 
                 // A sent file's bubble follows the legacy outcome: waiting → declined / accepted → sent / cancelled.
                 string doc = Path.Combine(directory, "notes.txt"); File.WriteAllText(doc, new string('x', 200_000));
@@ -297,6 +316,14 @@ internal static class Program
                 await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
                 string artifacts = Path.GetFullPath("artifacts"); Directory.CreateDirectory(artifacts);
                 Capture(window, Path.Combine(artifacts, "live-chat-tested.png"));
+                ClickNamed(window, "Files in this conversation");
+                await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+                Check(((FrameworkElement)window.FindName("FilesPanel")).IsVisible, "The files button should open the files panel.");
+                Capture(window, Path.Combine(artifacts, "files-panel-tested.png"));
+                ClickNamed(window, "Contact details");
+                await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+                Check(!((FrameworkElement)window.FindName("FilesPanel")).IsVisible && ((FrameworkElement)window.FindName("DetailsPanel")).IsVisible, "Only one side panel is open at a time.");
+                ClickNamed(window, "Contact details");
                 window.Width = window.MinWidth; window.Height = window.MinHeight;
                 await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
                 Capture(window, Path.Combine(artifacts, "compact-chat-tested.png"));
@@ -324,7 +351,19 @@ internal static class Program
             Check(restored.Transfers.Count >= 3 && restored.Settings.FirstName == "Home", "File history and profile did not survive restart.");
             Check(restored.Settings.DisplayName == "Home desktop updated", "Preferences were not persisted.");
             Console.WriteLine("PASS  Desktop restart restores history, drafts, profile and retry state");
-            Console.WriteLine("11/11 desktop test groups passed. Live networking was loopback-only, with isolated temporary application data.");
+
+            // Delete chat removes only the open conversation (and CydLan's picture copies); delete all chats removes every one.
+            var contact = restored.Peers.Single(); restored.SelectedPeer = contact;
+            var pictures = restored.Messages.Where(m => m.HasImage).Select(m => m.ImagePath).ToList();
+            restored.DeleteConversation();
+            Check(restored.Messages.Count == 0 && contact.Preview == "" && pictures.Count == 2 && pictures.All(p => !File.Exists(p)), "Delete chat should remove this person's messages and picture copies.");
+            Check(restored.Transfers.Any(t => !t.Inline && !t.Outgoing && t.State == "Received" && File.Exists(t.Path)), "Delete chat keeps received files and the files list.");
+            restored.SelectedGroup = restored.Groups.First(g => g.Name == "Lunch");
+            Check(restored.Messages.Count == 2, "Delete chat must not touch other chats.");
+            restored.ClearMessageHistory();
+            Check(restored.Messages.Count == 0 && restored.Groups.All(g => g.Preview == ""), "Delete all chats should remove every conversation.");
+            Console.WriteLine("PASS  Delete chat and delete all chats");
+            Console.WriteLine("12/12 desktop test groups passed. Live networking was loopback-only, with isolated temporary application data.");
         }
         finally
         {

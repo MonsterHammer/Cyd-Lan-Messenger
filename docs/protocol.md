@@ -32,7 +32,7 @@ Presence uses `status` (`chat`, `away`, `busy`, `dnd`), name updates use `name`,
 
 Encrypted `file` control messages negotiate `fileid` (32 hex characters), `mode` (`send`/`receive`), `filetype=normal`, `fileop`, `filename`, and `filesize`. A receiver must explicitly accept an offer and advertise its TCP port. The sender then connects separately and sends ASCII `FILE`, file ID, and sender ID; the receiver reads at most 64 bytes of this greeting, which limits sender IDs to 28 characters. The receiver replies `START`, followed by the sender's raw bytes. File payloads are unencrypted by the original protocol.
 
-CydLan matches incoming file streams against a previously accepted offer and the connected peer's IP. It never uses a sender-supplied path. Received bytes go to a unique `.partial` sibling, with a 30-second inactivity timeout. After the exact advertised size, the file is moved to the user-selected destination without overwriting. Empty files follow the same process. An incomplete transfer removes its partial file. The protocol supplies no final application-level receipt to the sender.
+CydLan matches incoming file streams against a previously accepted offer and the connected peer's IP. It never uses a sender-supplied path. Received bytes go to a unique `.partial` sibling, with a 30-second inactivity timeout. After the exact advertised size, the file is moved to its destination without overwriting. Like LAN Messenger (`StdLocation::fileStorageDir`, `lmcMessaging::getFreeFileName`), an accepted file goes straight into the received files folder, which defaults to `Documents\Received Files`, and a taken name becomes `name [1].ext`, `name [2].ext`, and so on. Empty files follow the same process. An incomplete transfer removes its partial file. The protocol supplies no final application-level receipt to the sender.
 
 ## Group chat
 
@@ -53,6 +53,8 @@ CydLan's `userdata` carries `firstname`, `lastname` and `about` alongside `name`
 
 Profile pictures use LAN Messenger's `avatar` message: `filetype=avatar`, `fileop=request`, `mode=send`, `fileid`, `filename`, `filesize` and `filepath`. The receiver answers `fileop=accept` automatically and the picture travels over the normal `FILE` stream. CydLan offers its picture (a 96 px PNG) once per connection and to everyone when it changes; it accepts pictures up to 1 MiB, stores them under the transfer ID in its own avatars folder, and keeps them only when the bytes start with a PNG, JPEG, GIF or BMP signature. Pictures never appear in the file-transfer list. LAN Messenger has no message for removing a picture.
 
+LAN Messenger 1.2.39 sends its picture whenever it discovers a peer, and delivers it by dialling its own configured port. When both apps run on one computer that port is LAN Messenger's own listener, so the stream never arrives. For a peer whose address belongs to this computer, CydLan therefore copies the picture from the request's `filepath` (with the same size and signature checks) and answers `fileop=decline`.
+
 ### CydLan inline images (extension)
 
 Images pasted, dropped or attached in the composer travel as ordinary `file` offers, so legacy LAN Messenger users receive a normal file they can accept or decline. When the receiving peer's `userdata` `version` starts with `CydLan`, the sender adds one extra body element, `cydlaninline=image`, which legacy parsers skip.
@@ -62,3 +64,7 @@ A CydLan receiver accepts such an offer automatically only when all of these hol
 ## Architectural boundary
 
 `CydLan.Core` contains transport, XML, cryptography, models, and persistence without a GUI dependency. `CydLan.Desktop` owns WPF views, UI dispatch, history lifecycle, and the tray. There is no HTTP endpoint, WebSocket server, cloud service, relay, or background web process.
+
+## Emoticons
+
+LAN Messenger has no emoticon message. Its picker inserts text codes such as `:-)`, `(Y)` and `(L)`; each client replaces the 81 known codes with 70 pictures when it shows a message, case-insensitively and one code at a time in table order. CydLan sends the same codes, draws the same pictures with the same matching rules (`Smileys.cs`), and leaves Unicode emoji as text.

@@ -26,8 +26,10 @@ public partial class MainWindow : Window
             Dispatcher.BeginInvoke(() => { if (force || atEnd) MessageScroller.ScrollToEnd(); else MessageScroller.ScrollToVerticalOffset(offset); });
         };
         Loaded += (_, _) => MessageScroller.ScrollToEnd();
-        Activated += (_, _) => { model.ConversationFocused = true; if (model.ChatOpen && !model.Broadcasting && model.SelectedPeer is { } peer) peer.Unread = 0; };
-        Deactivated += (_, _) => model.ConversationFocused = false;
+        // Opening a conversation (including from a notification) leaves it unread until the user clicks or types in the composer.
+        Deactivated += (_, _) => model.Replying = false;
+        Composer.PreviewMouseDown += (_, _) => model.Replying = true;
+        Composer.PreviewTextInput += (_, _) => model.Replying = true;
         Closing += (_, args) => { if (System.Windows.Application.Current is App { IsQuitting: true }) return; args.Cancel = true; Hide(); };
         typingTimer.Tick += async (_, _) => { typingTimer.Stop(); await StopTypingAsync(); };
         SizeChanged += (_, _) => UpdateCompactLayout();
@@ -41,7 +43,7 @@ public partial class MainWindow : Window
         PreviewDragLeave += (_, _) => DropOverlay.Visibility = Visibility.Collapsed;
         PreviewDrop += Window_Drop;
         model.PropertyChanged += async (_, args) => {
-            if (args.PropertyName == nameof(model.HasPeer) && !model.HasPeer) { DetailsPanel.Visibility = Visibility.Collapsed; UpdateCompactLayout(); }
+            if (args.PropertyName == nameof(model.HasPeer) && !model.HasPeer) { DetailsPanel.Visibility = Visibility.Collapsed; FilesPanel.Visibility = Visibility.Collapsed; UpdateCompactLayout(); }
             if (args.PropertyName == nameof(model.InGroup) && !model.InGroup) { GroupPanel.Visibility = Visibility.Collapsed; UpdateCompactLayout(); }
             if (args.PropertyName == nameof(model.SelectedPeer) || args.PropertyName == nameof(model.Broadcasting)) { typingTimer.Stop(); await StopTypingAsync(); }
         };
@@ -124,7 +126,7 @@ public partial class MainWindow : Window
         }
         else if (e.Key == Key.Escape)
         {
-            DetailsPanel.Visibility = Visibility.Collapsed;
+            DetailsPanel.Visibility = Visibility.Collapsed; FilesPanel.Visibility = Visibility.Collapsed;
             if (searchOpen) CloseSearch();
             UpdateCompactLayout(); Composer.Focus();
         }
@@ -163,10 +165,44 @@ public partial class MainWindow : Window
     }
     private void Details_Click(object sender, RoutedEventArgs e)
     {
-        if (model.InGroup) { GroupPanel.Visibility = GroupPanel.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible; DetailsPanel.Visibility = Visibility.Collapsed; }
-        else if (model.HasPeer) { DetailsPanel.Visibility = DetailsPanel.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible; GroupPanel.Visibility = Visibility.Collapsed; }
-        else return;
+        if (model.InGroup) ShowSidePanel(GroupPanel);
+        else if (model.HasPeer) ShowSidePanel(DetailsPanel);
+    }
+    private void ConversationFiles_Click(object sender, RoutedEventArgs e) { if (model.HasPeer) ShowSidePanel(FilesPanel); }
+    // One side panel at a time; clicking the open one's button closes it.
+    private void ShowSidePanel(FrameworkElement panel)
+    {
+        bool open = panel.Visibility != Visibility.Visible;
+        foreach (var other in new FrameworkElement[] { DetailsPanel, GroupPanel, FilesPanel }) other.Visibility = Visibility.Collapsed;
+        if (open) panel.Visibility = Visibility.Visible;
         UpdateCompactLayout();
+    }
+    private void FilesTab_Checked(object sender, RoutedEventArgs e) { if (model is not null) model.ConversationFilesSent = sender == SentTab; }
+    private void More_Click(object sender, RoutedEventArgs e)
+    {
+        var menu = MoreButton.ContextMenu;
+        menu.DataContext = model; menu.PlacementTarget = MoreButton; menu.IsOpen = true;
+    }
+    private void DeleteChat_Click(object sender, RoutedEventArgs e)
+    {
+        if (!model.HasDetails) return;
+        if (System.Windows.MessageBox.Show(this, $"Delete your chat with {model.ChatTitle}? Messages are removed from this computer.", "Delete chat", MessageBoxButton.OKCancel) == MessageBoxResult.OK)
+            model.DeleteConversation();
+    }
+    private void DeleteAllChats_Click(object sender, RoutedEventArgs e)
+    {
+        if (System.Windows.MessageBox.Show(this, "Delete all chats? Messages are removed from this computer.", "Delete all chats", MessageBoxButton.OKCancel) == MessageBoxResult.OK)
+            model.ClearMessageHistory();
+    }
+    private void DeleteRowChat_Click(object sender, RoutedEventArgs e)
+    {
+        switch (((FrameworkElement)sender).DataContext)
+        {
+            case Peer peer: model.SelectedPeer = peer; break;
+            case GroupChat group: model.SelectedGroup = group; break;
+            default: return;
+        }
+        DeleteChat_Click(sender, e);
     }
     internal void ShowConnectionDetails() { if (model.HasPeer) DetailsPanel.Visibility = Visibility.Visible; UpdateCompactLayout(); }
     private void UpdateCompactLayout(bool animate = false)
@@ -192,7 +228,8 @@ public partial class MainWindow : Window
         }
         // Details become a drawer on small windows instead of squeezing the chat.
         double conversationWidth = ActualWidth - 52 - width;
-        ChatContentGrid.Margin = (DetailsPanel.Visibility == Visibility.Visible || GroupPanel.Visibility == Visibility.Visible) && conversationWidth >= 790 ? new Thickness(0,0,242,0) : new Thickness(0);
+        bool panelOpen = DetailsPanel.Visibility == Visibility.Visible || GroupPanel.Visibility == Visibility.Visible || FilesPanel.Visibility == Visibility.Visible;
+        ChatContentGrid.Margin = panelOpen && conversationWidth >= 790 ? new Thickness(0,0,242,0) : new Thickness(0);
     }
     private async void Send_Click(object sender, RoutedEventArgs e) => await model.SendAsync();
     private async void Retry_Click(object sender, RoutedEventArgs e) { if (((System.Windows.Controls.Button)sender).DataContext is ChatMessage message) await model.RetryAsync(message); }
@@ -216,7 +253,23 @@ public partial class MainWindow : Window
         lastTyping = DateTime.UtcNow; await model.SendTypingAsync(true, typingPeer);
     }
     private async Task StopTypingAsync() { var peer = typingPeer; typingPeer = null; if (peer is not null) await model.SendTypingAsync(false, peer); }
-    private void Emoji_Click(object sender, RoutedEventArgs e) { Composer.SelectedText = " 🙂 "; Composer.CaretIndex = Composer.Text.Length; Composer.Focus(); }
+    private void Emoji_Click(object sender, RoutedEventArgs e)
+    {
+        SmileyGrid.ItemsSource ??= CydLan.Core.Smileys.PickerCodes.Select((code, i) => new { Code = code, Image = SmileyImages.Get(i + 1) }).ToList();
+        SmileyPopup.IsOpen = !SmileyPopup.IsOpen;
+    }
+    // Inserts the LAN Messenger code; both apps draw it as the picture.
+    private void Smiley_Click(object sender, RoutedEventArgs e)
+    {
+        SmileyPopup.IsOpen = false;
+        Composer.SelectedText = (string)((FrameworkElement)sender).Tag;
+        Composer.CaretIndex = Composer.SelectionStart + Composer.SelectionLength; Composer.SelectionLength = 0;
+        model.Replying = true; Composer.Focus();
+    }
+    private void CopyMessage_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: ChatMessage message }) try { System.Windows.Clipboard.SetText(message.Text); } catch (System.Runtime.InteropServices.ExternalException) { }
+    }
     private void Attach_Click(object sender, RoutedEventArgs e)
     {
         if (model.SelectedPeer is null || !model.SelectedPeer.Online) { model.Toast = "No online contact selected"; return; }
@@ -291,16 +344,10 @@ public partial class MainWindow : Window
         try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(message.ImagePath) { UseShellExecute = true }); }
         catch (System.ComponentModel.Win32Exception ex) { model.Toast = "No app is available to open this image: " + ex.Message; }
     }
+    // Like LAN Messenger, an accepted file goes straight into the received files folder ("name [1].ext" when taken).
     private async void AcceptFile_Click(object sender, RoutedEventArgs e)
     {
-        if (((System.Windows.Controls.Button)sender).DataContext is not FileTransfer transfer) return;
-        System.IO.Directory.CreateDirectory(model.ReceivedFilesFolder);
-        var picker = new Microsoft.Win32.SaveFileDialog { Title = "Save incoming LAN file", FileName = transfer.Name, OverwritePrompt = false, InitialDirectory = model.ReceivedFilesFolder };
-        if (picker.ShowDialog(this) == true)
-        {
-            if (System.IO.File.Exists(picker.FileName)) { model.Toast = "File already exists"; return; }
-            await model.AcceptFileAsync(transfer, picker.FileName);
-        }
+        if (((System.Windows.Controls.Button)sender).DataContext is FileTransfer transfer) await model.AcceptFileAsync(transfer);
     }
     private async void CancelOffer_Click(object sender, RoutedEventArgs e) { if (((FrameworkElement)sender).DataContext is FileTransfer transfer) await model.CancelOfferAsync(transfer); }
     private async void DeclineFile_Click(object sender, RoutedEventArgs e) { if (((System.Windows.Controls.Button)sender).DataContext is FileTransfer transfer) await model.DeclineFileAsync(transfer); }

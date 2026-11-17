@@ -141,8 +141,10 @@ public sealed class AppSettings
     public bool SoundsWhenBusy { get; set; } = true;
     public bool SoundsWhenDnd { get; set; }
     // File transfer
-    /// <summary>Folder for received files; empty means Downloads\CydLan.</summary>
+    /// <summary>Folder for received files; empty means <see cref="DefaultReceivedFilesFolder"/>.</summary>
     public string ReceivedFilesFolder { get; set; } = "";
+    /// <summary>LAN Messenger's default storage folder (Documents\Received Files), so both apps save to the same place.</summary>
+    public static string DefaultReceivedFilesFolder => System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Received Files");
     public bool AutoAcceptFiles { get; set; }
 }
 

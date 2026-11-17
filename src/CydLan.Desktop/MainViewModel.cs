@@ -36,6 +36,18 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     public int ReceivedCount => Transfers.Count(t => !t.Outgoing);
     public int SentCount => Transfers.Count(t => t.Outgoing);
     public bool NoTransfersShown => TransfersView.IsEmpty;
+    /// <summary>The open conversation's files panel: what this person sent you, or what you sent them.</summary>
+    public ICollectionView ConversationFiles { get; }
+    private bool conversationFilesSent;
+    public bool ConversationFilesSent { get => conversationFilesSent; set { if (Set(ref conversationFilesSent, value)) RefreshConversationFiles(); } }
+    public int ConversationReceivedCount => SelectedPeer is { } p ? Transfers.Count(t => t.PeerId == p.Id && !t.Outgoing) : 0;
+    public int ConversationSentCount => SelectedPeer is { } p ? Transfers.Count(t => t.PeerId == p.Id && t.Outgoing) : 0;
+    public bool NoConversationFiles => ConversationFiles.IsEmpty;
+    private void RefreshConversationFiles()
+    {
+        ConversationFiles.Refresh();
+        Changed(nameof(ConversationReceivedCount)); Changed(nameof(ConversationSentCount)); Changed(nameof(NoConversationFiles));
+    }
     public ObservableCollection<string> Diagnostics { get; } = [];
     public ICollectionView People { get; }
     private Peer? selected;
@@ -44,8 +56,9 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     private string transferFilter = "all";
     private string search = "", messageSearch = "", networkStatus = "Starting local network…", toast = "";
     private bool transfersOpen, broadcasting, connected;
-    private bool conversationFocused;
-    public bool ConversationFocused { get => conversationFocused; set { conversationFocused = value; MarkConversationRead(); } }
+    private bool replying;
+    /// <summary>The user has clicked or typed in the composer of the open conversation; until then its messages stay unread.</summary>
+    public bool Replying { get => replying; set { replying = value; MarkConversationRead(); } }
     public event Action<string, string>? Notify;
     public event Action<bool>? ScrollRequested;
     public Peer? SelectedPeer
@@ -54,7 +67,6 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         set
         {
             if (!Set(ref selected, value)) return;
-            if (value is not null && ConversationFocused) value.Unread = 0;
             // Picking a person always returns to one-to-one chat.
             if (value is not null) { broadcasting = false; groupsOpen = false; transfersOpen = false; }
             MessageSearch = ""; SectionChanged();
@@ -66,7 +78,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         set
         {
             if (!Set(ref selectedGroup, value)) return;
-            if (value is not null) { groupsOpen = true; broadcasting = false; transfersOpen = false; if (ConversationFocused) value.Unread = 0; }
+            if (value is not null) { groupsOpen = true; broadcasting = false; transfersOpen = false; }
             MessageSearch = ""; SectionChanged();
         }
     }
@@ -114,13 +126,13 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     private string NameOf(string peerId) => Peers.FirstOrDefault(p => p.Id == peerId)?.Name ?? "Someone";
     private void SectionChanged()
     {
-        MarkConversationRead();
+        replying = false;
         foreach (var name in new[] { nameof(TransfersOpen), nameof(Broadcasting), nameof(GroupsOpen), nameof(ChatOpen), nameof(IsConversationSection), nameof(IsBroadcastSection),
             nameof(IsGroupsSection), nameof(IsFilesSection), nameof(ShowPeopleList), nameof(ShowGroupList), nameof(InGroup), nameof(HasPeer), nameof(NoPeer), nameof(NoGroup),
             nameof(HasDetails), nameof(SelectedGroupMembers), nameof(SectionTitle), nameof(ChatTitle), nameof(ChatSubtitle), nameof(Draft) })
             Changed(name);
         Changed(nameof(SelectedGroup)); Changed(nameof(SelectedPeer));
-        AttachmentsSwitched(); ComposeChanged(); RefreshMessages(true);
+        AttachmentsSwitched(); ComposeChanged(); RefreshMessages(true); RefreshConversationFiles();
     }
     private void AttachmentsSwitched() { Changed(nameof(Attachments)); Changed(nameof(HasAttachments)); Changed(nameof(CanSend)); }
     public int OnlineCount => Peers.Count(p => p.Online);
@@ -193,7 +205,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
                 var peer = Peers.FirstOrDefault(p => p.Id == message.PeerId);
                 if (peer is null) return;
                 history.Add(message); peer.Preview = message.Text.ReplaceLineEndings(" ");
-                if (SelectedPeer?.Id != peer.Id || !IsConversationSection || !ConversationFocused) peer.Unread++;
+                if (SelectedPeer?.Id != peer.Id || !IsConversationSection || !Replying) peer.Unread++;
                 peer.Typing = "";
                 RefreshMessages(); Changed(nameof(PeopleSummary)); Save(); Notify?.Invoke(peer.Name, message.Text);
             });
@@ -203,7 +215,8 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
             lan.Diagnostic += message => UI(() => { Diagnostics.Insert(0, $"{DateTime.Now:HH:mm:ss}  {message}"); while (Diagnostics.Count > 100) Diagnostics.RemoveAt(100); });
         }
         TransfersView = new ListCollectionView(Transfers) { Filter = item => item is FileTransfer t && (TransferFilter == "all" || (TransferFilter == "received") != t.Outgoing) };
-        Transfers.CollectionChanged += (_, _) => { Changed(nameof(ReceivedCount)); Changed(nameof(SentCount)); Changed(nameof(NoTransfersShown)); };
+        ConversationFiles = new ListCollectionView(Transfers) { Filter = item => item is FileTransfer t && SelectedPeer is { } p && t.PeerId == p.Id && t.Outgoing == ConversationFilesSent };
+        Transfers.CollectionChanged += (_, _) => { Changed(nameof(ReceivedCount)); Changed(nameof(SentCount)); Changed(nameof(NoTransfersShown)); RefreshConversationFiles(); };
         People = CollectionViewSource.GetDefaultView(Peers);
         People.Filter = obj => obj is Peer peer && (peer.Name.Contains(Search, StringComparison.OrdinalIgnoreCase) || peer.Address.Contains(Search, StringComparison.OrdinalIgnoreCase) || history.Any(m => m.PeerId == peer.Id && m.Text.Contains(Search, StringComparison.OrdinalIgnoreCase)));
         People.SortDescriptions.Add(new(nameof(Peer.Online), ListSortDirection.Descending));
@@ -215,7 +228,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     private void ComposeChanged() { Changed(nameof(CanCompose)); Changed(nameof(CanSend)); Changed(nameof(CanAttach)); }
     private void MarkConversationRead()
     {
-        if (!ConversationFocused) return;
+        if (!Replying) return;
         if (IsConversationSection && SelectedPeer is { } peer) peer.Unread = 0;
         if (IsGroupsSection && SelectedGroup is { } group) group.Unread = 0;
     }
@@ -385,7 +398,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
             transfer.PeerName = Peers.FirstOrDefault(p => p.Id == transfer.PeerId)?.Name ?? transfer.PeerId; Transfers.Insert(0, transfer);
             if (!transfer.Outgoing && !transfer.Inline && transfer.State == "Waiting for approval") Notify?.Invoke(transfer.PeerName, "Wants to send you " + transfer.Name);
         }
-        TransfersView.Refresh();
+        TransfersView.Refresh(); RefreshConversationFiles();
         if (transferMessages.TryGetValue(transfer.Id, out var sent))
         {
             var delivery = DeliveryFor(transfer);
@@ -405,7 +418,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
             }
             history.Add(new() { Id = transfer.Id, PeerId = peer.Id, ImagePath = transfer.Path, Delivery = "Received" });
             peer.Preview = "Photo"; peer.Typing = "";
-            if (SelectedPeer?.Id != peer.Id || !IsConversationSection || !ConversationFocused) peer.Unread++;
+            if (SelectedPeer?.Id != peer.Id || !IsConversationSection || !Replying) peer.Unread++;
             RefreshMessages(); Changed(nameof(PeopleSummary)); Save(); Notify?.Invoke(peer.Name, "Sent you a photo");
         }
     }
@@ -415,7 +428,8 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         if (SelectedPeer is null) return;
         await RunAsync(async () => { await lan!.OfferFileAsync(SelectedPeer.Id, path); TransfersOpen = true; });
     }
-    public async Task AcceptFileAsync(FileTransfer transfer, string path) { if (lan is not null) await RunAsync(() => lan.AcceptFileAsync(transfer, path)); }
+    /// <summary>Saves an offered file straight into the received files folder, as LAN Messenger does.</summary>
+    public async Task AcceptFileAsync(FileTransfer transfer) { if (lan is not null) await RunAsync(() => lan.AcceptFileIntoAsync(transfer, ReceivedFilesFolder)); }
     public async Task DeclineFileAsync(FileTransfer transfer) { if (lan is not null) await RunAsync(() => lan.DeclineFileAsync(transfer)); }
     // ---------------- Group chat (LAN Messenger "chat rooms") ----------------
     // Wire format: groupmessage with thread + groupmsgop (request | join | message | leave), one copy per participant, never acknowledged.
@@ -482,7 +496,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
                 {
                     group = new GroupChat { Id = thread, Name = $"Group with {sender.Name}", Preview = $"{sender.Name} added you" };
                     Groups.Insert(0, group);
-                    if (!IsGroupsSection || SelectedGroup != group || !ConversationFocused) group.Unread++;
+                    if (!IsGroupsSection || SelectedGroup != group || !Replying) group.Unread++;
                     Notify?.Invoke(sender.Name, "Added you to a group chat");
                     _ = AnnounceJoinAsync(group);
                 }
@@ -495,7 +509,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
                 AddMember(group, senderId);
                 history.Add(new() { GroupId = thread, PeerId = senderId, SenderName = sender.Name, Text = text, Delivery = "Received" });
                 group.Preview = $"{sender.Name}: {text.ReplaceLineEndings(" ")}";
-                if (SelectedGroup != group || !IsGroupsSection || !ConversationFocused) group.Unread++;
+                if (SelectedGroup != group || !IsGroupsSection || !Replying) group.Unread++;
                 if (SelectedGroup == group && IsGroupsSection) RefreshMessages();
                 Notify?.Invoke($"{sender.Name} · {group.Name}", text);
                 break;
@@ -512,8 +526,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     }
 
     // ---------------- Preferences ----------------
-    public string ReceivedFilesFolder => string.IsNullOrWhiteSpace(Settings.ReceivedFilesFolder)
-        ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "CydLan") : Settings.ReceivedFilesFolder;
+    public string ReceivedFilesFolder => string.IsNullOrWhiteSpace(Settings.ReceivedFilesFolder) ? AppSettings.DefaultReceivedFilesFolder : Settings.ReceivedFilesFolder;
     public static double FontSizeFor(string size) => size switch { "small" => 13, "large" => 17, _ => 15 };
     public void ApplySettings()
     {
@@ -545,12 +558,23 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     }
     public bool ShouldAlert => Settings.Notifications && !(Settings.Status == "busy" && !Settings.AlertsWhenBusy) && !(Settings.Status == "dnd" && !Settings.AlertsWhenDnd);
     public bool ShouldPlaySound => Settings.Sounds && !(Settings.Status == "busy" && !Settings.SoundsWhenBusy) && !(Settings.Status == "dnd" && !Settings.SoundsWhenDnd);
-    public void ClearMessageHistory()
+    public void ClearMessageHistory() => DeleteMessages(_ => true);
+    /// <summary>Deletes the open chat's messages (one person or one group) from this computer.</summary>
+    public void DeleteConversation()
     {
-        history.Clear();
-        foreach (var peer in Peers) peer.Preview = "";
-        foreach (var group in Groups) group.Preview = "";
-        RefreshMessages(); Save();
+        if (InGroup) { var id = SelectedGroup!.Id; DeleteMessages(m => m.GroupId == id); }
+        else if (HasPeer) { var id = SelectedPeer!.Id; DeleteMessages(m => m.GroupId.Length == 0 && m.PeerId == id); }
+    }
+    private void DeleteMessages(Predicate<ChatMessage> match)
+    {
+        var removed = history.FindAll(match);
+        history.RemoveAll(match);
+        // Pictures are CydLan's own copies; files saved to the received files folder are kept.
+        foreach (var image in removed.Select(m => m.ImagePath).Where(p => p.Length > 0 && Path.GetFullPath(p).StartsWith(Path.GetFullPath(ImagesDirectory), StringComparison.OrdinalIgnoreCase)))
+            if (!history.Any(m => string.Equals(m.ImagePath, image, StringComparison.OrdinalIgnoreCase))) TryDelete(image);
+        foreach (var peer in Peers.Where(p => !history.Any(m => m.GroupId.Length == 0 && m.PeerId == p.Id))) { peer.Preview = ""; peer.Unread = 0; }
+        foreach (var group in Groups.Where(g => !history.Any(m => m.GroupId == g.Id))) { group.Preview = ""; group.Unread = 0; }
+        RefreshMessages(); Changed(nameof(PeopleSummary)); Save();
     }
     public void ClearTransferHistory()
     {

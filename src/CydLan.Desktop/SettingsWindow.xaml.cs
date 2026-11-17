@@ -114,7 +114,7 @@ public partial class SettingsWindow : Window
         if (!IPAddress.TryParse(multicast, out var group) || group.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork || group.GetAddressBytes()[0] is < 224 or > 239)
         { ShowPage("NetworkPage"); MulticastBox.Focus(); return; }
         bool networkChanged = port != model.Settings.Port || multicast != model.Settings.Multicast;
-        string defaultFolder = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "CydLan");
+        string defaultFolder = CydLan.Core.AppSettings.DefaultReceivedFilesFolder;
         await model.SavePreferencesAsync(s =>
         {
             s.StartWithWindows = StartWithWindowsBox.IsChecked == true; s.StartMinimized = MinimizedBox.IsChecked == true;

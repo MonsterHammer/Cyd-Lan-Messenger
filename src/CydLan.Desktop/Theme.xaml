@@ -53,6 +53,20 @@
     <Style x:Key="SendIcon" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
       <Setter Property="Width" Value="34"/><Setter Property="Height" Value="34"/><Setter Property="Padding" Value="0"/><Setter Property="Foreground" Value="{DynamicResource Accent}"/>
     </Style>
+    <!-- A tab in a side panel: label with an accent underline when selected. -->
+    <Style x:Key="Tab" TargetType="RadioButton">
+      <Setter Property="Foreground" Value="{DynamicResource Muted}"/><Setter Property="FontSize" Value="13"/><Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="RadioButton">
+        <Grid Background="Transparent">
+          <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,8,0,10"/>
+          <Border x:Name="Underline" Height="2" CornerRadius="1" Background="{DynamicResource Accent}" VerticalAlignment="Bottom" Visibility="Hidden"/>
+        </Grid>
+        <ControlTemplate.Triggers>
+          <Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="{DynamicResource Ink}"/></Trigger>
+          <Trigger Property="IsChecked" Value="True"><Setter Property="Foreground" Value="{DynamicResource Ink}"/><Setter Property="FontWeight" Value="SemiBold"/><Setter TargetName="Underline" Property="Visibility" Value="Visible"/></Trigger>
+        </ControlTemplate.Triggers>
+      </ControlTemplate></Setter.Value></Setter>
+    </Style>
     <!-- A selectable sidebar row (Files › All / Received / Sent). -->
     <Style x:Key="FilterRow" TargetType="RadioButton">
       <Setter Property="Foreground" Value="{DynamicResource Ink}"/><Setter Property="FontSize" Value="13"/><Setter Property="Cursor" Value="Hand"/><Setter Property="Margin" Value="0,1"/>

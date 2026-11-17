@@ -14,4 +14,6 @@
   </PropertyGroup>
   <ItemGroup><ProjectReference Include="../CydLan.Core/CydLan.Core.csproj" /></ItemGroup>
   <ItemGroup><Resource Include="../../assets/brand/cydlan.ico" Link="Assets/cydlan.ico" /></ItemGroup>
+  <!-- LAN Messenger 1.2.39 emoticon pictures (GPL-3.0-or-later); see THIRD-PARTY-NOTICES.md. -->
+  <ItemGroup><Resource Include="../../assets/smileys/*.png" LinkBase="Assets/smileys" /></ItemGroup>
 </Project>

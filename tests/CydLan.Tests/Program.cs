@@ -11,6 +11,7 @@ if (args.Contains("--experiment-peer")) return await NetworkExperiment.RunPeerAs
 
 var tests = new (string Name, Func<Task> Run)[] {
     ("Legacy XML fixtures, escaping and Unicode", TestXml),
+    ("LAN Messenger emoticon codes", TestSmileys),
     ("Reject external entities and malformed packets", TestInvalidXml),
     ("Fragmented and coalesced TCP frames", TestFraming),
     ("Reject oversized and truncated frames", TestInvalidFrames),
@@ -44,6 +45,18 @@ return failures == 0 ? 0 : 1;
 static void Check(bool condition, string description) { if (!condition) throw new Exception(description); }
 static async Task Until(Func<bool> predicate) { using var deadline = new CancellationTokenSource(8000); while (!predicate()) await Task.Delay(15, deadline.Token); }
 static AppSettings Settings(string name) => new() { DisplayName = name, Port = 0 };
+static Task TestSmileys()
+{
+    string Render(string text) => string.Concat(Smileys.Split(text).Select(s => s.Picture > 0 ? $"[{s.Picture}]" : s.Text));
+    Check(Smileys.PickerCodes.Count == 70 && Smileys.PickerCodes[0] == ":-)" && Smileys.PickerCodes[69] == "(M)", "Picker codes must follow LAN Messenger's order.");
+    Check(Render("hi :-) and :) (h)") == "hi [1] and [1] [6]", "Codes and aliases must match case-insensitively.");
+    Check(Render("8-)") == "[23]", "Earlier codes in the table win, as in LAN Messenger.");
+    Check(Render(":-(:'(") == "[10][11]", "Adjacent codes must both render.");
+    Check(Render("<:o) & (&)") == "[17] & [29]", "Codes with markup characters must match the raw text.");
+    Check(Render("plain text 😊") == "plain text 😊" && !Smileys.HasAny("plain") && Smileys.HasAny("ok (Y)"), "Plain text must be left alone.");
+    Check(Smileys.Split("").Count == 0, "Empty text has no segments.");
+    return Task.CompletedTask;
+}
 static Task TestXml()
 {
     var bytes = LegacyProtocol.Encode("message", "AABBCCalice", "DDEEFFbob", "42", new Dictionary<string, string> { ["message"] = "<hello> & 你好\n🙂" });
@@ -244,6 +257,11 @@ static async Task TestFiles()
     var directory = Path.Combine(Path.GetTempPath(), "CydLan-tests-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(directory);
     try
     {
+        // Free names follow LAN Messenger: "name.ext", then "name [1].ext", "name [2].ext", skipping names reserved by files still arriving.
+        File.WriteAllText(Path.Combine(directory, "report.pdf"), "");
+        Check(LanService.UniquePath(directory, "report.pdf") == Path.Combine(directory, "report [1].pdf"), "A taken name gets \" [1]\" before the extension.");
+        Check(LanService.UniquePath(directory, "report.pdf", [Path.Combine(directory, "report [1].pdf")]) == Path.Combine(directory, "report [2].pdf"), "Names of files still arriving are skipped.");
+        Check(LanService.UniquePath(directory, "fresh.txt") == Path.Combine(directory, "fresh.txt"), "A free name is kept.");
         foreach (int size in new[] { 0, 190123 })
         {
             var source = Path.Combine(directory, $"source-{size}.bin"); var target = Path.Combine(directory, $"received-{size}.bin");

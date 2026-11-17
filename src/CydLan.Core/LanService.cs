@@ -656,7 +656,15 @@ public sealed class LanService : IAsyncDisposable
                     return;
                 }
                 Directory.CreateDirectory(AvatarDirectory);
-                var incoming = new FileTransfer { Id = id, PeerId = session.Id, Name = "avatar", Size = size, Avatar = true,
+                // Legacy LAN Messenger ignores tcpport and dials its own configured port, which on a shared computer
+                // is its own listener. A peer on this computer names its picture file, so copy it and decline the stream.
+                if (IsThisComputer(session.Address) && CopyLocalAvatar(message.Get("filepath"), id) is { } copied)
+                {
+                    await SendAsync(session.Id, "avatar", new() { ["fileop"] = "decline", ["fileid"] = id, ["filetype"] = "avatar", ["mode"] = "receive" });
+                    AvatarReceived?.Invoke(session.Id, copied);
+                    return;
+                }
+                var incoming =new FileTransfer { Id = id, PeerId = session.Id, Name = "avatar", Size = size, Avatar = true,
                     Path = System.IO.Path.Combine(AvatarDirectory, id.ToLowerInvariant() + ".img") };
                 if (!transfers.TryAdd(key, incoming)) return;
                 incoming.State = "Accepted";
@@ -675,6 +683,27 @@ public sealed class LanService : IAsyncDisposable
                 transfers.TryRemove(key, out _);
                 break;
         }
+    }
+    /// <summary>True when the address is one of this computer's own.</summary>
+    public static bool IsThisComputer(string address)
+    {
+        if (!IPAddress.TryParse(address, out var ip)) return false;
+        if (IPAddress.IsLoopback(ip)) return true;
+        try { return NetworkInterface.GetAllNetworkInterfaces().SelectMany(n => n.GetIPProperties().UnicastAddresses).Any(u => u.Address.Equals(ip)); }
+        catch (NetworkInformationException) { return false; }
+    }
+    private string? CopyLocalAvatar(string source, string id)
+    {
+        if (AvatarDirectory is null || source.Length == 0 || !System.IO.Path.IsPathFullyQualified(source)) return null;
+        try
+        {
+            var info = new FileInfo(source);
+            if (!info.Exists || info.Length is <= 0 or > MaxAvatarBytes || !IsImageFile(source)) return null;
+            var target = System.IO.Path.Combine(AvatarDirectory, id.ToLowerInvariant() + ".img");
+            File.Copy(source, target, true);
+            return target;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException) { return null; }
     }
     /// <summary>Profile pictures finish silently; everything else is reported as a file transfer.</summary>
     private void Report(FileTransfer transfer)
@@ -736,8 +765,7 @@ public sealed class LanService : IAsyncDisposable
             }
             else if (AutoAcceptDirectory is { } folder)
             {
-                Directory.CreateDirectory(folder);
-                try { await AcceptFileAsync(transfer, UniquePath(folder, name)); }
+                try { await AcceptFileIntoAsync(transfer, folder); }
                 catch (IOException e) { transfer.State = "Failed: " + e.Message; TransferChanged?.Invoke(transfer); }
             }
         }
@@ -758,13 +786,22 @@ public sealed class LanService : IAsyncDisposable
         }
         await Task.CompletedTask;
     }
-    /// <summary>"name.ext", then "name (2).ext", … so an existing file is never overwritten.</summary>
-    public static string UniquePath(string folder, string name)
+    /// <summary>"name.ext", then "name [1].ext", "name [2].ext", … like LAN Messenger, so an existing file is never overwritten.</summary>
+    public static string UniquePath(string folder, string name, IEnumerable<string>? reserved = null)
     {
+        var taken = new HashSet<string>(reserved ?? [], StringComparer.OrdinalIgnoreCase);
         var path = System.IO.Path.Combine(folder, name);
         var stem = System.IO.Path.GetFileNameWithoutExtension(name); var ext = System.IO.Path.GetExtension(name);
-        for (int n = 2; File.Exists(path) || File.Exists(path + ".partial"); n++) path = System.IO.Path.Combine(folder, $"{stem} ({n}){ext}");
+        for (int n = 1; File.Exists(path) || Directory.Exists(path) || taken.Contains(path); n++) path = System.IO.Path.Combine(folder, $"{stem} [{n}]{ext}");
         return path;
+    }
+    /// <summary>Accepts an offer into <paramref name="folder"/> under a free name, as LAN Messenger does.</summary>
+    public Task AcceptFileIntoAsync(FileTransfer transfer, string folder)
+    {
+        Directory.CreateDirectory(folder);
+        // Files still arriving have no file yet, so their names are reserved too.
+        var pending = transfers.Values.Where(t => !t.Outgoing && !t.Avatar && t.State is "Accepted" or "Transferring").Select(t => t.Path);
+        return AcceptFileAsync(transfer, UniquePath(folder, transfer.Name, pending));
     }
     private async Task SendFileAsync(Session session, FileTransfer transfer, int port)
     {

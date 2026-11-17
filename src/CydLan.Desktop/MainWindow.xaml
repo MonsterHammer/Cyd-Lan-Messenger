@@ -10,6 +10,7 @@
     <BooleanToVisibilityConverter x:Key="Bool"/>
     <local:ImagePathConverter x:Key="ImageFile"/>
     <local:AvatarPathConverter x:Key="AvatarFile"/>
+    <local:SmileyVisibilityConverter x:Key="SmileyVisibility"/>
     <Style x:Key="Caption" TargetType="TextBlock"><Setter Property="Foreground" Value="{DynamicResource Faint}"/><Setter Property="FontSize" Value="11"/><Setter Property="FontWeight" Value="SemiBold"/></Style>
     <DataTemplate x:Key="MessageTemplate">
       <Grid Margin="0,0,0,24">
@@ -26,7 +27,13 @@
             <Border.Style><Style TargetType="Border"><Setter Property="Background" Value="{DynamicResource Surface}"/><Style.Triggers><DataTrigger Binding="{Binding Outgoing}" Value="True"><Setter Property="Background" Value="{DynamicResource AccentSoft}"/></DataTrigger></Style.Triggers></Style></Border.Style>
             <StackPanel>
               <TextBlock Text="ANNOUNCEMENT" Foreground="{DynamicResource Accent}" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,6" Visibility="{Binding Broadcast, Converter={StaticResource Bool}}"/>
-              <TextBox Text="{Binding Text, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" FontSize="{DynamicResource MessageFontSize}" FontFamily="{DynamicResource MessageFontFamily}" Background="Transparent" BorderThickness="0" Padding="0"/>
+              <TextBox Text="{Binding Text, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" FontSize="{DynamicResource MessageFontSize}" FontFamily="{DynamicResource MessageFontFamily}" Background="Transparent" BorderThickness="0" Padding="0"
+                       Visibility="{Binding Text, Converter={StaticResource SmileyVisibility}, ConverterParameter=plain}"/>
+              <!-- LAN Messenger emoticon codes are drawn as its pictures. -->
+              <TextBlock local:SmileyText.Text="{Binding Text}" TextWrapping="Wrap" FontSize="{DynamicResource MessageFontSize}" FontFamily="{DynamicResource MessageFontFamily}" Foreground="{DynamicResource Ink}"
+                         Visibility="{Binding Text, Converter={StaticResource SmileyVisibility}}">
+                <TextBlock.ContextMenu><ContextMenu><MenuItem Header="Copy" Click="CopyMessage_Click"/></ContextMenu></TextBlock.ContextMenu>
+              </TextBlock>
             </StackPanel>
           </Border>
           <StackPanel Orientation="Horizontal" Margin="4,7,4,0">
@@ -112,7 +119,7 @@
             <Grid Grid.Row="3">
               <ListBox ItemsSource="{Binding People}" SelectedItem="{Binding SelectedPeer}" ScrollViewer.VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Conversations" Visibility="{Binding ShowPeopleList, Converter={StaticResource Bool}}">
                 <ListBox.ItemTemplate><DataTemplate>
-                  <Grid Margin="10,7,8,7">
+                  <Grid Margin="10,7,8,7" Background="Transparent"><Grid.ContextMenu><ContextMenu><MenuItem Header="Delete chat" Click="DeleteRowChat_Click"/></ContextMenu></Grid.ContextMenu>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="40"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                     <Grid Width="30" Height="30" HorizontalAlignment="Left">
                       <Border Background="{DynamicResource Avatar}" CornerRadius="15"><TextBlock Text="{Binding Initials}" FontSize="12" Foreground="{DynamicResource Accent}" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
@@ -126,7 +133,7 @@
               </ListBox>
               <ListBox ItemsSource="{Binding Groups}" SelectedItem="{Binding SelectedGroup}" ScrollViewer.VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Group chats" Visibility="{Binding ShowGroupList, Converter={StaticResource Bool}}">
                 <ListBox.ItemTemplate><DataTemplate>
-                  <Grid Margin="10,7,8,7">
+                  <Grid Margin="10,7,8,7" Background="Transparent"><Grid.ContextMenu><ContextMenu><MenuItem Header="Delete chat" Click="DeleteRowChat_Click"/></ContextMenu></Grid.ContextMenu>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="40"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                     <Border Width="30" Height="30" CornerRadius="10" Background="{DynamicResource Avatar}" HorizontalAlignment="Left"><local:Glyph Data="{StaticResource IconUsers}" Size="16" Foreground="{DynamicResource Accent}"/></Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,5,0"><TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding Preview}" FontSize="12" Foreground="{DynamicResource Faint}" TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/></StackPanel>
@@ -159,7 +166,13 @@
                     <TextBox x:Name="MessageSearchBox" Text="{Binding MessageSearch, UpdateSourceTrigger=PropertyChanged}" Visibility="Collapsed" Opacity="0" Margin="30,0,6,0" Padding="0,7" Background="Transparent" BorderThickness="0" VerticalAlignment="Center" LostKeyboardFocus="MessageSearch_LostFocus" AutomationProperties.Name="Search message text"/>
                     <TextBlock x:Name="SearchHint" Text="Search messages" Margin="32,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Faint}" IsHitTestVisible="False" Opacity="{Binding Opacity, ElementName=MessageSearchBox}"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding MessageSearch}" Value=""/><Condition Binding="{Binding Visibility, ElementName=MessageSearchBox}" Value="Visible"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
                   </Grid>
-                </Border><Button Style="{StaticResource Icon}" ToolTip="Contact details" Click="Details_Click" IsEnabled="{Binding HasDetails}" AutomationProperties.Name="Contact details"><local:Glyph Data="{StaticResource IconInfo}" Size="18"/></Button></StackPanel>
+                </Border><Button Style="{StaticResource Icon}" ToolTip="Files" Click="ConversationFiles_Click" IsEnabled="{Binding HasPeer}" AutomationProperties.Name="Files in this conversation"><local:Glyph Data="{StaticResource IconFile}" Size="17"/></Button><Button Style="{StaticResource Icon}" ToolTip="Contact details" Click="Details_Click" IsEnabled="{Binding HasDetails}" AutomationProperties.Name="Contact details"><local:Glyph Data="{StaticResource IconInfo}" Size="18"/></Button>
+                <Button x:Name="MoreButton" Style="{StaticResource Icon}" ToolTip="More" Click="More_Click" AutomationProperties.Name="More options"><local:Glyph Data="{StaticResource IconMore}" Size="18" StrokeThickness="2.6"/>
+                  <Button.ContextMenu><ContextMenu Placement="Bottom">
+                    <MenuItem Header="Delete chat" Click="DeleteChat_Click" IsEnabled="{Binding HasDetails}"/>
+                    <MenuItem Header="Delete all chats" Click="DeleteAllChats_Click"/>
+                  </ContextMenu></Button.ContextMenu>
+                </Button></StackPanel>
             </Grid>
             <Grid Grid.Row="1" Visibility="{Binding ChatOpen, Converter={StaticResource Bool}}">
               <Grid x:Name="ChatContentGrid">
@@ -202,7 +215,17 @@
                     <Grid>
                       <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                       <Button Style="{StaticResource Icon}" Width="34" Height="34" VerticalAlignment="Bottom" ToolTip="Attachments" Click="Attach_Click" IsEnabled="{Binding CanAttach}" AutomationProperties.Name="Attach files"><local:Glyph Data="{StaticResource IconPlus}" Size="19"/></Button>
-                      <Button Grid.Column="1" Style="{StaticResource Icon}" Width="34" Height="34" VerticalAlignment="Bottom" ToolTip="Emoji" Click="Emoji_Click" AutomationProperties.Name="Insert a smile"><local:Glyph Data="{StaticResource IconSmile}" Size="19"/></Button>
+                      <Button x:Name="EmojiButton" Grid.Column="1" Style="{StaticResource Icon}" Width="34" Height="34" VerticalAlignment="Bottom" ToolTip="Emoji" Click="Emoji_Click" IsEnabled="{Binding CanCompose}" AutomationProperties.Name="Emoticons"><local:Glyph Data="{StaticResource IconSmile}" Size="19"/></Button>
+                      <Popup x:Name="SmileyPopup" Grid.Column="1" PlacementTarget="{Binding ElementName=EmojiButton}" Placement="Top" VerticalOffset="-6" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
+                        <Border Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="10" Padding="6">
+                          <ItemsControl x:Name="SmileyGrid" AutomationProperties.Name="Emoticons">
+                            <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="10"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate><DataTemplate>
+                              <Button Style="{StaticResource Icon}" Width="30" Height="30" Padding="0" Click="Smiley_Click" Tag="{Binding Code}" ToolTip="{Binding Code}" AutomationProperties.Name="{Binding Code}"><Image Source="{Binding Image}" Width="19" Height="19"/></Button>
+                            </DataTemplate></ItemsControl.ItemTemplate>
+                          </ItemsControl>
+                        </Border>
+                      </Popup>
                       <Grid Grid.Column="2" Margin="4,0" VerticalAlignment="Center">
                         <TextBox x:Name="Composer" Text="{Binding Draft, UpdateSourceTrigger=PropertyChanged}" Background="Transparent" BorderThickness="0" FontSize="{DynamicResource MessageFontSize}" FontFamily="{DynamicResource MessageFontFamily}" Padding="4,7" MinHeight="34" MaxHeight="160" AcceptsReturn="True" TextWrapping="Wrap" MaxLength="32000" VerticalScrollBarVisibility="Auto" IsEnabled="{Binding CanCompose}" PreviewKeyDown="Composer_KeyDown" TextChanged="Composer_TextChanged" ToolTip="Message" AutomationProperties.Name="Message composer"/>
                         <TextBlock Text="Message…" FontSize="15" Foreground="{DynamicResource Muted}" Margin="6,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Draft}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
@@ -232,6 +255,35 @@
                   <TextBlock Text="Client" Style="{StaticResource Caption}" Margin="0,22,0,8"/><TextBlock Text="{Binding SelectedPeer.Version}" FontSize="13" TextWrapping="Wrap"/>
                 </StackPanel></ScrollViewer>
               </Border>
+              <Border x:Name="FilesPanel" Width="242" Visibility="Collapsed" HorizontalAlignment="Right" Background="{DynamicResource Sidebar}" BorderBrush="{DynamicResource Line}" BorderThickness="1,0,0,0">
+                <Grid Margin="0,16,0,0">
+                  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                  <Grid Margin="20,0,20,8"><TextBlock Text="Files" Style="{StaticResource Caption}" VerticalAlignment="Center"/><Button Style="{StaticResource Icon}" Width="28" Height="28" HorizontalAlignment="Right" Click="ConversationFiles_Click" ToolTip="Close"><local:Glyph Data="{StaticResource IconClose}" Size="15"/></Button></Grid>
+                  <Border Grid.Row="1" Height="1" Background="{DynamicResource Line}" VerticalAlignment="Bottom" Margin="14,0"/>
+                  <UniformGrid Grid.Row="1" Columns="2" Margin="14,0">
+                    <RadioButton x:Name="ReceivedTab" Style="{StaticResource Tab}" GroupName="ConversationFiles" IsChecked="True" Checked="FilesTab_Checked" AutomationProperties.Name="Received files"><TextBlock><Run Text="Received"/><Run Text=" "/><Run Text="{Binding ConversationReceivedCount, Mode=OneWay}" Foreground="{DynamicResource Faint}"/></TextBlock></RadioButton>
+                    <RadioButton x:Name="SentTab" Style="{StaticResource Tab}" GroupName="ConversationFiles" Checked="FilesTab_Checked" AutomationProperties.Name="Sent files"><TextBlock><Run Text="Sent"/><Run Text=" "/><Run Text="{Binding ConversationSentCount, Mode=OneWay}" Foreground="{DynamicResource Faint}"/></TextBlock></RadioButton>
+                  </UniformGrid>
+                  <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="12,10,12,4">
+                    <ItemsControl x:Name="ConversationFilesList" ItemsSource="{Binding ConversationFiles}" AutomationProperties.Name="Files"><ItemsControl.ItemTemplate><DataTemplate>
+                      <Border Background="{DynamicResource Surface}" CornerRadius="10" Padding="10,9" Margin="0,0,0,8">
+                        <StackPanel>
+                          <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="26"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <local:Glyph Data="{StaticResource IconFile}" Size="17" HorizontalAlignment="Left" VerticalAlignment="Top" Foreground="{DynamicResource Accent}"/>
+                            <StackPanel Grid.Column="1"><TextBlock Text="{Binding Name}" ToolTip="{Binding Name}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/><TextBlock FontSize="11" Foreground="{DynamicResource Faint}" Margin="0,3,0,0" TextWrapping="Wrap"><Run Text="{Binding SizeLabel, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding State, Mode=OneWay}"/></TextBlock><TextBlock Text="{Binding TimeLabel}" FontSize="11" Foreground="{DynamicResource Faint}" Margin="0,2,0,0"/></StackPanel>
+                          </Grid>
+                          <ProgressBar Value="{Binding Progress}" Height="3" Margin="0,8,0,0" BorderThickness="0" Foreground="{DynamicResource Accent}" Background="{DynamicResource Hover}"><ProgressBar.Style><Style TargetType="ProgressBar"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding State}" Value="Transferring"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></ProgressBar.Style></ProgressBar>
+                          <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0"><StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding State}" Value="Waiting for approval"/><Condition Binding="{Binding Outgoing}" Value="False"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers></Style></StackPanel.Style><Button Content="Decline" Style="{StaticResource Secondary}" Margin="0,0,6,0" Click="DeclineFile_Click"/><Button Content="Accept" Style="{StaticResource Primary}" Click="AcceptFile_Click"/></StackPanel>
+                          <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0"><StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding State}" Value="Waiting for approval"/><Condition Binding="{Binding Outgoing}" Value="True"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers></Style></StackPanel.Style><Button Content="Cancel offer" Style="{StaticResource Secondary}" Click="CancelOffer_Click"/></StackPanel>
+                          <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,6,0,0"><StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding State}" Value="Received"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding State}" Value="Sent · receipt unavailable"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></StackPanel.Style><Button Style="{StaticResource Icon}" Width="28" Height="28" ToolTip="Show in folder" Click="ShowFile_Click" AutomationProperties.Name="Show in folder"><local:Glyph Data="{StaticResource IconFolder}" Size="15"/></Button><Button Style="{StaticResource Icon}" Width="28" Height="28" ToolTip="Open" Click="OpenFile_Click" AutomationProperties.Name="Open file"><local:Glyph Data="{StaticResource IconDownload}" Size="15"/></Button></StackPanel>
+                        </StackPanel>
+                      </Border>
+                    </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+                  </ScrollViewer>
+                  <TextBlock Grid.Row="2" Text="No files" FontSize="13" Foreground="{DynamicResource Faint}" HorizontalAlignment="Center" Margin="0,24,0,0" Visibility="{Binding NoConversationFiles, Converter={StaticResource Bool}}"/>
+                  <Button Grid.Row="3" Content="Open received folder" Style="{StaticResource Secondary}" HorizontalAlignment="Stretch" Margin="14,4,14,14" Click="OpenReceivedFolder_Click"/>
+                </Grid>
+              </Border>
               <Border x:Name="GroupPanel" Width="242" Visibility="Collapsed" HorizontalAlignment="Right" Background="{DynamicResource Sidebar}" BorderBrush="{DynamicResource Line}" BorderThickness="1,0,0,0">
                 <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="20,16">
                   <Grid><TextBlock Text="Group" Style="{StaticResource Caption}" VerticalAlignment="Center"/><Button Style="{StaticResource Icon}" Width="28" Height="28" HorizontalAlignment="Right" Click="Details_Click" ToolTip="Close"><local:Glyph Data="{StaticResource IconClose}" Size="15"/></Button></Grid>
@@ -256,7 +308,7 @@
                 <Border Background="{DynamicResource Surface}" CornerRadius="12" Padding="16,14" Margin="0,0,0,10"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="40"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                   <local:Glyph Data="{StaticResource IconFile}" Size="26" HorizontalAlignment="Left" VerticalAlignment="Top" Foreground="{DynamicResource Accent}"/>
                   <StackPanel Grid.Column="1"><TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding DirectionLabel}" FontSize="13" Foreground="{DynamicResource Muted}" Margin="0,7,0,0"/><TextBlock FontSize="12" Foreground="{DynamicResource Faint}" Margin="0,5,0,10" TextWrapping="Wrap"><Run Text="{Binding SizeLabel, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding State, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding TimeLabel, Mode=OneWay}"/></TextBlock><ProgressBar Value="{Binding Progress}" Height="3" BorderThickness="0" Foreground="{DynamicResource Accent}" Background="{DynamicResource Hover}"/>
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0"><StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding State}" Value="Waiting for approval"/><Condition Binding="{Binding Outgoing}" Value="False"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers></Style></StackPanel.Style><Button Content="Decline" Style="{StaticResource Secondary}" Margin="0,0,8,0" Click="DeclineFile_Click"/><Button Content="Save file" Style="{StaticResource Primary}" Click="AcceptFile_Click"/></StackPanel>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0"><StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding State}" Value="Waiting for approval"/><Condition Binding="{Binding Outgoing}" Value="False"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers></Style></StackPanel.Style><Button Content="Decline" Style="{StaticResource Secondary}" Margin="0,0,8,0" Click="DeclineFile_Click"/><Button Content="Accept" Style="{StaticResource Primary}" Click="AcceptFile_Click"/></StackPanel>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0"><StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding State}" Value="Waiting for approval"/><Condition Binding="{Binding Outgoing}" Value="True"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers></Style></StackPanel.Style><Button Content="Cancel offer" Style="{StaticResource Secondary}" Click="CancelOffer_Click"/></StackPanel>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0"><StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding State}" Value="Received"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding State}" Value="Sent · receipt unavailable"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></StackPanel.Style><Button Content="Show in folder" Style="{StaticResource Secondary}" Margin="0,0,8,0" Click="ShowFile_Click"/><Button Content="Open" Style="{StaticResource Secondary}" Click="OpenFile_Click"/></StackPanel>
                   </StackPanel>
