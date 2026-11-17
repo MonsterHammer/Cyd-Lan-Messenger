@@ -35,13 +35,15 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     public string Draft { get => draft; set => Set(ref draft, value); }
     public string NetworkStatus { get => networkStatus; set => Set(ref networkStatus, value); }
     public string Toast { get => toast; set => Set(ref toast, value); }
-    public bool TransfersOpen { get => transfersOpen; set { Set(ref transfersOpen, value); Changed(nameof(ChatOpen)); } }
+    public bool TransfersOpen { get => transfersOpen; set { Set(ref transfersOpen, value); Changed(nameof(ChatOpen)); Changed(nameof(IsConversationSection)); Changed(nameof(IsBroadcastSection)); Changed(nameof(ChatTitle)); } }
     public bool ChatOpen => !TransfersOpen;
-    public bool Broadcasting { get => broadcasting; set { Set(ref broadcasting, value); Changed(nameof(HasPeer)); Changed(nameof(NoPeer)); Changed(nameof(CanCompose)); Changed(nameof(ChatTitle)); Changed(nameof(ChatSubtitle)); RefreshMessages(); } }
+    public bool IsConversationSection => !TransfersOpen && !Broadcasting;
+    public bool IsBroadcastSection => !TransfersOpen && Broadcasting;
+    public bool Broadcasting { get => broadcasting; set { Set(ref broadcasting, value); Changed(nameof(HasPeer)); Changed(nameof(NoPeer)); Changed(nameof(CanCompose)); Changed(nameof(ChatTitle)); Changed(nameof(ChatSubtitle)); Changed(nameof(IsConversationSection)); Changed(nameof(IsBroadcastSection)); RefreshMessages(); } }
     public bool HasPeer => SelectedPeer is not null && !Broadcasting;
     public bool NoPeer => SelectedPeer is null && !Broadcasting;
     public bool CanCompose => Broadcasting || SelectedPeer?.Online == true;
-    public string ChatTitle => Broadcasting ? "Broadcast to your network" : SelectedPeer?.Name ?? "A little closer, on LAN.";
+    public string ChatTitle => TransfersOpen ? "File transfers" : Broadcasting ? "Broadcast preview" : SelectedPeer?.Name ?? "Your conversations";
     public string ChatSubtitle => Preview ? "Offline design mode · sample conversations" : Broadcasting ? $"Send an announcement to {OnlineCount} connected people" : SelectedPeer is { } p ? $"{p.Presence}  ·  Direct LAN connection" : "Your people. One network. No server.";
     public int OnlineCount => Peers.Count(p => p.Online);
     public string ProfileName => Settings.DisplayName;

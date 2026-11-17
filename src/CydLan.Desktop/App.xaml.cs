@@ -22,7 +22,8 @@ public partial class App : System.Windows.Application
         // shortcut supplies network-related arguments. The transport is retained
         // in Core for a later, explicitly authorized networking phase.
         bool captureTray = e.Args.Contains("--tray-screenshot");
-        bool capturing = captureTray || e.Args.Contains("--screenshot");
+        bool captureSettings = e.Args.Contains("--settings-screenshot");
+        bool capturing = captureTray || captureSettings || e.Args.Contains("--screenshot");
         if (!capturing)
         {
             mutex = new Mutex(true, "Local\\CydLan.Desktop", out var first);
@@ -32,11 +33,13 @@ public partial class App : System.Windows.Application
         {
             model = new MainViewModel(preview: true, seedPreview: !e.Args.Contains("--empty-preview"));
             var window = new MainWindow(model);
+            if (e.Args.Contains("--compact")) { window.Width = window.MinWidth; window.Height = window.MinHeight; }
             window.Title = "CydLan · Offline design mode";
             if (e.Args.Contains("--transfers")) model.TransfersOpen = true;
             MainWindow = window;
             if (!capturing) CreateTray(window);
             if (!captureTray) window.Show();
+            if (e.Args.Contains("--details")) window.ShowConnectionDetails();
             await model.StartAsync();
             Window captureWindow = window;
             if (captureTray)
@@ -45,7 +48,13 @@ public partial class App : System.Windows.Application
                 trayMenu.ShowNear(Forms.Cursor.Position);
                 captureWindow = trayMenu;
             }
-            int capture = Array.IndexOf(e.Args, captureTray ? "--tray-screenshot" : "--screenshot");
+            if (captureSettings)
+            {
+                var settingsWindow = new SettingsWindow(model) { Owner = window };
+                settingsWindow.Show();
+                captureWindow = settingsWindow;
+            }
+            int capture = Array.IndexOf(e.Args, captureTray ? "--tray-screenshot" : captureSettings ? "--settings-screenshot" : "--screenshot");
             if (capture >= 0 && capture + 1 < e.Args.Length)
             {
                 await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
@@ -61,7 +70,8 @@ public partial class App : System.Windows.Application
         }
         catch (Exception ex)
         {
-            System.Windows.MessageBox.Show(ex.Message, "CydLan could not start");
+            if (capturing) { Console.Error.WriteLine(ex); Environment.ExitCode = 1; }
+            else System.Windows.MessageBox.Show(ex.Message, "CydLan could not start");
             await QuitAsync();
         }
     }
@@ -89,9 +99,9 @@ public partial class App : System.Windows.Application
         using var bitmap = new Bitmap(32, 32);
         using var graphics = Graphics.FromImage(bitmap);
         graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-        using var background = new SolidBrush(System.Drawing.Color.FromArgb(121, 96, 218));
+        using var background = new SolidBrush(System.Drawing.Color.FromArgb(133, 177, 191));
         graphics.FillEllipse(background, 1, 1, 30, 30);
-        using var pen = new System.Drawing.Pen(System.Drawing.Color.White, 3);
+        using var pen = new System.Drawing.Pen(System.Drawing.Color.FromArgb(19, 38, 46), 3);
         graphics.DrawArc(pen, 8, 8, 16, 16, 45, 270);
         var handle = bitmap.GetHicon();
         try { using var original = Icon.FromHandle(handle); return (Icon)original.Clone(); }

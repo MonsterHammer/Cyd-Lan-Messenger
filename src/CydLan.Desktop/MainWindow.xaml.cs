@@ -20,7 +20,8 @@ public partial class MainWindow : Window
         Deactivated += (_, _) => model.ConversationFocused = false;
         Closing += (_, args) => { args.Cancel = true; Hide(); };
         typingTimer.Tick += async (_, _) => { typingTimer.Stop(); await model.SendTypingAsync(false); };
-        if (model.Preview && model.HasPeer) DetailsColumn.Width = new GridLength(230);
+        SizeChanged += (_, _) => UpdateCompactLayout();
+        model.PropertyChanged += (_, args) => { if (args.PropertyName == nameof(model.HasPeer) && !model.HasPeer) { DetailsPanel.Visibility = Visibility.Collapsed; UpdateCompactLayout(); } };
     }
     private void TitleBar_MouseDown(object sender, MouseButtonEventArgs e) { if (e.ClickCount == 2) ToggleMaximize(); else if (e.LeftButton == MouseButtonState.Pressed) DragMove(); }
     private void Minimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
@@ -30,10 +31,22 @@ public partial class MainWindow : Window
     private void Chat_Click(object sender, RoutedEventArgs e) { model.TransfersOpen = false; model.Broadcasting = false; }
     private void People_Click(object sender, RoutedEventArgs e) { PeopleSearch.Focus(); PeopleSearch.SelectAll(); }
     private void Transfers_Click(object sender, RoutedEventArgs e) => model.TransfersOpen = true;
-    private void Broadcast_Click(object sender, RoutedEventArgs e) { model.Broadcasting = true; model.TransfersOpen = false; DetailsColumn.Width = new GridLength(0); Composer.Focus(); }
+    private void Broadcast_Click(object sender, RoutedEventArgs e) { model.Broadcasting = true; model.TransfersOpen = false; Composer.Focus(); }
     private async void Refresh_Click(object sender, RoutedEventArgs e) => await model.RefreshAsync();
     private void SearchMessages_Click(object sender, RoutedEventArgs e) { MessageSearchBox.Visibility = MessageSearchBox.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible; if (MessageSearchBox.Visibility == Visibility.Visible) MessageSearchBox.Focus(); else model.MessageSearch = ""; }
-    private void Details_Click(object sender, RoutedEventArgs e) { if (model.HasPeer) DetailsColumn.Width = new GridLength(DetailsColumn.Width.Value == 0 ? 230 : 0); }
+    private void Details_Click(object sender, RoutedEventArgs e)
+    {
+        if (!model.HasPeer) return;
+        DetailsPanel.Visibility = DetailsPanel.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
+        UpdateCompactLayout();
+    }
+    internal void ShowConnectionDetails() { if (model.HasPeer) DetailsPanel.Visibility = Visibility.Visible; UpdateCompactLayout(); }
+    private void UpdateCompactLayout()
+    {
+        PeopleColumn.Width = new GridLength(ActualWidth < 760 ? 190 : 208);
+        // Details become a drawer on small windows instead of squeezing the chat.
+        ChatContentGrid.Margin = DetailsPanel.Visibility == Visibility.Visible && ActualWidth >= 1000 ? new Thickness(0,0,220,0) : new Thickness(0);
+    }
     private async void Send_Click(object sender, RoutedEventArgs e) => await model.SendAsync();
     private async void Composer_KeyDown(object sender, System.Windows.Input.KeyEventArgs e) { if (e.Key == Key.Enter && !Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)) { e.Handled = true; await model.SendAsync(); } }
     private async void Composer_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)

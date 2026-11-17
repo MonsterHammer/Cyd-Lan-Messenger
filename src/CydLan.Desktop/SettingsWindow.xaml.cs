@@ -14,6 +14,10 @@ public partial class SettingsWindow : Window
         NotificationsBox.IsChecked = model.Settings.Notifications; MinimizedBox.IsChecked = model.Settings.StartMinimized;
     }
     private void Cancel_Click(object sender, RoutedEventArgs e) => Close();
+    private void TitleBar_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (e.LeftButton == System.Windows.Input.MouseButtonState.Pressed) DragMove();
+    }
     private async void Save_Click(object sender, RoutedEventArgs e)
     {
         var name = DisplayNameBox.Text.Trim();
