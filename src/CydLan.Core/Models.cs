@@ -93,7 +93,23 @@ public sealed class FileTransfer : Observable
     public string Path { get; set; } = "";
     private string state = "Waiting for approval";
     private double progress;
-    public string State { get => state; set => Set(ref state, value); }
+    public string State
+    {
+        get => state;
+        set
+        {
+            if (!Set(ref state, value)) return;
+            Changed(nameof(IsActive));
+            Changed(nameof(IsConnecting));
+            Changed(nameof(ActiveLabel));
+        }
+    }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsActive => IsConnecting || State == "Transferring";
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsConnecting => State is "Accepted" or "Connecting";
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string ActiveLabel => IsConnecting ? "Connecting…" : Outgoing ? "Sending…" : "Receiving…";
     public double Progress { get => progress; set => Set(ref progress, value); }
     public string SizeLabel => Size < 1024 * 1024 ? $"{Size / 1024d:0.#} KB" : $"{Size / (1024d * 1024):0.#} MB";
 }

@@ -899,6 +899,7 @@ public sealed class LanService : IAsyncDisposable
             var start = new byte[5]; await stream.ReadExactlyAsync(start, deadline.Token);
             if (Encoding.ASCII.GetString(start) != "START") throw new InvalidDataException("Invalid transfer response.");
             transfer.State = "Transferring";
+            Report(transfer);
             using var file = File.OpenRead(transfer.Path);
             if (file.Length != transfer.Size) throw new IOException("The file changed after it was offered.");
             var buffer = new byte[65536]; long sent = 0; int read;
@@ -928,6 +929,7 @@ public sealed class LanService : IAsyncDisposable
             {
                 await stream.WriteAsync("START"u8.ToArray(), deadline.Token);
                 transfer.State = "Transferring";
+                Report(transfer);
                 var buffer = new byte[65536]; long remaining = transfer.Size;
                 while (remaining > 0)
                 {

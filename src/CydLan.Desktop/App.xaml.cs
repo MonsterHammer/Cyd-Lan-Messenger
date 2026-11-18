@@ -110,7 +110,7 @@ public partial class App : System.Windows.Application
         tray.MouseClick += (_, args) => {
             if (args.Button != Forms.MouseButtons.Right) return;
             Dispatcher.Invoke(() => {
-                trayMenu?.Close();
+                trayMenu?.CloseOnce();
                 trayMenu = new TrayMenuWindow(window, model!);
                 trayMenu.ShowNear(Forms.Cursor.Position);
             });
@@ -158,7 +158,7 @@ public partial class App : System.Windows.Application
         catch (Exception e) { log?.Write("application.shutdown_failed", e); Environment.ExitCode = 1; }
         finally
         {
-            trayMenu?.Close();
+            trayMenu?.CloseOnce();
             tray?.Dispose(); mutex?.Dispose(); Shutdown(Environment.ExitCode);
         }
     }

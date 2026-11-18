@@ -1,4 +1,6 @@
 using System.Runtime.InteropServices;
+using System.Diagnostics;
+using System.IO;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Input;
@@ -372,11 +374,52 @@ public partial class MainWindow : Window
     private void RemoveAttachment_Click(object sender, RoutedEventArgs e) { if (((FrameworkElement)sender).DataContext is Attachment item) model.RemoveAttachment(item); }
     private void MessageImage_Click(object sender, MouseButtonEventArgs e)
     {
-        if (((FrameworkElement)sender).DataContext is not ChatMessage { ImagePath.Length: > 0 } message || !System.IO.File.Exists(message.ImagePath)) return;
-        // Only our own stored copies are opened, and only image types (validated on receipt).
-        if (!CydLan.Core.LanService.IsInlineImageName(message.ImagePath)) return;
-        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(message.ImagePath) { UseShellExecute = true }); }
-        catch (System.ComponentModel.Win32Exception ex) { model.Toast = "No app is available to open this image: " + ex.Message; }
+        if (((FrameworkElement)sender).DataContext is ChatMessage message) RunImageAction(message, "Open");
+    }
+    private void ImageMenu_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.MenuItem { DataContext: ChatMessage message, Tag: string action })
+            RunImageAction(message, action);
+    }
+    private void RunImageAction(ChatMessage message, string action)
+    {
+        string path = message.ImagePath;
+        if (!LanService.IsInlineImageName(path) || !File.Exists(path))
+        {
+            model.Toast = "Image unavailable";
+            return;
+        }
+
+        try
+        {
+            switch (action)
+            {
+                case "Open":
+                    if (Images.Load(path, 2048) is { } preview)
+                        PopupHost.ShowModal(this, new ImagePreviewWindow(Path.GetFileName(path), preview));
+                    else model.Toast = "Image could not be opened";
+                    break;
+                case "Attach":
+                    if (model.AddAttachment(path) is { } problem) model.Toast = problem;
+                    else Composer.Focus();
+                    break;
+                case "Copy":
+                    if (Images.Load(path, 0) is { } image) System.Windows.Clipboard.SetImage(image);
+                    else model.Toast = "Image could not be copied";
+                    break;
+                case "Reveal":
+                    Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{Path.GetFullPath(path)}\""));
+                    break;
+                case "Save":
+                    var picker = new Microsoft.Win32.SaveFileDialog { Title = "Save a copy", FileName = Path.GetFileName(path) };
+                    if (picker.ShowDialog(this) == true) File.Copy(path, picker.FileName, overwrite: true);
+                    break;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ExternalException)
+        {
+            model.Toast = "Image action failed";
+        }
     }
     // Like LAN Messenger, an accepted file goes straight into the received files folder ("name [1].ext" when taken).
     private async void AcceptFile_Click(object sender, RoutedEventArgs e)

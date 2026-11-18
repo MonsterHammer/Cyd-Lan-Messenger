@@ -2,6 +2,7 @@
     <!-- Palette brushes live in Themes/*.xaml; ThemeManager swaps them at runtime, so every colour is a DynamicResource. -->
     <ResourceDictionary.MergedDictionaries>
       <ResourceDictionary Source="/CydLan;component/Icons.xaml"/>
+      <ResourceDictionary Source="/CydLan;component/Themes/ControlCorners.xaml"/>
       <ResourceDictionary Source="/CydLan;component/Themes/Light.xaml"/>
     </ResourceDictionary.MergedDictionaries>
     <FontFamily x:Key="UiFont">Segoe UI Variable Text, Segoe UI</FontFamily>
@@ -10,7 +11,7 @@
     <sys:Double x:Key="MessageFontSize">15</sys:Double>
     <Style x:Key="FocusRing">
       <Setter Property="Control.Template"><Setter.Value><ControlTemplate>
-        <Border Margin="-2" CornerRadius="8" BorderThickness="2" BorderBrush="{DynamicResource Accent}" SnapsToDevicePixels="True"/>
+        <Border Margin="-2" CornerRadius="{DynamicResource ControlCorner}" BorderThickness="2" BorderBrush="{DynamicResource Accent}" SnapsToDevicePixels="True"/>
       </ControlTemplate></Setter.Value></Setter>
     </Style>
     <Style TargetType="Window">
@@ -27,8 +28,8 @@
       <Setter Property="Template"><Setter.Value>
         <ControlTemplate TargetType="Button">
           <Grid x:Name="Root">
-            <Border Background="{TemplateBinding Background}" CornerRadius="8"/>
-            <Border x:Name="Shade" Background="{DynamicResource Ink}" CornerRadius="8" Opacity="0"/>
+            <Border Background="{TemplateBinding Background}" CornerRadius="{DynamicResource ControlCorner}"/>
+            <Border x:Name="Shade" Background="{DynamicResource Ink}" CornerRadius="{DynamicResource ControlCorner}" Opacity="0"/>
             <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center"/>
           </Grid>
           <ControlTemplate.Triggers>
@@ -72,8 +73,8 @@
       <Setter Property="Foreground" Value="{DynamicResource Ink}"/><Setter Property="FontSize" Value="13"/><Setter Property="Cursor" Value="Hand"/><Setter Property="Margin" Value="0,1"/>
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="RadioButton">
         <Grid>
-          <Border x:Name="Row" Background="Transparent" CornerRadius="8" Padding="12,9"><ContentPresenter/></Border>
-          <Border x:Name="Marker" Width="3" Height="18" CornerRadius="1.5" Background="{DynamicResource Accent}" HorizontalAlignment="Left" Margin="-1,0,0,0" Visibility="Collapsed"/>
+          <Border x:Name="Row" Background="Transparent" CornerRadius="{DynamicResource ControlCorner}" Padding="12,9"><ContentPresenter/></Border>
+          <Border x:Name="Marker" Width="3" Height="18" CornerRadius="{DynamicResource MarkerCorner}" Background="{DynamicResource Accent}" HorizontalAlignment="Left" Margin="-1,0,0,0" Visibility="Collapsed"/>
         </Grid>
         <ControlTemplate.Triggers>
           <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Row" Property="Background" Value="{DynamicResource RowHover}"/></Trigger>
@@ -113,7 +114,7 @@
       <Setter Property="CaretBrush" Value="{DynamicResource Accent}"/><Setter Property="SelectionBrush" Value="{DynamicResource AccentSoft}"/>
       <Setter Property="Template"><Setter.Value>
         <ControlTemplate TargetType="TextBox">
-          <Border x:Name="InputBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8">
+          <Border x:Name="InputBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{DynamicResource ControlCorner}">
             <ScrollViewer x:Name="PART_ContentHost" Padding="{TemplateBinding Padding}"/>
           </Border>
           <ControlTemplate.Triggers><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="InputBorder" Property="BorderBrush" Value="{DynamicResource Accent}"/></Trigger></ControlTemplate.Triggers>
@@ -131,9 +132,9 @@
       <Setter Property="Template"><Setter.Value>
         <ControlTemplate TargetType="ListBoxItem">
           <Grid>
-            <Border x:Name="Row" Background="Transparent" CornerRadius="8"><ContentPresenter/></Border>
+            <Border x:Name="Row" Background="Transparent" CornerRadius="{DynamicResource ControlCorner}"><ContentPresenter/></Border>
             <!-- Selected rows get a soft tint plus a short accent marker instead of a heavy fill. -->
-            <Border x:Name="Marker" Width="3" Height="18" CornerRadius="1.5" Background="{DynamicResource Accent}" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="-1,0,0,0" Visibility="Collapsed"/>
+            <Border x:Name="Marker" Width="3" Height="18" CornerRadius="{DynamicResource MarkerCorner}" Background="{DynamicResource Accent}" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="-1,0,0,0" Visibility="Collapsed"/>
           </Grid>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Row" Property="Background" Value="{DynamicResource RowHover}"/></Trigger>
@@ -147,7 +148,7 @@
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ScrollBar">
         <Track x:Name="PART_Track" IsDirectionReversed="True" Orientation="{TemplateBinding Orientation}">
           <Track.DecreaseRepeatButton><RepeatButton Command="ScrollBar.PageUpCommand" Focusable="False" Opacity="0"/></Track.DecreaseRepeatButton>
-          <Track.Thumb><Thumb><Thumb.Template><ControlTemplate TargetType="Thumb"><Border Background="{DynamicResource Hover}" CornerRadius="3" Margin="2,0"/></ControlTemplate></Thumb.Template></Thumb></Track.Thumb>
+          <Track.Thumb><Thumb><Thumb.Template><ControlTemplate TargetType="Thumb"><Border Background="{DynamicResource Hover}" CornerRadius="{DynamicResource ScrollCorner}" Margin="2,0"/></ControlTemplate></Thumb.Template></Thumb></Track.Thumb>
           <Track.IncreaseRepeatButton><RepeatButton Command="ScrollBar.PageDownCommand" Focusable="False" Opacity="0"/></Track.IncreaseRepeatButton>
         </Track>
       </ControlTemplate></Setter.Value></Setter>
@@ -180,11 +181,11 @@
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ComboBox">
         <Grid>
           <ToggleButton Focusable="False" IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
-            <ToggleButton.Template><ControlTemplate TargetType="ToggleButton"><Border Background="{DynamicResource Input}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="8" Padding="10,8"><local:Glyph Data="{StaticResource IconChevronDown}" Size="14" Foreground="{DynamicResource Muted}" HorizontalAlignment="Right"/></Border></ControlTemplate></ToggleButton.Template>
+            <ToggleButton.Template><ControlTemplate TargetType="ToggleButton"><Border Background="{DynamicResource Input}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="{DynamicResource ControlCorner}" Padding="10,8"><local:Glyph Data="{DynamicResource IconChevronDown}" Size="14" Foreground="{DynamicResource Muted}" HorizontalAlignment="Right"/></Border></ControlTemplate></ToggleButton.Template>
           </ToggleButton>
           <ContentPresenter Content="{TemplateBinding SelectionBoxItem}" ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" Margin="10,8,30,8" IsHitTestVisible="False"/>
           <Popup x:Name="PART_Popup" Placement="Bottom" IsOpen="{TemplateBinding IsDropDownOpen}" AllowsTransparency="True" Focusable="False">
-            <Border Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="8" Margin="0,4,0,0" MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}" MaxHeight="{TemplateBinding MaxDropDownHeight}"><ScrollViewer><ItemsPresenter/></ScrollViewer></Border>
+            <Border Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="{DynamicResource ControlCorner}" Margin="0,4,0,0" MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}" MaxHeight="{TemplateBinding MaxDropDownHeight}"><ScrollViewer><ItemsPresenter/></ScrollViewer></Border>
           </Popup>
         </Grid>
       </ControlTemplate></Setter.Value></Setter>
@@ -193,8 +194,8 @@
       <Setter Property="Foreground" Value="{DynamicResource Ink}"/><Setter Property="FocusVisualStyle" Value="{x:Null}"/>
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="CheckBox">
         <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="24"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-          <Border x:Name="Box" Width="17" Height="17" HorizontalAlignment="Left" VerticalAlignment="Center" CornerRadius="5" Background="{DynamicResource Input}" BorderBrush="{DynamicResource Faint}" BorderThickness="1">
-            <local:Glyph x:Name="Mark" Data="{StaticResource IconCheck}" Size="12" StrokeThickness="2.2" Foreground="{DynamicResource AccentInk}" Visibility="Collapsed"/>
+          <Border x:Name="Box" Width="17" Height="17" HorizontalAlignment="Left" VerticalAlignment="Center" CornerRadius="{DynamicResource CheckCorner}" Background="{DynamicResource Input}" BorderBrush="{DynamicResource Faint}" BorderThickness="1">
+            <local:Glyph x:Name="Mark" Data="{DynamicResource IconCheck}" Size="12" StrokeThickness="2.2" Foreground="{DynamicResource AccentInk}" Visibility="Collapsed"/>
           </Border>
           <ContentPresenter Grid.Column="1" VerticalAlignment="Center"/>
         </Grid>

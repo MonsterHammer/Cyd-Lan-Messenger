@@ -26,7 +26,7 @@ Closing the window keeps CydLan running in the system tray. Double-click its tra
 
 - Automatic IPv4 multicast discovery, adapter refresh, directed IP discovery, and saved-contact reconnection, with one-hop multicast scope.
 - Direct chat with UTF-8 text, delivery acknowledgments, duplicate suppression, typing indicators, and online/offline labels. Chat headers show profile pictures or initials. CydLan peers use application heartbeats and legacy peers use TCP keepalive.
-- Group rooms, LAN Messenger emoticons, and light, dark, and system themes.
+- Group rooms and LAN Messenger emoticons. Appearance options include Light, Dark, Match Windows, Ocean, Lavender, Ember, and Pixel. Pixel uses square controls and grid-drawn icons.
 - Broadcast announcements sent individually to connected peers.
 - File offers with save/decline or optional auto-accept, progress, and support for empty files. The Files view and conversation file panel show transfers. The default receive folder is `Documents\Received Files`. Incoming files are staged until the advertised byte count is received. Existing destination files are preserved.
 - Search people, IP addresses, and saved messages; search within a conversation.

@@ -43,6 +43,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     public bool NoTransfersShown => TransfersView.IsEmpty;
     /// <summary>The open conversation's files panel: what this person sent you, or what you sent them.</summary>
     public ICollectionView ConversationFiles { get; }
+    public ICollectionView ActiveConversationTransfers { get; }
     private bool conversationFilesSent;
     public bool ConversationFilesSent { get => conversationFilesSent; set { if (Set(ref conversationFilesSent, value)) RefreshConversationFiles(); } }
     public int ConversationReceivedCount => SelectedPeer is { } p ? Transfers.Count(t => t.PeerId == p.Id && !t.Outgoing) : 0;
@@ -51,6 +52,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     private void RefreshConversationFiles()
     {
         ConversationFiles.Refresh();
+        ActiveConversationTransfers.Refresh();
         Changed(nameof(ConversationReceivedCount)); Changed(nameof(ConversationSentCount)); Changed(nameof(NoConversationFiles));
     }
     public ObservableCollection<string> Diagnostics { get; } = [];
@@ -222,6 +224,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         }
         TransfersView = new ListCollectionView(Transfers) { Filter = item => item is FileTransfer t && (TransferFilter == "all" || (TransferFilter == "received") != t.Outgoing) };
         ConversationFiles = new ListCollectionView(Transfers) { Filter = item => item is FileTransfer t && SelectedPeer is { } p && t.PeerId == p.Id && t.Outgoing == ConversationFilesSent };
+        ActiveConversationTransfers = new ListCollectionView(Transfers) { Filter = item => item is FileTransfer { IsActive: true } t && HasPeer && t.PeerId == SelectedPeer?.Id };
         Transfers.CollectionChanged += (_, _) => { Changed(nameof(ReceivedCount)); Changed(nameof(SentCount)); Changed(nameof(NoTransfersShown)); RefreshConversationFiles(); };
         People = CollectionViewSource.GetDefaultView(Peers);
         People.Filter = obj => obj is Peer peer && (peer.Name.Contains(Search, StringComparison.OrdinalIgnoreCase) || peer.Address.Contains(Search, StringComparison.OrdinalIgnoreCase) || history.Any(m => m.PeerId == peer.Id && m.Text.Contains(Search, StringComparison.OrdinalIgnoreCase)));
@@ -401,7 +404,8 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     {
         // Progress can fire for every network buffer. Persist state changes only, without file names or paths.
         string state = transfer.State.StartsWith("Failed", StringComparison.Ordinal) ? "Failed" : transfer.State;
-        if (loggedTransferStates.GetValueOrDefault(transfer.Id) != state)
+        bool stateChanged = loggedTransferStates.GetValueOrDefault(transfer.Id) != state;
+        if (stateChanged)
         {
             if (loggedTransferStates.Count >= 2000) loggedTransferStates.Clear();
             loggedTransferStates[transfer.Id] = state;
@@ -412,7 +416,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
             transfer.PeerName = Peers.FirstOrDefault(p => p.Id == transfer.PeerId)?.Name ?? transfer.PeerId; Transfers.Insert(0, transfer);
             if (!transfer.Outgoing && !transfer.Inline && transfer.State == "Waiting for approval") Notify?.Invoke(transfer.PeerName, "Wants to send you " + transfer.Name);
         }
-        TransfersView.Refresh(); RefreshConversationFiles();
+        if (stateChanged) RefreshConversationFiles();
         if (transferMessages.TryGetValue(transfer.Id, out var sent))
         {
             var delivery = DeliveryFor(transfer);

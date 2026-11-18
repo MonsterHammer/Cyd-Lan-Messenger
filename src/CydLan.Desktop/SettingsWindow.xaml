@@ -10,7 +10,7 @@
     <Style x:Key="Segment" TargetType="RadioButton">
       <Setter Property="Foreground" Value="{DynamicResource Muted}"/><Setter Property="Cursor" Value="Hand"/><Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="RadioButton">
-        <Border x:Name="Seg" Background="Transparent" CornerRadius="6" Padding="0,7"><ContentPresenter HorizontalAlignment="Center"/></Border>
+        <Border x:Name="Seg" Background="Transparent" CornerRadius="{DynamicResource SegmentCorner}" Padding="0,7"><ContentPresenter HorizontalAlignment="Center"/></Border>
         <ControlTemplate.Triggers>
           <Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="{DynamicResource Ink}"/></Trigger>
           <Trigger Property="IsChecked" Value="True"><Setter TargetName="Seg" Property="Background" Value="{DynamicResource Canvas}"/><Setter Property="Foreground" Value="{DynamicResource Ink}"/></Trigger>
@@ -25,7 +25,6 @@
   <Border BorderBrush="{DynamicResource Line}" BorderThickness="1">
     <Grid>
       <Grid.ColumnDefinitions><ColumnDefinition Width="180"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-      <!-- Pages follow LAN Messenger's preferences: General, Account, Messages, History, Alerts, Network, Files, Appearance. -->
       <Border Background="{DynamicResource Sidebar}">
         <StackPanel x:Name="NavPanel" Margin="8,0">
           <Grid x:Name="TitleBar" Background="Transparent" Height="56"><TextBlock Text="Preferences" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" Margin="12,0,0,0"/></Grid>
@@ -37,12 +36,13 @@
           <RadioButton Style="{StaticResource FilterRow}" Content="Network" Tag="NetworkPage" Checked="Page_Checked"/>
           <RadioButton Style="{StaticResource FilterRow}" Content="Files" Tag="FilesPage" Checked="Page_Checked"/>
           <RadioButton Style="{StaticResource FilterRow}" Content="Appearance" Tag="AppearancePage" Checked="Page_Checked"/>
+          <RadioButton Style="{StaticResource FilterRow}" Content="About" Tag="AboutPage" Checked="Page_Checked"/>
         </StackPanel>
       </Border>
       <Grid Grid.Column="1" Margin="24,0,20,16">
         <Grid.RowDefinitions><RowDefinition Height="56"/><RowDefinition Height="*"/><RowDefinition Height="46"/></Grid.RowDefinitions>
         <Grid x:Name="DragArea" Background="Transparent">
-          <Button Style="{StaticResource Icon}" Width="30" Height="30" HorizontalAlignment="Right" ToolTip="Close" Click="Cancel_Click"><local:Glyph Data="{StaticResource IconClose}" Size="16"/></Button>
+          <Button Style="{StaticResource Icon}" Width="30" Height="30" HorizontalAlignment="Right" ToolTip="Close" Click="Cancel_Click"><local:Glyph Data="{DynamicResource IconClose}" Size="16"/></Button>
         </Grid>
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
           <Grid>
@@ -83,11 +83,11 @@
                 <StackPanel><TextBlock Text="Font" Style="{StaticResource Label}"/><ComboBox x:Name="FontBox" MaxDropDownHeight="260" SelectionChanged="Font_Changed" AutomationProperties.Name="Message font"/></StackPanel>
                 <StackPanel Grid.Column="2"><TextBlock Text="Size" Style="{StaticResource Label}"/><ComboBox x:Name="SizeBox" SelectionChanged="Font_Changed" AutomationProperties.Name="Message text size"><ComboBoxItem Content="Small" Tag="small"/><ComboBoxItem Content="Medium" Tag="medium"/><ComboBoxItem Content="Large" Tag="large"/></ComboBox></StackPanel>
               </Grid>
-              <Border Background="{DynamicResource Surface}" CornerRadius="12" Padding="14,10" Margin="0,12,0,18" HorizontalAlignment="Left">
+              <Border Background="{DynamicResource Surface}" CornerRadius="{DynamicResource ComposerCorner}" Padding="14,10" Margin="0,12,0,18" HorizontalAlignment="Left">
                 <TextBlock x:Name="FontPreview" Text="The quick brown fox jumps over the lazy dog."/>
               </Border>
               <TextBlock Text="Send with" Style="{StaticResource Label}"/>
-              <Border Background="{DynamicResource Surface}" CornerRadius="8" Padding="3" Margin="0,0,0,16" Width="260" HorizontalAlignment="Left">
+              <Border Background="{DynamicResource Surface}" CornerRadius="{DynamicResource ControlCorner}" Padding="3" Margin="0,0,0,16" Width="260" HorizontalAlignment="Left">
                 <UniformGrid Columns="2">
                   <RadioButton x:Name="SendEnter" Content="Enter" GroupName="SendKey" Style="{StaticResource Segment}"/>
                   <RadioButton x:Name="SendCtrlEnter" Content="Ctrl + Enter" GroupName="SendKey" Style="{StaticResource Segment}"/>
@@ -107,16 +107,16 @@
             <StackPanel x:Name="AlertsPage" Style="{StaticResource Page}">
               <TextBlock Text="Alerts" Style="{StaticResource Heading}"/>
               <CheckBox x:Name="NotificationsBox" Content="Show notifications"/>
-              <CheckBox x:Name="AlertsBusyBox" Content="…also when I'm Busy" Margin="24,0,0,12"/>
-              <CheckBox x:Name="AlertsDndBox" Content="…also when I'm on Do not disturb" Margin="24,0,0,20"/>
+              <CheckBox x:Name="AlertsBusyBox" Margin="24,0,0,12"><TextBlock Text="Show notifications while Busy" TextWrapping="Wrap"/></CheckBox>
+              <CheckBox x:Name="AlertsDndBox" Margin="24,0,0,20"><TextBlock Text="Show notifications during Do not disturb" TextWrapping="Wrap"/></CheckBox>
               <CheckBox x:Name="SoundsBox" Content="Play sounds"/>
-              <CheckBox x:Name="SoundsBusyBox" Content="…also when I'm Busy" Margin="24,0,0,12"/>
-              <CheckBox x:Name="SoundsDndBox" Content="…also when I'm on Do not disturb" Margin="24,0,0,12"/>
+              <CheckBox x:Name="SoundsBusyBox" Margin="24,0,0,12"><TextBlock Text="Play sounds while Busy" TextWrapping="Wrap"/></CheckBox>
+              <CheckBox x:Name="SoundsDndBox" Margin="24,0,0,12"><TextBlock Text="Play sounds during Do not disturb" TextWrapping="Wrap"/></CheckBox>
             </StackPanel>
 
             <StackPanel x:Name="NetworkPage" Style="{StaticResource Page}">
               <TextBlock Text="Network" Style="{StaticResource Heading}"/>
-              <Border Background="{DynamicResource Surface}" CornerRadius="10" Padding="14" Margin="0,0,0,16">
+              <Border Background="{DynamicResource Surface}" CornerRadius="{DynamicResource PanelCorner}" Padding="14" Margin="0,0,0,16">
                 <StackPanel>
                   <TextBlock Text="{Binding ConnectionSummary}" FontWeight="SemiBold" Foreground="{DynamicResource Accent}"/>
                   <TextBlock Text="{Binding NetworkEndpoint}" TextWrapping="Wrap" FontSize="12" Margin="0,6,0,12"/>
@@ -156,13 +156,56 @@
             <StackPanel x:Name="AppearancePage" Style="{StaticResource Page}">
               <TextBlock Text="Appearance" Style="{StaticResource Heading}"/>
               <TextBlock Text="Theme" Style="{StaticResource Label}"/>
-              <Border Background="{DynamicResource Surface}" CornerRadius="8" Padding="3">
-                <UniformGrid Columns="3">
-                  <RadioButton x:Name="ThemeLight" Content="Light" GroupName="Theme" Style="{StaticResource Segment}" Checked="Theme_Checked" Tag="light"/>
-                  <RadioButton x:Name="ThemeDark" Content="Dark" GroupName="Theme" Style="{StaticResource Segment}" Checked="Theme_Checked" Tag="dark"/>
-                  <RadioButton x:Name="ThemeSystem" Content="Match Windows" GroupName="Theme" Style="{StaticResource Segment}" Checked="Theme_Checked" Tag="system"/>
-                </UniformGrid>
+              <ComboBox x:Name="ThemeBox" SelectedValuePath="Tag" SelectionChanged="Theme_Changed" AutomationProperties.Name="Theme">
+                <ComboBoxItem Content="Light" Tag="light"/>
+                <ComboBoxItem Content="Dark" Tag="dark"/>
+                <ComboBoxItem Content="Match Windows" Tag="system"/>
+                <ComboBoxItem Content="Ocean" Tag="ocean"/>
+                <ComboBoxItem Content="Lavender" Tag="lavender"/>
+                <ComboBoxItem Content="Ember" Tag="ember"/>
+                <ComboBoxItem Content="Pixel" Tag="pixel"/>
+              </ComboBox>
+              <TextBlock Text="Preview" Style="{StaticResource Label}" Margin="0,18,0,6"/>
+              <Border x:Name="ThemePreview" Background="{DynamicResource Canvas}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="{DynamicResource PanelCorner}" ClipToBounds="True" Height="190" AutomationProperties.Name="Theme preview">
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="150"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                  <Border Background="{DynamicResource Sidebar}" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,1,0" Padding="8">
+                    <StackPanel>
+                      <Border Background="{DynamicResource RowSelected}" CornerRadius="{DynamicResource ControlCorner}" Padding="6">
+                        <StackPanel Orientation="Horizontal">
+                          <Grid Width="22" Height="22"><Ellipse Fill="{DynamicResource Avatar}"/><Ellipse Width="7" Height="7" Fill="{DynamicResource Online}" HorizontalAlignment="Right" VerticalAlignment="Bottom"/></Grid>
+                          <TextBlock Text="Alex" Margin="8,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Ink}"/>
+                        </StackPanel>
+                      </Border>
+                      <StackPanel Orientation="Horizontal" Margin="6,8,0,0">
+                        <Grid Width="22" Height="22"><Ellipse Fill="{DynamicResource Avatar}"/><Ellipse Width="7" Height="7" Fill="{DynamicResource Away}" HorizontalAlignment="Right" VerticalAlignment="Bottom"/></Grid>
+                        <TextBlock Text="Sam" Margin="8,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Muted}"/>
+                      </StackPanel>
+                    </StackPanel>
+                  </Border>
+                  <Grid Grid.Column="1" Margin="12">
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <Border HorizontalAlignment="Left" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="{DynamicResource MessageBubbleCorner}" Padding="10,6">
+                      <TextBlock Text="Lunch at noon?" Foreground="{DynamicResource Ink}"/>
+                    </Border>
+                    <Border Grid.Row="1" HorizontalAlignment="Right" Margin="0,8,0,0" Background="{DynamicResource Accent}" CornerRadius="{DynamicResource MessageBubbleCorner}" Padding="10,6">
+                      <TextBlock Text="Sounds good" Foreground="{DynamicResource AccentInk}"/>
+                    </Border>
+                    <Border Grid.Row="3" Background="{DynamicResource Input}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="{DynamicResource ComposerCorner}" Padding="10,6">
+                      <TextBlock Text="Message" Foreground="{DynamicResource Faint}"/>
+                    </Border>
+                  </Grid>
+                </Grid>
               </Border>
+            </StackPanel>
+            <StackPanel x:Name="AboutPage" Style="{StaticResource Page}">
+              <TextBlock Text="About" Style="{StaticResource Heading}"/>
+              <Image Source="{DynamicResource BrandMark}" Width="48" Height="48" HorizontalAlignment="Left" Margin="0,0,0,12"/>
+              <TextBlock Text="Cyd Lan Messenger" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap"/>
+              <TextBlock x:Name="VersionText" Margin="0,6,0,16"/>
+              <TextBlock Text="Developer" Style="{StaticResource Label}"/>
+              <TextBlock Text="MonsterHammer" Margin="0,0,0,12"/>
+              <TextBlock Text="GPL-3.0-or-later" Foreground="{DynamicResource Muted}"/>
             </StackPanel>
           </Grid>
         </ScrollViewer>

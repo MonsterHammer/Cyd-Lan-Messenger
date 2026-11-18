@@ -15,9 +15,13 @@ public partial class TrayMenuWindow : Window
     {
         InitializeComponent(); this.mainWindow = mainWindow; this.model = model;
         DataContext = model;
-        Deactivated += (_, _) => Close();
-        PreviewKeyDown += (_, args) => { if (args.Key == Key.Escape) { args.Handled = true; Close(); } };
+        Closing += (_, _) => closing = true;
+        Deactivated += (_, _) => CloseOnce();
+        PreviewKeyDown += (_, args) => { if (args.Key == Key.Escape) { args.Handled = true; CloseOnce(); } };
     }
+    // Closing deactivates the window, which would call Close() again mid-close and crash the app.
+    private bool closing;
+    public void CloseOnce() { if (!closing) { closing = true; Close(); } }
     public void ShowNear(System.Drawing.Point anchor)
     {
         // Hide the initial layout pass; position only after Windows has sized the
@@ -35,10 +39,10 @@ public partial class TrayMenuWindow : Window
         SetWindowPos(handle, new IntPtr(-1), x, y, 0, 0, 0x0001);
         Opacity = 1; Activate(); OpenAction.Focus();
     }
-    private void Open_Click(object sender, RoutedEventArgs e) { Close(); App.ShowWindow(mainWindow); }
-    private void Transfers_Click(object sender, RoutedEventArgs e) { model.TransfersOpen = true; Close(); App.ShowWindow(mainWindow); }
-    private void Settings_Click(object sender, RoutedEventArgs e) { Close(); App.ShowWindow(mainWindow); PopupHost.ShowModal(mainWindow, new SettingsWindow(model)); }
-    private async void Quit_Click(object sender, RoutedEventArgs e) { Close(); await ((App)System.Windows.Application.Current).QuitAsync(); }
+    private void Open_Click(object sender, RoutedEventArgs e) { CloseOnce(); App.ShowWindow(mainWindow); }
+    private void Transfers_Click(object sender, RoutedEventArgs e) { model.TransfersOpen = true; CloseOnce(); App.ShowWindow(mainWindow); }
+    private void Settings_Click(object sender, RoutedEventArgs e) { CloseOnce(); App.ShowWindow(mainWindow); PopupHost.ShowModal(mainWindow, new SettingsWindow(model)); }
+    private async void Quit_Click(object sender, RoutedEventArgs e) { CloseOnce(); await ((App)System.Windows.Application.Current).QuitAsync(); }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct NativeRect { public int Left, Top, Right, Bottom; }

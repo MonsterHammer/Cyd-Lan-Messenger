@@ -11,7 +11,7 @@
       <Grid.RowDefinitions><RowDefinition Height="52"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="46"/></Grid.RowDefinitions>
       <Grid x:Name="TitleBar" Background="Transparent">
         <TextBlock x:Name="HeadingText" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"/>
-        <Button Style="{StaticResource Icon}" Width="30" Height="30" HorizontalAlignment="Right" ToolTip="Close" Click="Cancel_Click"><local:Glyph Data="{StaticResource IconClose}" Size="16"/></Button>
+        <Button Style="{StaticResource Icon}" Width="30" Height="30" HorizontalAlignment="Right" ToolTip="Close" Click="Cancel_Click"><local:Glyph Data="{DynamicResource IconClose}" Size="16"/></Button>
       </Grid>
       <StackPanel Grid.Row="1" x:Name="NamePanel" Margin="0,0,0,14">
         <TextBlock Text="Group name" FontSize="12" Foreground="{DynamicResource Muted}" Margin="0,0,0,6"/>

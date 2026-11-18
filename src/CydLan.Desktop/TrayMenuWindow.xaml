@@ -8,7 +8,7 @@
     <Style x:Key="TrayAction" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
       <Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="Padding" Value="10,8"/><Setter Property="Margin" Value="0,1"/>
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
-        <Border x:Name="Row" Background="Transparent" CornerRadius="5" Padding="{TemplateBinding Padding}"><ContentPresenter HorizontalAlignment="Stretch"/></Border>
+        <Border x:Name="Row" Background="Transparent" CornerRadius="{DynamicResource CheckCorner}" Padding="{TemplateBinding Padding}"><ContentPresenter HorizontalAlignment="Stretch"/></Border>
         <ControlTemplate.Triggers>
           <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Row" Property="Background" Value="{DynamicResource AccentSoft}"/></Trigger>
           <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Row" Property="Background" Value="{DynamicResource AccentSoft}"/></Trigger>
@@ -16,7 +16,7 @@
       </ControlTemplate></Setter.Value></Setter>
     </Style>
   </Window.Resources>
-  <Border Background="{DynamicResource Sidebar}" CornerRadius="10" BorderBrush="{DynamicResource Line}" BorderThickness="1" Padding="8">
+  <Border Background="{DynamicResource Sidebar}" CornerRadius="{DynamicResource PanelCorner}" BorderBrush="{DynamicResource Line}" BorderThickness="1" Padding="8">
     <StackPanel>
       <Grid Margin="8,6,8,11">
         <Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -24,11 +24,11 @@
         <StackPanel Grid.Column="1"><TextBlock Text="CydLan" FontSize="15" FontWeight="SemiBold"/><TextBlock Text="{Binding ConnectionSummary}" FontSize="11" Foreground="{DynamicResource Faint}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/></StackPanel>
       </Grid>
       <Border Background="{DynamicResource Line}" Height="1" Margin="3,0,3,5"/>
-      <Button x:Name="OpenAction" Style="{StaticResource TrayAction}" Click="Open_Click"><Grid><local:Glyph Data="{StaticResource IconChat}" Size="16" Foreground="{DynamicResource Accent}" HorizontalAlignment="Left"/><TextBlock Text="Open CydLan" Margin="27,0,0,0" FontSize="12" FontWeight="SemiBold"/></Grid></Button>
-      <Button Style="{StaticResource TrayAction}" Click="Transfers_Click"><Grid><local:Glyph Data="{StaticResource IconTransfer}" Size="16" Foreground="{DynamicResource Muted}" HorizontalAlignment="Left"/><TextBlock Text="File transfers" Margin="27,0,0,0" FontSize="12"/></Grid></Button>
-      <Button Style="{StaticResource TrayAction}" Click="Settings_Click"><Grid><local:Glyph Data="{StaticResource IconSettings}" Size="16" Foreground="{DynamicResource Muted}" HorizontalAlignment="Left"/><TextBlock Text="Preferences" Margin="27,0,0,0" FontSize="12"/></Grid></Button>
+      <Button x:Name="OpenAction" Style="{StaticResource TrayAction}" Click="Open_Click"><Grid><local:Glyph Data="{DynamicResource IconChat}" Size="16" Foreground="{DynamicResource Accent}" HorizontalAlignment="Left"/><TextBlock Text="Open CydLan" Margin="27,0,0,0" FontSize="12" FontWeight="SemiBold"/></Grid></Button>
+      <Button Style="{StaticResource TrayAction}" Click="Transfers_Click"><Grid><local:Glyph Data="{DynamicResource IconTransfer}" Size="16" Foreground="{DynamicResource Muted}" HorizontalAlignment="Left"/><TextBlock Text="File transfers" Margin="27,0,0,0" FontSize="12"/></Grid></Button>
+      <Button Style="{StaticResource TrayAction}" Click="Settings_Click"><Grid><local:Glyph Data="{DynamicResource IconSettings}" Size="16" Foreground="{DynamicResource Muted}" HorizontalAlignment="Left"/><TextBlock Text="Preferences" Margin="27,0,0,0" FontSize="12"/></Grid></Button>
       <Border Background="{DynamicResource Line}" Height="1" Margin="3,5,3,5"/>
-      <Button Style="{StaticResource TrayAction}" Click="Quit_Click"><Grid><local:Glyph Data="{StaticResource IconQuit}" Size="16" Foreground="{DynamicResource Danger}" HorizontalAlignment="Left"/><TextBlock Text="Quit CydLan" Margin="27,0,0,0" FontSize="12" Foreground="{DynamicResource Danger}"/></Grid></Button>
+      <Button Style="{StaticResource TrayAction}" Click="Quit_Click"><Grid><local:Glyph Data="{DynamicResource IconQuit}" Size="16" Foreground="{DynamicResource Danger}" HorizontalAlignment="Left"/><TextBlock Text="Quit CydLan" Margin="27,0,0,0" FontSize="12" Foreground="{DynamicResource Danger}"/></Grid></Button>
     </StackPanel>
   </Border>
 </Window>

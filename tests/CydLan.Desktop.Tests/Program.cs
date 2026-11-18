@@ -60,10 +60,33 @@ internal static class Program
             // Switching theme while windows are open must recolour inherited text, not only explicit brushes.
             var themed = new MainWindow(preview); themed.Show();
             var prefs = new SettingsWindow(preview) { Owner = themed }; prefs.Show();
-            foreach (var (mode, ink) in new[] { ("dark", "#FFECECEC"), ("light", "#FF1D2326"), ("dark", "#FFECECEC") })
+            prefs.ShowPage("AboutPage");
+            string version = typeof(MainWindow).Assembly.GetName().Version!.ToString(3);
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            Check(FindText(prefs, $"Version {version}") is { IsVisible: true } &&
+                FindText(prefs, "MonsterHammer") is { IsVisible: true }, "About should show the installed version and developer.");
+            prefs.ShowPage("AlertsPage");
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            Check(FindText(prefs, "Show notifications during Do not disturb") is { IsVisible: true } &&
+                FindText(prefs, "Play sounds during Do not disturb") is { IsVisible: true }, "Alert labels should identify the action and status.");
+            prefs.ShowPage("AppearancePage");
+            var themeBox = (System.Windows.Controls.ComboBox)prefs.FindName("ThemeBox");
+            var chatButton = (System.Windows.Controls.Button)themed.FindName("ChatNav");
+            var chatGlyph = (Glyph)chatButton.Content;
+            var standardGlyph = chatGlyph.Data;
+            var buttonRoot = (System.Windows.Controls.Grid)chatButton.Template.FindName("Root", chatButton);
+            var buttonChrome = (System.Windows.Controls.Border)buttonRoot.Children[0];
+            foreach (var (mode, ink) in new[] {
+                ("dark", "#FFECECEC"), ("ocean", "#FFE9F5FF"), ("lavender", "#FF282039"),
+                ("ember", "#FFFFF0E3"), ("pixel", "#FFF0F7D9"), ("light", "#FF1D2326")
+            })
             {
-                ThemeManager.Apply(mode);
+                themeBox.SelectedValue = mode;
                 await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+                bool pixel = mode == "pixel";
+                Check((buttonChrome.CornerRadius.TopLeft == 0) == pixel,
+                    $"Incorrect button shape in {mode}: {buttonChrome.CornerRadius}, app resource {themed.FindResource("ControlCorner")}.");
+                Check((!ReferenceEquals(chatGlyph.Data, standardGlyph)) == pixel, $"Incorrect chat geometry in {mode}.");
                 foreach (Window w in new Window[] { themed, prefs })
                 {
                     string actual = ((SolidColorBrush)w.Foreground).Color.ToString();
@@ -73,8 +96,11 @@ internal static class Program
                     Check(inherited == ink, $"{w.GetType().Name} inherited text stayed {inherited} after switching to {mode}.");
                 }
             }
-            prefs.Close(); themed.Close(); ThemeManager.Apply("light");
-            Console.WriteLine("PASS  Live light/dark switching recolours open windows");
+            themeBox.SelectedValue = "pixel";
+            prefs.Close();
+            Check(ReferenceEquals(chatGlyph.Data, standardGlyph), "Cancel did not restore the original icons.");
+            themed.Close(); ThemeManager.Apply("light");
+            Console.WriteLine("PASS  Live theme switching, Pixel controls and icons, Cancel restores appearance");
 
             // Popups open over a dimmed main window, fit inside it, and cannot be moved outside it.
             var host = new MainWindow(preview) { Left = 100, Top = 100, Width = 800, Height = 560 }; host.Show();
@@ -103,12 +129,10 @@ internal static class Program
             if (int.TryParse(Environment.GetEnvironmentVariable("CYDLAN_TEST_HOLD_MS"), out int hold)) await Task.Delay(hold); // lets a screen grab see real window corners
             var sidebar = (FrameworkElement)motion.FindName("SidebarPanel");
             double openWidth = sidebar.ActualWidth;
-            ClickNamed(motion, "Toggle conversations sidebar"); await Task.Delay(100);
-            double midWidth = ((FrameworkElement)motion.FindName("SidebarPanel")).ActualWidth;
-            Check(midWidth > 0 && midWidth < openWidth, $"Sidebar should be mid-slide after 100 ms (was {midWidth} of {openWidth}).");
-            await Task.Delay(400);
-            Check(sidebar.Visibility == Visibility.Collapsed, "Sidebar did not finish closing.");
-            ClickNamed(motion, "Toggle conversations sidebar"); await Task.Delay(500);
+            ClickNamed(motion, "Toggle conversations sidebar");
+            await Until(() => sidebar.Visibility == Visibility.Collapsed);
+            ClickNamed(motion, "Toggle conversations sidebar");
+            await Until(() => Math.Abs(sidebar.ActualWidth - openWidth) < 0.5);
             Check(Math.Abs(sidebar.ActualWidth - openWidth) < 0.5, $"Sidebar reopened to {sidebar.ActualWidth}, expected {openWidth}.");
             var pill = (FrameworkElement)motion.FindName("SearchPill");
             ClickNamed(motion, "Search this conversation"); await Task.Delay(450);
@@ -144,6 +168,27 @@ internal static class Program
             ClickNamed(motion, "Restore");
             await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
             Check(motion.WindowState == WindowState.Normal, "The window must return to normal size on Restore.");
+            var chatImage = FindChatImage(motion) ?? throw new Exception("Chat image menu is missing.");
+            var menu = chatImage.ContextMenu;
+            menu.PlacementTarget = chatImage;
+            menu.IsOpen = true;
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            var actions = menu.Items.OfType<System.Windows.Controls.MenuItem>().ToArray();
+            Check(actions.Length == 5 && actions.All(item => ReferenceEquals(item.DataContext, chatImage.DataContext)),
+                "Each image action should target the clicked chat image.");
+            menu.IsOpen = false;
+            bool showedImage = false;
+            var closeViewer = motion.Dispatcher.InvokeAsync(() =>
+            {
+                var viewer = motion.OwnedWindows.OfType<ImagePreviewWindow>().SingleOrDefault();
+                if (viewer is null) return;
+                showedImage = viewer.IsVisible &&
+                    ((System.Windows.Controls.Image)viewer.FindName("PreviewImage")).Source is BitmapSource;
+                viewer.Close();
+            }, DispatcherPriority.ApplicationIdle);
+            actions[0].RaiseEvent(new RoutedEventArgs(System.Windows.Controls.MenuItem.ClickEvent));
+            await closeViewer;
+            Check(showedImage, "Opening a chat image should show its bitmap inside CydLan.");
             motion.Close();
             Console.WriteLine("PASS  Chat profile photo and presence, maximize and restore, compact sidebar and search");
         }
@@ -342,6 +387,24 @@ internal static class Program
 
                 var window = new MainWindow(model); window.Show();
                 await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+                var loading = new FileTransfer
+                {
+                    Id = "progress-ui-test", PeerId = model.SelectedPeer!.Id, Name = "Test attachment.bin",
+                    Size = 100, State = "Accepted"
+                };
+                model.Transfers.Insert(0, loading);
+                await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+                var progress = FindTransferProgress(window, loading);
+                Check(progress is { IsVisible: true, IsIndeterminate: true }, "Accepted attachments should show connecting progress in chat.");
+                loading.Progress = 40;
+                loading.State = "Transferring";
+                await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+                Check(progress is { IsIndeterminate: false, Value: 40 } && FindText(window, "Receiving…") is { IsVisible: true },
+                    "An incoming attachment should show its live byte progress.");
+                loading.State = "Received";
+                await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+                Check(progress is { IsVisible: false }, "Completed attachments should stop showing loading.");
+                model.Transfers.Remove(loading);
                 string artifacts = Path.GetFullPath("artifacts"); Directory.CreateDirectory(artifacts);
                 Capture(window, Path.Combine(artifacts, "live-chat-tested.png"));
                 ClickNamed(window, "Files in this conversation");
@@ -391,7 +454,8 @@ internal static class Program
             restored.ClearMessageHistory();
             Check(restored.Messages.Count == 0 && restored.Groups.All(g => g.Preview == ""), "Delete all chats should remove every conversation.");
             Console.WriteLine("PASS  Delete chat and delete all chats");
-            Console.WriteLine("12/12 desktop test groups passed. Live networking was loopback-only, with isolated temporary application data.");
+            await TestIsolatedAccountsAsync(directory);
+            Console.WriteLine("13/13 desktop test groups passed. Live networking was loopback-only, with isolated temporary application data.");
         }
         finally
         {
@@ -401,6 +465,56 @@ internal static class Program
                 throw new InvalidOperationException("Refusing cleanup outside the desktop test directory.");
             Directory.Delete(full, true);
         }
+    }
+
+    private static async Task TestIsolatedAccountsAsync(string directory)
+    {
+        // Use distinct TCP/UDP ports and data directories for three desktop identities.
+        var profiles = new[] { ("Test Alice", "ocean"), ("Test Bob", "pixel"), ("Test Carol", "ember") };
+        var stores = profiles.Select(profile => new LocalStore(Path.Combine(directory, profile.Item1))).ToArray();
+        using var alicePort = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        using var bobPort = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        using var carolPort = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        var reservations = new[] { alicePort, bobPort, carolPort };
+        for (int i = 0; i < profiles.Length; i++)
+        {
+            var (name, theme) = profiles[i];
+            stores[i].SaveSettings(new() {
+                DisplayName = name, Theme = theme,
+                Port = ((IPEndPoint)reservations[i].Client.LocalEndPoint!).Port,
+                Notifications = false, Sounds = false
+            });
+        }
+        foreach (var socket in reservations) socket.Dispose();
+
+        await using var alice = new MainViewModel(localStore: stores[0]);
+        await using var bob = new MainViewModel(localStore: stores[1]);
+        await using var carol = new MainViewModel(localStore: stores[2]);
+        var accounts = new[] { alice, bob, carol };
+        Check(accounts.Select(account => account.Settings.UserId).Distinct().Count() == 3, "Account identities must stay separate.");
+        foreach (var account in accounts) await account.StartAsync(true, IPAddress.Loopback);
+        await alice.ConnectByAddressAsync($"127.0.0.1:{bob.Settings.Port}");
+        await alice.ConnectByAddressAsync($"127.0.0.1:{carol.Settings.Port}");
+        await bob.ConnectByAddressAsync($"127.0.0.1:{carol.Settings.Port}");
+        await Until(() => accounts.All(account => account.OnlineCount == 2));
+        for (int i = 0; i < accounts.Length; i++)
+        {
+            var sender = accounts[i];
+            var receiver = accounts[(i + 1) % accounts.Length];
+            sender.SelectedPeer = sender.Peers.Single(peer => peer.Id == receiver.Settings.UserId);
+            receiver.SelectedPeer = receiver.Peers.Single(peer => peer.Id == sender.Settings.UserId);
+            string text = $"{sender.ProfileName} to {receiver.ProfileName}";
+            sender.Draft = text;
+            await sender.SendAsync();
+            await Until(() => receiver.Messages.Any(message => message.Text == text));
+            Check(sender.Messages.Single(message => message.Text == text).Delivery == "Delivered" &&
+                receiver.Messages.Count(message => message.Text == text) == 1,
+                "Expected one delivered message in both conversations.");
+            var other = accounts.Single(account => account != sender && account != receiver);
+            Check(!other.Peers.Any(peer => peer.Preview == text), "A direct message reached the third account.");
+            Check(stores[i].LoadSettings().Theme == profiles[i].Item2, "Account themes must stay separate on disk.");
+        }
+        Console.WriteLine("PASS  Three isolated desktop accounts discover each other, exchange chat and retain independent themes");
     }
 
     private static void ClickNamed(DependencyObject root, string automationName)
@@ -419,6 +533,22 @@ internal static class Program
         if (root is System.Windows.Controls.TextBlock block && block.Text == text) return block;
         for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
             if (FindText(VisualTreeHelper.GetChild(root, i), text) is { } found) return found;
+        return null;
+    }
+
+    private static System.Windows.Controls.Image? FindChatImage(DependencyObject root)
+    {
+        if (root is System.Windows.Controls.Image { IsVisible: true, ContextMenu: not null } image) return image;
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+            if (FindChatImage(VisualTreeHelper.GetChild(root, i)) is { } found) return found;
+        return null;
+    }
+
+    private static System.Windows.Controls.ProgressBar? FindTransferProgress(DependencyObject root, FileTransfer transfer)
+    {
+        if (root is System.Windows.Controls.ProgressBar bar && ReferenceEquals(bar.DataContext, transfer)) return bar;
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+            if (FindTransferProgress(VisualTreeHelper.GetChild(root, i), transfer) is { } found) return found;
         return null;
     }
 

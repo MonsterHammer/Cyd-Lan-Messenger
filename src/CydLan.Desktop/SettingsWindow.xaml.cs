@@ -14,6 +14,7 @@ public partial class SettingsWindow : Window
     public SettingsWindow(MainViewModel model)
     {
         InitializeComponent(); this.model = model; DataContext = model;
+        VersionText.Text = $"Version {typeof(SettingsWindow).Assembly.GetName().Version?.ToString(3)}";
         PopupHost.EnableDrag(this, TitleBar); PopupHost.EnableDrag(this, DragArea);
         var s = model.Settings;
         // General
@@ -40,7 +41,7 @@ public partial class SettingsWindow : Window
         FolderBox.Text = model.ReceivedFilesFolder; AutoAcceptBox.IsChecked = s.AutoAcceptFiles;
         // Appearance (live preview; Cancel restores)
         originalTheme = ThemeManager.Normalize(s.Theme);
-        (originalTheme switch { ThemeManager.Dark => ThemeDark, ThemeManager.FollowSystem => ThemeSystem, _ => ThemeLight }).IsChecked = true;
+        ThemeBox.SelectedValue = originalTheme;
         Closed += (_, _) =>
         {
             if (!saved) ThemeManager.Apply(originalTheme);
@@ -66,20 +67,27 @@ public partial class SettingsWindow : Window
         unsavedAvatars.Add(path); avatarPath = path; ShowAvatar();
     }
     private void RemoveAvatar_Click(object sender, RoutedEventArgs e) { avatarPath = ""; ShowAvatar(); }
-    private string SelectedTheme => ThemeDark.IsChecked == true ? ThemeManager.Dark : ThemeSystem.IsChecked == true ? ThemeManager.FollowSystem : ThemeManager.Light;
-    private void Theme_Checked(object sender, RoutedEventArgs e) { if (IsInitialized && ThemeLight is not null) ThemeManager.Apply(SelectedTheme); }
+    private string SelectedTheme => ThemeManager.Normalize(ThemeBox.SelectedValue as string);
+    private void Theme_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (IsInitialized && ThemeBox.SelectedValue is string theme)
+            ThemeManager.Apply(theme);
+    }
     private void Page_Checked(object sender, RoutedEventArgs e)
     {
         if (!IsInitialized || GeneralPage is null) return;
-        foreach (var page in new[] { GeneralPage, AccountPage, MessagesPage, HistoryPage, AlertsPage, NetworkPage, FilesPage, AppearancePage })
-            page.Visibility = page.Name == (string)((FrameworkElement)sender).Tag ? Visibility.Visible : Visibility.Collapsed;
+        SelectPage((string)((FrameworkElement)sender).Tag);
     }
     /// <summary>Shows a page by name (used by tests and screenshots).</summary>
     public void ShowPage(string name)
     {
-        foreach (var page in new[] { GeneralPage, AccountPage, MessagesPage, HistoryPage, AlertsPage, NetworkPage, FilesPage, AppearancePage })
-            page.Visibility = page.Name == name ? Visibility.Visible : Visibility.Collapsed;
+        SelectPage(name);
         foreach (var item in NavPanel.Children.OfType<System.Windows.Controls.RadioButton>()) if ((string)item.Tag == name) item.IsChecked = true;
+    }
+    private void SelectPage(string name)
+    {
+        foreach (var page in new[] { GeneralPage, AccountPage, MessagesPage, HistoryPage, AlertsPage, NetworkPage, FilesPage, AppearancePage, AboutPage })
+            page.Visibility = page.Name == name ? Visibility.Visible : Visibility.Collapsed;
     }
     private void Font_Changed(object sender, SelectionChangedEventArgs e) => UpdateFontPreview();
     private void UpdateFontPreview()

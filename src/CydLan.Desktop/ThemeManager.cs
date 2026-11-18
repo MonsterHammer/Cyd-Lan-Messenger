@@ -4,27 +4,47 @@ using Microsoft.Win32;
 
 namespace CydLan.Desktop;
 
-/// <summary>Swaps the palette dictionary (Themes/Light.xaml or Themes/Dark.xaml) at runtime.</summary>
+/// <summary>Swaps the active appearance resources at runtime.</summary>
 public static class ThemeManager
 {
     public const string Light = "light", Dark = "dark", FollowSystem = "system";
-    private static ResourceDictionary? active;
+    public const string Ocean = "ocean", Lavender = "lavender", Ember = "ember", Pixel = "pixel";
+    private static ResourceDictionary? pixelControls;
     private static string mode = Light;
     private static bool listening;
 
-    public static string Normalize(string? value) => value is Dark or FollowSystem ? value : Light;
+    public static string Normalize(string? value) => value is Dark or FollowSystem or Ocean or Lavender or Ember or Pixel ? value : Light;
 
     public static void Apply(string? value)
     {
         mode = Normalize(value);
         if (Application.Current is not { } app) return;
         if (mode == FollowSystem && !listening) { SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged; listening = true; }
-        bool dark = mode == Dark || (mode == FollowSystem && WindowsUsesDarkApps());
-        var palette = new ResourceDictionary { Source = new Uri($"/CydLan;component/Themes/{(dark ? "Dark" : "Light")}.xaml", UriKind.Relative) };
-        var merged = app.Resources.MergedDictionaries;
-        if (active is not null) merged.Remove(active);
-        merged.Add(palette); // last merged dictionary wins over the default palette inside Theme.xaml
-        active = palette;
+        var appearance = mode switch
+        {
+            Dark => "Dark",
+            FollowSystem when WindowsUsesDarkApps() => "Dark",
+            Ocean => "Ocean",
+            Lavender => "Lavender",
+            Ember => "Ember",
+            Pixel => "Pixel",
+            _ => "Light"
+        };
+        var palette = new ResourceDictionary { Source = new Uri($"/CydLan;component/Themes/{appearance}.xaml", UriKind.Relative) };
+        // Swapping a merged dictionary leaves already-resolved template and style values on the old brushes.
+        // Writing each key straight into the application resources forces every DynamicResource to refresh.
+        foreach (var (key, brush) in Flatten(palette)) app.Resources[key] = brush;
+        // Set the geometry and corner keys directly so WPF refreshes instantiated templates and glyphs.
+        if (mode == Pixel && pixelControls is null)
+        {
+            pixelControls = new ResourceDictionary { Source = new Uri("/CydLan;component/Themes/PixelControls.xaml", UriKind.Relative) };
+            foreach (string key in pixelControls.Keys) app.Resources[key] = pixelControls[key];
+        }
+        else if (mode != Pixel && pixelControls is not null)
+        {
+            foreach (string key in pixelControls.Keys) app.Resources.Remove(key);
+            pixelControls = null;
+        }
         // WPF does not refresh a Window's own style-set Foreground on a palette swap, which leaves inherited
         // text in the old colour. Binding the window-level brushes directly keeps every open window in sync.
         foreach (Window window in app.Windows)
@@ -32,6 +52,16 @@ public static class ThemeManager
             window.SetResourceReference(System.Windows.Controls.Control.ForegroundProperty, "Ink");
             if (!window.AllowsTransparency) window.SetResourceReference(System.Windows.Controls.Control.BackgroundProperty, "Canvas");
         }
+    }
+
+    // Base dictionaries first, so a theme's own keys override the ones it inherits.
+    private static Dictionary<object, object> Flatten(ResourceDictionary dictionary)
+    {
+        var result = new Dictionary<object, object>();
+        foreach (var inner in dictionary.MergedDictionaries)
+            foreach (var pair in Flatten(inner)) result[pair.Key] = pair.Value;
+        foreach (object key in dictionary.Keys) result[key] = dictionary[key];
+        return result;
     }
 
     private static void OnUserPreferenceChanged(object? sender, UserPreferenceChangedEventArgs e)

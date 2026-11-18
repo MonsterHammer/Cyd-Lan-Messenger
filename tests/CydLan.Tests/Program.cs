@@ -8,6 +8,19 @@ using System.Xml.Linq;
 using CydLan.Core;
 
 if (args.Contains("--experiment-peer")) return await NetworkExperiment.RunPeerAsync(args);
+if (args.Contains("--sandbox-legacy"))
+{
+    int[] ports = args.SkipWhile(arg => arg != "--sandbox-legacy").Skip(1).Select(int.Parse).ToArray();
+    await TestOriginalLegacyAsync(ports.Length > 0 ? ports : [50000]).WaitAsync(TimeSpan.FromMinutes(3));
+    return 0;
+}
+if (args.Contains("--isolated-mixed"))
+{
+    await NetworkExperiment.RunAsync();
+    await TestMixedPeers().WaitAsync(TimeSpan.FromSeconds(25));
+    Console.WriteLine("PASS  Three CydLan services and two legacy fixture connections on loopback");
+    return 0;
+}
 
 var tests = new (string Name, Func<Task> Run)[] {
     ("Persistent diagnostics: rotation, concurrency, privacy and disk failures", DiagnosticLogTests.RunAsync),
@@ -21,6 +34,7 @@ var tests = new (string Name, Func<Task> Run)[] {
     ("Real sockets: peer handshake, chat, receipts, typing and broadcast", TestPeers),
     ("Legacy fixture peer: inbound handshake, deduplication, numeric IDs", TestLegacyPeer),
     ("Legacy fixture acceptor: outbound 1024-bit RSA session and receipt", TestLegacyAcceptor),
+    ("Mixed loopback: three CydLan services and two legacy fixture connections", TestMixedPeers),
     ("Simultaneous peer connections converge without a relay", TestSimultaneous),
     ("Directed UDP discovery and reconnect after a peer restarts", TestDiscoveryReconnect),
     ("Occupied legacy TCP port falls back to an advertised port", TestPortCoexistence),
@@ -147,12 +161,17 @@ static async Task TestLegacyPeer()
 {
     var settings = Settings("CydLan test");
     await using var service = new LanService(settings);
-    int count = 0; string? name = null;
-    service.PeerOnline += peer => name = peer.Name;
-    service.MessageReceived += _ => Interlocked.Increment(ref count);
     await service.StartAsync(false, IPAddress.Loopback);
+    await ExerciseLegacyPeer(service, settings);
+}
+static async Task ExerciseLegacyPeer(LanService service, AppSettings settings, Func<Task>? whileConnected = null)
+{
+    int count = 0; string? name = null;
+    const string id = "001122334455Legacy User";
+    service.PeerOnline += peer => { if (peer.Id == id) name = peer.Name; };
+    service.MessageReceived += message => { if (message.PeerId == id) Interlocked.Increment(ref count); };
     using var client = new TcpClient(); await client.ConnectAsync(IPAddress.Loopback, service.ListeningPort);
-    var stream = client.GetStream(); const string id = "001122334455Legacy User";
+    var stream = client.GetStream();
     // An independent peer fixture deliberately fragments the unframed identity.
     foreach (byte value in Encoding.ASCII.GetBytes("MSG" + id)) { await stream.WriteAsync(new byte[] { value }); await Task.Delay(1); }
     var pub = await RawRead(stream); Check(pub.Type == "PUBKEY", "The acceptor sends its PKCS#1 public key first.");
@@ -191,6 +210,7 @@ static async Task TestLegacyPeer()
     Check((string?)afterHeartbeat.Element("body")?.Element("messageid") == "24" && wentOffline == 0,
         "An otherwise working legacy connection must survive without heartbeat receipts.");
     await Until(() => count == 2);
+    if (whileConnected is not null) await whileConnected();
 
     // LAN Messenger group sends stack one header per recipient; a copy for someone else must not end the session.
     string? groupText = null; service.GroupMessageReceived += (_, _, op, text) => { if (op == "message") groupText = text; };
@@ -207,6 +227,102 @@ static async Task TestLegacyPeer()
     await Until(() => count == 3);
     client.Dispose();
     await Until(() => wentOffline == 1);
+}
+static async Task TestMixedPeers()
+{
+    var a = Settings("Mixed A"); var b = Settings("Mixed B"); var c = Settings("Mixed C");
+    await using var one = new LanService(a);
+    await using var two = new LanService(b);
+    await using var three = new LanService(c);
+    var nodes = new[] { (Service: one, Settings: a), (Service: two, Settings: b), (Service: three, Settings: c) };
+    await Task.WhenAll(nodes.Select(node => node.Service.StartAsync(false, IPAddress.Loopback)));
+    var messages = new ConcurrentBag<(string Receiver, string Text)>();
+    foreach (var node in nodes)
+        node.Service.MessageReceived += message => messages.Add((node.Settings.UserId, message.Text));
+
+    for (int i = 0; i < nodes.Length; i++)
+        for (int j = i + 1; j < nodes.Length; j++)
+            await nodes[i].Service.ConnectAsync(nodes[j].Settings.UserId, "127.0.0.1", nodes[j].Service.ListeningPort);
+
+    var legacyReady = new SemaphoreSlim(0);
+    using var done = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+    var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+    async Task HoldLegacyAsync()
+    {
+        legacyReady.Release();
+        await release.Task.WaitAsync(done.Token);
+    }
+    var legacy = Task.WhenAll(ExerciseLegacyPeer(one, a, HoldLegacyAsync), ExerciseLegacyPeer(two, b, HoldLegacyAsync));
+    try
+    {
+        for (int i = 0; i < 2; i++) await legacyReady.WaitAsync(done.Token);
+        await Task.WhenAll(nodes.SelectMany(sender => nodes
+            .Where(receiver => receiver.Settings.UserId != sender.Settings.UserId)
+            .Select(async receiver =>
+            {
+                string text = $"{sender.Settings.DisplayName} to {receiver.Settings.DisplayName}";
+                Check(await sender.Service.SendChatAsync(receiver.Settings.UserId, text, "17701"),
+                    "Missing receipt while legacy sessions were open: " + text);
+                Check(messages.Count(message => message == (receiver.Settings.UserId, text)) == 1,
+                    "Mixed chat was missing, duplicated or routed incorrectly: " + text);
+            })));
+    }
+    finally { release.TrySetResult(); await legacy; legacyReady.Dispose(); }
+}
+static async Task<string> ProbeOriginalIdentityAsync(int legacyPort)
+{
+    using var probe = new TcpClient();
+    await probe.ConnectAsync(IPAddress.Loopback, legacyPort);
+    var stream = probe.GetStream();
+    await stream.WriteAsync(Encoding.ASCII.GetBytes("MSG" + AppSettings.NewUserId()));
+    var key = await RawRead(stream).WaitAsync(TimeSpan.FromSeconds(10));
+    Check(key.Type == "PUBKEY", "Original client did not send its public key.");
+    using var rsa = RSA.Create();
+    rsa.ImportFromPem(Encoding.ASCII.GetString(key.Payload));
+    byte[] material = RandomNumberGenerator.GetBytes(48);
+    await RawWrite(stream, "HNDSHK", rsa.Encrypt(material, RSAEncryptionPadding.OaepSHA1));
+    using var aes = Aes.Create();
+    aes.Key = material[..32]; aes.IV = material[32..];
+    var profile = await ReadMessage(stream, aes).WaitAsync(TimeSpan.FromSeconds(10));
+    string legacyId = (string?)profile.Element("body")?.Element("userid") ?? "";
+    Check(legacyId.Length > 0, "Original client returned an empty identity.");
+    return legacyId;
+}
+
+static async Task TestOriginalLegacyAsync(int[] legacyPorts)
+{
+    var legacy = await Task.WhenAll(legacyPorts.Select(async port => (Port: port, Id: await ProbeOriginalIdentityAsync(port))));
+    Check(legacy.Select(peer => peer.Id).Distinct().Count() == legacy.Length, "Original clients must have separate identities.");
+    var first = Settings("Isolated CydLan A"); var second = Settings("Isolated CydLan B");
+    await using var a = new LanService(first);
+    await using var b = new LanService(second);
+    int offline = 0;
+    var legacyIds = legacy.Select(peer => peer.Id).ToHashSet();
+    var legacyOnline = new ConcurrentDictionary<(string CydLan, string Legacy), string>();
+    a.PeerOnline += peer => { if (legacyIds.Contains(peer.Id)) legacyOnline[(first.UserId, peer.Id)] = peer.Version; };
+    b.PeerOnline += peer => { if (legacyIds.Contains(peer.Id)) legacyOnline[(second.UserId, peer.Id)] = peer.Version; };
+    a.PeerOffline += id => { if (legacyIds.Contains(id)) Interlocked.Increment(ref offline); };
+    b.PeerOffline += id => { if (legacyIds.Contains(id)) Interlocked.Increment(ref offline); };
+    await a.StartAsync(false, IPAddress.Loopback);
+    await b.StartAsync(false, IPAddress.Loopback);
+    await a.ConnectAsync(second.UserId, "127.0.0.1", b.ListeningPort);
+    await Task.WhenAll(legacy.SelectMany(peer => new[] {
+        a.ConnectAsync(peer.Id, "127.0.0.1", peer.Port), b.ConnectAsync(peer.Id, "127.0.0.1", peer.Port)
+    }));
+    await Until(() => legacyOnline.Count == 2 * legacy.Length);
+    Console.WriteLine($"Two CydLan clients connected to {legacy.Length} distinct original LAN Messenger client(s), version(s) {string.Join(", ", legacyOnline.Values.Distinct())}.");
+    for (int i = 0; i < 4; i++)
+    {
+        foreach (var peer in legacy)
+        {
+            Check(await a.SendChatAsync(peer.Id, $"Isolated CydLan A {i}", (18000 + i).ToString()), $"Legacy port {peer.Port} did not acknowledge CydLan A.");
+            Check(await b.SendChatAsync(peer.Id, $"Isolated CydLan B {i}", (19000 + i).ToString()), $"Legacy port {peer.Port} did not acknowledge CydLan B.");
+        }
+        Check(await a.SendChatAsync(second.UserId, $"Mixed topology {i}", (20000 + i).ToString()), "CydLan B did not acknowledge CydLan A.");
+        if (i < 3) await Task.Delay(TimeSpan.FromSeconds(15));
+    }
+    Check(Volatile.Read(ref offline) == 0, "A legacy session disconnected during the stability check.");
+    Console.WriteLine($"PASS  {8 * legacy.Length} mixed messages acknowledged; all {2 * legacy.Length} legacy connections survived 45 seconds of mixed traffic.");
 }
 static async Task TestLegacyAcceptor()
 {
