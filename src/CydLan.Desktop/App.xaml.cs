@@ -5,6 +5,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Forms = System.Windows.Forms;
+using CydLan.Core;
 
 namespace CydLan.Desktop;
 
@@ -14,6 +15,7 @@ public partial class App : System.Windows.Application
     private Forms.NotifyIcon? tray;
     private TrayMenuWindow? trayMenu;
     private MainViewModel? model;
+    private DiagnosticLog? log;
     private bool quitting;
     internal bool IsQuitting => quitting;
     protected override async void OnStartup(StartupEventArgs e)
@@ -30,7 +32,13 @@ public partial class App : System.Windows.Application
         }
         try
         {
-            model = new MainViewModel(preview, seedPreview: !e.Args.Contains("--empty-preview"));
+            if (!preview)
+            {
+                log = new DiagnosticLog(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CydLan", "logs"));
+                RegisterCrashLogging();
+                log.Write("application.start", null, ("version", typeof(App).Assembly.GetName().Version), ("runtime", Environment.Version), ("os", Environment.OSVersion.VersionString));
+            }
+            model = new MainViewModel(preview, seedPreview: !e.Args.Contains("--empty-preview"), log: log);
             int themeArg = Array.IndexOf(e.Args, "--theme");
             if (preview && themeArg >= 0 && themeArg + 1 < e.Args.Length) model.Settings.Theme = ThemeManager.Normalize(e.Args[themeArg + 1]); // preview/screenshot override only
             ThemeManager.Apply(model.Settings.Theme);
@@ -78,10 +86,23 @@ public partial class App : System.Windows.Application
         }
         catch (Exception ex)
         {
+            log?.Write("application.start_failed", ex);
             if (capturing) { Console.Error.WriteLine(ex); Environment.ExitCode = 1; }
             else System.Windows.MessageBox.Show(ex.Message, "CydLan could not start");
             await QuitAsync();
         }
+    }
+    private void RegisterCrashLogging()
+    {
+        // Preserve normal fatal-error behavior: write evidence without declaring the exception handled.
+        DispatcherUnhandledException += (_, args) => log?.Write("application.dispatcher_crash", args.Exception);
+        AppDomain.CurrentDomain.UnhandledException += (_, args) => log?.Write("application.unhandled_exception", args.ExceptionObject as Exception, ("terminating", args.IsTerminating));
+        TaskScheduler.UnobservedTaskException += (_, args) => log?.Write("application.unobserved_task", args.Exception);
+    }
+    protected override void OnExit(ExitEventArgs e)
+    {
+        log?.Write("application.exit", null, ("exitCode", e.ApplicationExitCode));
+        base.OnExit(e);
     }
     private void CreateTray(MainWindow window)
     {
@@ -132,8 +153,13 @@ public partial class App : System.Windows.Application
     {
         if (quitting) return;
         quitting = true;
-        if (model is not null) await model.DisposeAsync();
-        trayMenu?.Close();
-        tray?.Dispose(); mutex?.Dispose(); Shutdown();
+        log?.Write("application.stopping");
+        try { if (model is not null) await model.DisposeAsync(); }
+        catch (Exception e) { log?.Write("application.shutdown_failed", e); Environment.ExitCode = 1; }
+        finally
+        {
+            trayMenu?.Close();
+            tray?.Dispose(); mutex?.Dispose(); Shutdown(Environment.ExitCode);
+        }
     }
 }

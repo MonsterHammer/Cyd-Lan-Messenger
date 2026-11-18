@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Net;
+using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Data;
 using System.Windows.Media;
@@ -16,6 +17,10 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
 {
     private readonly LocalStore? store;
     private readonly LanService? lan;
+    private readonly DiagnosticLog? log;
+    private readonly Dictionary<string, string> loggedTransferStates = [];
+    public string LogsDirectory => log?.DirectoryPath ?? "";
+    public bool HasLogs => log is not null;
     private readonly List<ChatMessage> history = [];
     private readonly Dictionary<string, string> drafts = [];
     private readonly Dictionary<string, ObservableCollection<Attachment>> attachments = [];
@@ -150,7 +155,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     public string PeopleSummary => Preview ? "Sample contacts only" : $"{OnlineCount} online · {Peers.Sum(p => p.Unread)} unread";
     public string NetworkEndpoint => Preview ? "" : connected ? $"{LocalAddress} · TCP {lan!.ListeningPort} · UDP {lan.DiscoveryPort}" : "Network unavailable";
 
-    public MainViewModel(bool preview = false, bool seedPreview = true, LocalStore? localStore = null)
+    public MainViewModel(bool preview = false, bool seedPreview = true, LocalStore? localStore = null, DiagnosticLog? log = null)
     {
         Preview = preview;
         ImagesDirectory = preview ? Path.Combine(Path.GetTempPath(), "CydLan-preview", "images")
@@ -158,6 +163,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         if (preview) Settings = new() { DisplayName = "Alex Morgan" };
         else
         {
+            this.log = log ?? new DiagnosticLog(Path.Combine(localStore?.DirectoryPath ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CydLan"), "logs"));
             store = localStore ?? new(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CydLan"));
             Settings = store.LoadSettings();
             if (Settings.Port is < 1 or > 65535) Settings.Port = 50000;
@@ -178,7 +184,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
                 if (transfer.State is "Waiting for approval" or "Accepted" or "Connecting" or "Transferring") transfer.State = "Interrupted";
                 Transfers.Add(transfer);
             }
-            lan = new(Settings, Peers) { InlineImageDirectory = Path.Combine(ImagesDirectory, "received"), AvatarDirectory = Path.Combine(ImagesDirectory, "avatars") };
+            lan = new(Settings, Peers, this.log) { InlineImageDirectory = Path.Combine(ImagesDirectory, "received"), AvatarDirectory = Path.Combine(ImagesDirectory, "avatars") };
             lan.PeerOnline += peer => UI(() => {
                 var existing = Peers.FirstOrDefault(p => p.Id == peer.Id);
                 if (existing is null) { existing = peer; Peers.Add(peer); }
@@ -244,7 +250,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         if (Preview) { NetworkStatus = "Design mode · LAN disconnected"; return; }
         try { await lan!.StartAsync(discovery, bindAddress); connected = true; NetworkStatus = "Local network connected"; UpdateCounts(); }
         catch (Exception e) when (e is System.Net.Sockets.SocketException or ArgumentException or IOException)
-        { NetworkStatus = "Network unavailable"; Toast = $"Could not start networking: {e.Message}"; Diagnostics.Add(Toast); UpdateCounts(); }
+        { log?.Write("network.start_failed", e); NetworkStatus = "Network unavailable"; Toast = $"Could not start networking: {e.Message}"; Diagnostics.Add(Toast); UpdateCounts(); }
     }
     public async Task RefreshAsync()
     {
@@ -295,7 +301,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     private async Task DeliverAsync(ChatMessage message)
     {
         try { message.Delivery = await lan!.SendChatAsync(message.PeerId, message.Text, message.Id) ? "Delivered" : "Unconfirmed"; }
-        catch (Exception e) when (e is IOException or System.Net.Sockets.SocketException or OperationCanceledException or InvalidOperationException or ArgumentException) { message.Delivery = "Failed"; Toast = e.Message; }
+        catch (Exception e) when (e is IOException or System.Net.Sockets.SocketException or OperationCanceledException or InvalidOperationException or ArgumentException) { log?.Write("message.send_failed", e, ("peer", message.PeerId), ("id", message.Id)); message.Delivery = "Failed"; Toast = e.Message; }
         Save();
     }
     public async Task ConnectByAddressAsync(string endpoint)
@@ -358,7 +364,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
             var message = new ChatMessage { PeerId = peer.Id, Outgoing = true, Delivery = "Sending…", Id = NextMessageId().ToString() };
             string path = file.Path;
             try { if (file.IsImage) { path = KeepCopy(file.Path); message.ImagePath = path; } else message.FileName = file.Name; }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Toast = $"{file.Name} couldn't be prepared: {e.Message}"; continue; }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { log?.Write("attachment.prepare_failed", e); Toast = $"{file.Name} couldn't be prepared: {e.Message}"; continue; }
             history.Add(message); queued.Add((message, path, file.IsImage));
         }
         if (queued.Count > 0) peer.Preview = queued[^1].Image ? "Photo" : queued[^1].Message.FileName;
@@ -373,7 +379,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
                 message.Delivery = DeliveryFor(transfer);
             }
             catch (Exception e) when (e is IOException or System.Net.Sockets.SocketException or OperationCanceledException or InvalidOperationException)
-            { message.Delivery = "Failed"; Toast = e.Message; }
+            { log?.Write("attachment.offer_failed", e, ("peer", peer.Id)); message.Delivery = "Failed"; Toast = e.Message; }
         }
         Save();
     }
@@ -393,6 +399,14 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     public async Task CancelOfferAsync(FileTransfer transfer) { if (lan is not null) await RunAsync(() => lan.CancelFileAsync(transfer)); }
     private void OnTransferChanged(FileTransfer transfer)
     {
+        // Progress can fire for every network buffer. Persist state changes only, without file names or paths.
+        string state = transfer.State.StartsWith("Failed", StringComparison.Ordinal) ? "Failed" : transfer.State;
+        if (loggedTransferStates.GetValueOrDefault(transfer.Id) != state)
+        {
+            if (loggedTransferStates.Count >= 2000) loggedTransferStates.Clear();
+            loggedTransferStates[transfer.Id] = state;
+            log?.Write("transfer.state", null, ("peer", transfer.PeerId), ("id", transfer.Id), ("outgoing", transfer.Outgoing), ("bytes", transfer.Size), ("state", state));
+        }
         if (!Transfers.Contains(transfer))
         {
             transfer.PeerName = Peers.FirstOrDefault(p => p.Id == transfer.PeerId)?.Name ?? transfer.PeerId; Transfers.Insert(0, transfer);
@@ -414,6 +428,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
             {
                 try { File.Delete(transfer.Path); } catch (IOException) { }
                 Diagnostics.Insert(0, $"{DateTime.Now:HH:mm:ss}  Discarded an image from {peer.Name} that could not be decoded.");
+                log?.Write("image.decode_failed", null, ("peer", peer.Id), ("id", transfer.Id));
                 return;
             }
             history.Add(new() { Id = transfer.Id, PeerId = peer.Id, ImagePath = transfer.Path, Delivery = "Received" });
@@ -589,11 +604,11 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         store?.SaveSettings(Settings); Changed(nameof(ProfileName)); Changed(nameof(ProfileInitial)); Changed(nameof(ProfileStatus));
         if (lan is not null) await RunAsync(() => lan.UpdateProfileAsync());
     }
-    private async Task RunAsync(Func<Task> action, bool report = true)
+    private async Task RunAsync(Func<Task> action, bool report = true, [CallerMemberName] string operation = "")
     {
         try { await action(); }
         catch (Exception e) when (e is IOException or System.Net.Sockets.SocketException or OperationCanceledException or UnauthorizedAccessException or InvalidOperationException)
-        { if (report) Toast = e.Message; }
+        { log?.Write("operation.failed", e, ("operation", operation)); if (report) Toast = e.Message; }
     }
     private void RefreshMessages(bool forceScroll = false)
     {
@@ -611,7 +626,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
             store?.SaveHistory(Settings.KeepHistory ? history : []); store?.SavePeers(Peers); store?.SaveDrafts(drafts); store?.SaveGroups(Groups);
             store?.SaveTransfers(Settings.KeepFileHistory ? Transfers.Where(t => t.Id != "preview") : []);
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Toast = "Local history could not be saved: " + e.Message; }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { log?.Write("storage.save_failed", e); Toast = "Local history could not be saved: " + e.Message; }
     }
     public async ValueTask DisposeAsync() { Save(); if (lan is not null) await lan.DisposeAsync(); }
     private void SeedPreview()

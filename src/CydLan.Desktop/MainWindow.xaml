@@ -123,10 +123,39 @@
                     <Grid.ColumnDefinitions><ColumnDefinition Width="40"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                     <Grid Width="30" Height="30" HorizontalAlignment="Left">
                       <Border Background="{DynamicResource Avatar}" CornerRadius="15"><TextBlock Text="{Binding Initials}" FontSize="12" Foreground="{DynamicResource Accent}" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
-                      <Image Source="{Binding AvatarPath, Converter={StaticResource AvatarFile}}" Stretch="UniformToFill" local:Rounded.Radius="15"/>
-                      <Ellipse Width="9" Height="9" Stroke="{DynamicResource Sidebar}" StrokeThickness="2" HorizontalAlignment="Right" VerticalAlignment="Bottom"><Ellipse.Style><Style TargetType="Ellipse"><Setter Property="Fill" Value="{DynamicResource Faint}"/><Style.Triggers><DataTrigger Binding="{Binding Online}" Value="True"><Setter Property="Fill" Value="{DynamicResource Online}"/></DataTrigger><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding Online}" Value="True"/><Condition Binding="{Binding Status}" Value="away"/></MultiDataTrigger.Conditions><Setter Property="Fill" Value="{DynamicResource Away}"/></MultiDataTrigger><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding Online}" Value="True"/><Condition Binding="{Binding Status}" Value="busy"/></MultiDataTrigger.Conditions><Setter Property="Fill" Value="{DynamicResource Away}"/></MultiDataTrigger></Style.Triggers></Style></Ellipse.Style></Ellipse>
+                      <Ellipse>
+                        <Ellipse.Fill><ImageBrush ImageSource="{Binding AvatarPath, Converter={StaticResource AvatarFile}}" Stretch="UniformToFill"/></Ellipse.Fill>
+                      </Ellipse>
                     </Grid>
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,5,0"><TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding Preview}" FontSize="12" Foreground="{DynamicResource Faint}" TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/></StackPanel>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,5,0">
+                      <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                      <DockPanel Margin="0,2,0,0">
+                        <Ellipse Width="6" Height="6" Margin="0,0,5,0" VerticalAlignment="Center">
+                          <Ellipse.Style>
+                            <Style TargetType="Ellipse">
+                              <Setter Property="Fill" Value="{DynamicResource Faint}"/>
+                              <Style.Triggers>
+                                <DataTrigger Binding="{Binding Online}" Value="True"><Setter Property="Fill" Value="{DynamicResource Online}"/></DataTrigger>
+                                <DataTrigger Binding="{Binding Presence}" Value="Away"><Setter Property="Fill" Value="{DynamicResource Away}"/></DataTrigger>
+                                <DataTrigger Binding="{Binding Presence}" Value="Busy"><Setter Property="Fill" Value="{DynamicResource Away}"/></DataTrigger>
+                                <DataTrigger Binding="{Binding Presence}" Value="Do not disturb"><Setter Property="Fill" Value="{DynamicResource Danger}"/></DataTrigger>
+                              </Style.Triggers>
+                            </Style>
+                          </Ellipse.Style>
+                        </Ellipse>
+                        <TextBlock Text="{Binding Presence}" FontSize="11" Foreground="{DynamicResource Muted}"/>
+                        <TextBlock Text="{Binding Preview, StringFormat=' · {0}'}" FontSize="11" Foreground="{DynamicResource Faint}" TextTrimming="CharacterEllipsis">
+                          <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                              <Style.Triggers>
+                                <DataTrigger Binding="{Binding Preview}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+                                <DataTrigger Binding="{Binding Preview}" Value="Say hello"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+                              </Style.Triggers>
+                            </Style>
+                          </TextBlock.Style>
+                        </TextBlock>
+                      </DockPanel>
+                    </StackPanel>
                     <Border Grid.Column="2" Background="{DynamicResource Accent}" CornerRadius="8" Height="18" MinWidth="18" Padding="4,0" VerticalAlignment="Center"><Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Visible"/><Style.Triggers><DataTrigger Binding="{Binding Unread}" Value="0"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Border.Style><TextBlock Text="{Binding Unread}" FontSize="11" Foreground="{DynamicResource AccentInk}" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
                   </Grid>
                 </DataTemplate></ListBox.ItemTemplate>
@@ -159,7 +188,26 @@
             <Grid.RowDefinitions><RowDefinition Height="74"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
             <Grid Margin="26,0,22,0">
               <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-              <StackPanel VerticalAlignment="Center"><TextBlock x:Name="ConversationTitle" Text="{Binding ChatTitle}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding ChatSubtitle}" FontSize="12" Foreground="{DynamicResource Faint}" Margin="0,6,0,0" TextTrimming="CharacterEllipsis"><TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers><DataTrigger Binding="{Binding ChatSubtitle}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock></StackPanel>
+              <DockPanel VerticalAlignment="Center">
+                <Grid Width="40" Height="40" Margin="0,0,12,0" Visibility="{Binding HasPeer, Converter={StaticResource Bool}}">
+                  <Border Background="{DynamicResource Avatar}" CornerRadius="20">
+                    <TextBlock Text="{Binding SelectedPeer.Initials}" FontSize="14" Foreground="{DynamicResource Accent}" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                  </Border>
+                  <Ellipse x:Name="ConversationAvatar">
+                    <Ellipse.Fill><ImageBrush ImageSource="{Binding SelectedPeer.AvatarPath, Converter={StaticResource AvatarFile}}" Stretch="UniformToFill"/></Ellipse.Fill>
+                  </Ellipse>
+                </Grid>
+                <StackPanel VerticalAlignment="Center">
+                  <TextBlock x:Name="ConversationTitle" Text="{Binding ChatTitle}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                  <TextBlock Text="{Binding ChatSubtitle}" FontSize="12" Foreground="{DynamicResource Muted}" Margin="0,4,0,0" TextTrimming="CharacterEllipsis">
+                    <TextBlock.Style>
+                      <Style TargetType="TextBlock">
+                        <Style.Triggers><DataTrigger Binding="{Binding ChatSubtitle}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers>
+                      </Style>
+                    </TextBlock.Style>
+                  </TextBlock>
+                </StackPanel>
+              </DockPanel>
               <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0" Visibility="{Binding ChatOpen, Converter={StaticResource Bool}}"><Border x:Name="SearchPill" Width="32" Height="32" CornerRadius="8" Background="Transparent" Margin="0,0,2,0" ClipToBounds="True">
                   <Grid>
                     <Button Style="{StaticResource Icon}" Focusable="False" HorizontalAlignment="Left" ToolTip="Search messages" Click="SearchMessages_Click" AutomationProperties.Name="Search this conversation"><local:Glyph Data="{StaticResource IconSearch}" Size="17"/></Button>

@@ -7,7 +7,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>../../assets/brand/cydlan.ico</ApplicationIcon>
     <AssemblyName>CydLan</AssemblyName>
-    <Version>0.1.0</Version>
+    <Version>0.1.4</Version>
     <Product>CydLan</Product>
     <!-- WPF owns the window DPI policy; WinForms is used only for NotifyIcon. -->
     <NoWarn>$(NoWarn);WFO0003</NoWarn>

@@ -104,6 +104,16 @@ public partial class SettingsWindow : Window
         catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception) { model.Toast = ex.Message; }
     }
     private void Cancel_Click(object sender, RoutedEventArgs e) => Close();
+    private void OpenLogs_Click(object sender, RoutedEventArgs e)
+    {
+        if (!model.HasLogs) return;
+        try
+        {
+            System.IO.Directory.CreateDirectory(model.LogsDirectory);
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", $"\"{model.LogsDirectory}\"") { UseShellExecute = true });
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception) { model.Toast = "Logs could not be opened."; }
+    }
     private async void Connect_Click(object sender, RoutedEventArgs e) => await model.ConnectByAddressAsync(AddressBox.Text);
     private async void Save_Click(object sender, RoutedEventArgs e)
     {

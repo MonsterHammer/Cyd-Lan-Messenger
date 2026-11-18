@@ -54,6 +54,7 @@ internal static class Program
             preview.SelectedPeer = jamie; Check(preview.Draft == "Jamie's draft", "Switching contacts lost the draft.");
             await preview.SendAsync(); Check(preview.Messages.Last().Delivery == "Preview only", "Preview fabricated a network receipt.");
             Check(preview.DeviceLabel.Contains("NO LAN CONNECTION"), "Preview must remain clearly offline.");
+            Check(!preview.HasLogs && preview.LogsDirectory == "", "Offline previews must not create persistent diagnostics.");
             Console.WriteLine("PASS  Offline preview, separate contact/broadcast drafts, honest receipts");
 
             // Switching theme while windows are open must recolour inherited text, not only explicit brushes.
@@ -117,8 +118,34 @@ internal static class Program
             motion.RaiseEvent(new System.Windows.Input.KeyEventArgs(System.Windows.Input.Keyboard.PrimaryDevice, PresentationSource.FromVisual(motion)!, 0, System.Windows.Input.Key.Escape) { RoutedEvent = UIElement.PreviewKeyDownEvent });
             await Task.Delay(400);
             Check(Math.Abs(pill.ActualWidth - 32) < 0.5, $"Escape should shrink search back to its icon (was {pill.ActualWidth}).");
+
+            preview.SelectedPeer = preview.Peers[0];
+            var avatar = (System.Windows.Shapes.Ellipse)motion.FindName("ConversationAvatar");
+            var avatarBrush = (ImageBrush)avatar.Fill;
+            Check(avatarBrush.ImageSource is null && avatar.IsVisible, "A contact without a photo must still have a visible header avatar.");
+            preview.SelectedPeer.AvatarPath = preview.Messages.First(m => m.HasImage).ImagePath;
+            preview.Peers[1].Online = false;
+            ClickNamed(motion, "Maximize");
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            motion.UpdateLayout();
+            Check(avatarBrush.ImageSource is not null, "The header did not pick up the contact's profile photo.");
+            Check(FindText(motion, "Online") is not null && FindText(motion, "Offline") is not null,
+                "The conversation list must show both online and offline presence in text.");
+            var handle = new System.Windows.Interop.WindowInteropHelper(motion).Handle;
+            var workArea = System.Windows.Forms.Screen.FromHandle(handle).WorkingArea;
+            var root = (FrameworkElement)motion.FindName("RootBorder");
+            var contentStart = root.PointToScreen(new Point(0, 0));
+            var contentEnd = root.PointToScreen(new Point(root.ActualWidth, root.ActualHeight));
+            Check(motion.WindowState == WindowState.Maximized &&
+                Math.Abs(contentStart.X - workArea.Left) <= 2 && Math.Abs(contentStart.Y - workArea.Top) <= 2 &&
+                Math.Abs(contentEnd.X - workArea.Right) <= 2 && Math.Abs(contentEnd.Y - workArea.Bottom) <= 2,
+                $"Maximized content runs from {contentStart} to {contentEnd} but the work area is {workArea}.");
+            Capture(motion, Path.Combine(Path.GetFullPath("artifacts"), "chat-maximized-tested.png"));
+            ClickNamed(motion, "Restore");
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            Check(motion.WindowState == WindowState.Normal, "The window must return to normal size on Restore.");
             motion.Close();
-            Console.WriteLine("PASS  Compact default size, sliding sidebar and in-place search");
+            Console.WriteLine("PASS  Chat profile photo and presence, maximize and restore, compact sidebar and search");
         }
 
         string directory = Path.Combine(Path.GetTempPath(), "CydLan-desktop-" + Guid.NewGuid().ToString("N"));
@@ -133,6 +160,7 @@ internal static class Program
             await using (var model = new MainViewModel(localStore: store))
             {
                 Check(!model.Preview && model.Peers.Count == 0, "Default desktop mode must use real contacts.");
+                Check(model.HasLogs && model.LogsDirectory == Path.Combine(directory, "logs"), "Live diagnostics must stay inside the isolated application profile.");
                 await peer.StartAsync(true, IPAddress.Loopback);
                 await model.StartAsync(true, IPAddress.Loopback);
                 await model.ConnectByAddressAsync($"127.0.0.1:{peer.DiscoveryPort}");

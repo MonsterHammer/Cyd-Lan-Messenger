@@ -10,6 +10,7 @@ using CydLan.Core;
 if (args.Contains("--experiment-peer")) return await NetworkExperiment.RunPeerAsync(args);
 
 var tests = new (string Name, Func<Task> Run)[] {
+    ("Persistent diagnostics: rotation, concurrency, privacy and disk failures", DiagnosticLogTests.RunAsync),
     ("Legacy XML fixtures, escaping and Unicode", TestXml),
     ("LAN Messenger emoticon codes", TestSmileys),
     ("Reject external entities and malformed packets", TestInvalidXml),
@@ -28,6 +29,7 @@ var tests = new (string Name, Func<Task> Run)[] {
     ("Version passes LAN Messenger's chat-room check", TestLegacyRoomVersion),
     ("Profile details and pictures travel like LAN Messenger avatars", TestProfileAndAvatar),
     ("Saved contact reconnects automatically without multicast", TestSavedContactRecovery),
+    ("Repeated recovery attempts back off for an unreachable contact", TestRecoveryBackoff),
     ("Concurrent bidirectional chat and duplicate suppression", TestConcurrentChat),
     ("Separate-process peers: Unicode replies and binary files both ways", NetworkExperiment.RunAsync),
     ("File offers, approval, binary transfer and empty files", TestFiles),
@@ -150,7 +152,7 @@ static async Task TestLegacyPeer()
     service.MessageReceived += _ => Interlocked.Increment(ref count);
     await service.StartAsync(false, IPAddress.Loopback);
     using var client = new TcpClient(); await client.ConnectAsync(IPAddress.Loopback, service.ListeningPort);
-    var stream = client.GetStream(); const string id = "001122334455LegacyUser";
+    var stream = client.GetStream(); const string id = "001122334455Legacy User";
     // An independent peer fixture deliberately fragments the unframed identity.
     foreach (byte value in Encoding.ASCII.GetBytes("MSG" + id)) { await stream.WriteAsync(new byte[] { value }); await Task.Delay(1); }
     var pub = await RawRead(stream); Check(pub.Type == "PUBKEY", "The acceptor sends its PKCS#1 public key first.");
@@ -179,6 +181,17 @@ static async Task TestLegacyPeer()
     }
     Check(count == 1, "A legacy retry must not duplicate the message.");
 
+    // This independent legacy peer deliberately never answers application heartbeat pings.
+    // A missing ping receipt must not take it offline while the TCP connection is usable.
+    int wentOffline = 0;
+    service.PeerOffline += _ => Interlocked.Increment(ref wentOffline);
+    await service.CheckPeersAsync();
+    await Send("message", "24", new XElement("message", "Chat after heartbeat"));
+    var afterHeartbeat = await ReadMessage(stream, aes);
+    Check((string?)afterHeartbeat.Element("body")?.Element("messageid") == "24" && wentOffline == 0,
+        "An otherwise working legacy connection must survive without heartbeat receipts.");
+    await Until(() => count == 2);
+
     // LAN Messenger group sends stack one header per recipient; a copy for someone else must not end the session.
     string? groupText = null; service.GroupMessageReceived += (_, _, op, text) => { if (op == "message") groupText = text; };
     async Task SendHeads(string[] recipients, params XElement[] body)
@@ -191,7 +204,9 @@ static async Task TestLegacyPeer()
     await Until(() => groupText is not null);
     Check(groupText == "Room hello 🙂", "A stacked-header group message addressed to us must be delivered.");
     await Send("message", "23", new XElement("message", "Still connected"));
-    await Until(() => count == 2);
+    await Until(() => count == 3);
+    client.Dispose();
+    await Until(() => wentOffline == 1);
 }
 static async Task TestLegacyAcceptor()
 {
@@ -421,6 +436,22 @@ static async Task TestConcurrentChat()
     Check(await one.SendChatAsync(b.UserId, "A → B 0 你好 🙂", "8000"), "An explicit retry must receive a receipt.");
     Check(inboundB == 40, "An explicit retry must not create a duplicate.");
 }
+static async Task TestRecoveryBackoff()
+{
+    using var reservation = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+    reservation.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+    int port = ((IPEndPoint)reservation.LocalEndPoint!).Port;
+    var saved = new Peer { Id = "unreachable", Address = "127.0.0.1", Port = port };
+    await using var service = new LanService(Settings("Backoff test"), [saved]);
+    int failures = 0;
+    service.Diagnostic += message => { if (message.StartsWith("Could not connect to ", StringComparison.Ordinal)) Interlocked.Increment(ref failures); };
+    await service.StartAsync(false, IPAddress.Loopback);
+    await service.RefreshAsync();
+    await service.RefreshAsync();
+    await service.RefreshAsync();
+    Check(failures == 1, "Repeated discovery should skip unreachable peers during the cooldown.");
+}
+
 static async Task TestSavedContactRecovery()
 {
     var a = Settings("Saved-contact A"); var b = Settings("Saved-contact B");

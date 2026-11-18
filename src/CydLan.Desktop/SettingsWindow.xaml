@@ -134,6 +134,7 @@
                 <StackPanel Grid.Column="2"><TextBlock Text="Multicast address" Style="{StaticResource Label}"/><TextBox x:Name="MulticastBox" MaxLength="15" AutomationProperties.Name="Multicast address"/></StackPanel>
               </Grid>
               <TextBlock Text="Port and multicast changes apply after restarting CydLan." FontSize="12" Foreground="{DynamicResource Faint}" Margin="0,8,0,14" TextWrapping="Wrap"/>
+              <Button Content="Open logs" Click="OpenLogs_Click" IsEnabled="{Binding HasLogs}" HorizontalAlignment="Left" Margin="0,0,0,12"/>
               <Expander Header="Diagnostics" Foreground="{DynamicResource Muted}">
                 <ItemsControl ItemsSource="{Binding Diagnostics}" Margin="0,8,0,0"><ItemsControl.ItemTemplate><DataTemplate><TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,7"/></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
               </Expander>

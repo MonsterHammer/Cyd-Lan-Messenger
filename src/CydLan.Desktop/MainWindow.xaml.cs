@@ -1,4 +1,6 @@
+using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Interop;
 using System.Windows.Input;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
@@ -33,7 +35,11 @@ public partial class MainWindow : Window
         Closing += (_, args) => { if (System.Windows.Application.Current is App { IsQuitting: true }) return; args.Cancel = true; Hide(); };
         typingTimer.Tick += async (_, _) => { typingTimer.Stop(); await StopTypingAsync(); };
         SizeChanged += (_, _) => UpdateCompactLayout();
-        SourceInitialized += (_, _) => PopupHost.RoundCorners(this);
+        SourceInitialized += (_, _) =>
+        {
+            PopupHost.RoundCorners(this);
+            if (PresentationSource.FromVisual(this) is HwndSource source) source.AddHook(RespectMonitorWorkArea);
+        };
         PreviewKeyDown += Window_PreviewKeyDown;
         // Paste images/files into the composer: covers Win+Shift+S screenshots, copied images and copied files.
         CommandManager.AddPreviewExecutedHandler(Composer, (_, e) => { if (e.Command == ApplicationCommands.Paste && TryPasteAttachments()) e.Handled = true; });
@@ -52,6 +58,34 @@ public partial class MainWindow : Window
     private void Minimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
     private void Maximize_Click(object sender, RoutedEventArgs e) => ToggleMaximize();
     private void ToggleMaximize() => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+
+    private static IntPtr RespectMonitorWorkArea(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        const int getMinMaxInfo = 0x0024;
+        if (message != getMinMaxInfo) return IntPtr.Zero;
+
+        // WindowChrome extends our client area to the window edges. Keep those edges
+        // inside the current monitor's work area so Windows can show its taskbar.
+        var screen = System.Windows.Forms.Screen.FromHandle(hwnd);
+        var bounds = screen.Bounds;
+        var workArea = screen.WorkingArea;
+        var limits = Marshal.PtrToStructure<MinMaxInfo>(lParam);
+        limits.MaxPosition = new() { X = workArea.Left - bounds.Left, Y = workArea.Top - bounds.Top };
+        limits.MaxSize = new() { X = workArea.Width, Y = workArea.Height };
+        Marshal.StructureToPtr(limits, lParam, false);
+        handled = true;
+        return IntPtr.Zero;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativePoint { public int X, Y; }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MinMaxInfo
+    {
+        public NativePoint Reserved, MaxSize, MaxPosition, MinTrackSize, MaxTrackSize;
+    }
+
     protected override void OnStateChanged(EventArgs e)
     {
         base.OnStateChanged(e);

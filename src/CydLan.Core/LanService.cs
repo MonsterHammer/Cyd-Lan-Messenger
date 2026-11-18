@@ -11,12 +11,14 @@ namespace CydLan.Core;
 public sealed class LanService : IAsyncDisposable
 {
     private readonly AppSettings settings;
+    private readonly DiagnosticLog? log;
     private readonly CancellationTokenSource stopping = new();
     private readonly RSA rsa = RSA.Create(2048);
     private readonly object rsaGate = new();
     private readonly object sessionGate = new();
     private readonly ConcurrentDictionary<string, Session> sessions = new();
     private readonly ConcurrentDictionary<string, byte> connecting = new();
+    private readonly ConcurrentDictionary<string, (string Address, int Port, int Failures, long RetryAt)> retryDelays = new();
     private readonly ConcurrentDictionary<string, FileTransfer> transfers = new();
     private readonly ConcurrentDictionary<string, TaskCompletionSource<bool>> pending = new();
     private readonly ConcurrentDictionary<string, byte> received = new();
@@ -72,11 +74,12 @@ public sealed class LanService : IAsyncDisposable
         return marker >= 0 ? "CydLan " + wire[(marker + CydLanMarker.Length)..] : wire;
     }
 
-    public LanService(AppSettings settings, IEnumerable<Peer>? savedPeers = null)
+    public LanService(AppSettings settings, IEnumerable<Peer>? savedPeers = null, DiagnosticLog? log = null)
     {
         if (!AppSettings.IsValidUserId(settings.UserId))
             throw new ArgumentException($"User IDs must be 1–{AppSettings.MaxUserIdLength} printable ASCII characters for LAN Messenger file transfers.", nameof(settings));
         this.settings = settings;
+        this.log = log;
         foreach (var peer in savedPeers ?? [])
             if (IPAddress.TryParse(peer.Address, out var ip) && ip.AddressFamily == AddressFamily.InterNetwork && peer.Port is > 0 and <= 65535)
                 knownPeers[peer.Id] = (ip.ToString(), peer.Port);
@@ -84,6 +87,7 @@ public sealed class LanService : IAsyncDisposable
     public async Task StartAsync(bool discovery = true, IPAddress? bindAddress = null)
     {
         if (listener is not null) throw new InvalidOperationException("Already started.");
+        log?.Write("network.start", null, ("port", settings.Port), ("discovery", discovery));
         boundAddress = bindAddress;
         listener = CreateListener(bindAddress, settings.Port);
         try { listener.Start(); }
@@ -92,6 +96,7 @@ public sealed class LanService : IAsyncDisposable
             listener.Stop();
             listener = CreateListener(bindAddress, 0);
             listener.Start();
+            log?.Write("network.port_fallback", e, ("requestedPort", settings.Port), ("actualPort", ((IPEndPoint)listener.LocalEndpoint).Port));
             Diagnostic?.Invoke($"TCP {settings.Port} is in use. Using TCP {((IPEndPoint)listener.LocalEndpoint).Port}; discovery remains on UDP {settings.Port}.");
         }
         ListeningPort = ((IPEndPoint)listener.LocalEndpoint).Port;
@@ -119,6 +124,7 @@ public sealed class LanService : IAsyncDisposable
             catch { await DisposeAsync(); throw; }
         }
         Diagnostic?.Invoke($"Listening on TCP {ListeningPort} · discovery UDP {DiscoveryPort}");
+        log?.Write("network.listening", null, ("address", LocalAddress), ("tcpPort", ListeningPort), ("udpPort", DiscoveryPort));
         _ = HeartbeatLoopAsync();
     }
 
@@ -149,6 +155,7 @@ public sealed class LanService : IAsyncDisposable
         try
         {
             RefreshInterfaces();
+            log?.Write("discovery.announce", null, ("interfaces", interfaces.Count), ("port", settings.Port));
             var bytes = Encode("announce", null, new() { ["tcpport"] = ListeningPort.ToString() });
             foreach (var ip in interfaces.DefaultIfEmpty(IPAddress.Any))
             {
@@ -157,7 +164,7 @@ public sealed class LanService : IAsyncDisposable
                     if (!ip.Equals(IPAddress.Any)) udp.Client.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.MulticastInterface, ip.GetAddressBytes());
                     await udp.SendAsync(bytes, new IPEndPoint(IPAddress.Parse(settings.Multicast), settings.Port), stopping.Token);
                 }
-                catch (SocketException e) { Diagnostic?.Invoke($"Discovery send failed: {e.Message}"); }
+                catch (SocketException e) { log?.Write("discovery.send_failed", e, ("interface", ip)); Diagnostic?.Invoke($"Discovery send failed: {e.Message}"); }
             }
         }
         finally { discoveryGate.Release(); }
@@ -176,6 +183,7 @@ public sealed class LanService : IAsyncDisposable
         if (address.AddressFamily != AddressFamily.InterNetwork || port is < 1 or > 65535)
             throw new ArgumentException("Enter an IPv4 address and a UDP port between 1 and 65535.");
         if (udp is null) throw new InvalidOperationException("Discovery has not started.");
+        log?.Write("discovery.directed", null, ("address", address), ("port", port));
         await udp.SendAsync(Encode("announce", null, new() { ["tcpport"] = ListeningPort.ToString() }), new IPEndPoint(address, port), stopping.Token);
     }
 
@@ -196,9 +204,11 @@ public sealed class LanService : IAsyncDisposable
             foreach (var ip in current.Except(joinedInterfaces))
             {
                 try { udp.JoinMulticastGroup(group, ip); joinedInterfaces.Add(ip); }
-                catch (SocketException e) { Diagnostic?.Invoke($"Discovery unavailable on {ip}: {e.Message}"); }
+                catch (SocketException e) { log?.Write("discovery.join_failed", e, ("interface", ip)); Diagnostic?.Invoke($"Discovery unavailable on {ip}: {e.Message}"); }
             }
         }
+        if (log is not null && !current.ToHashSet().SetEquals(interfaces))
+            log.Write("network.interfaces_changed", null, ("addresses", string.Join(", ", current.Select(ip => ip.ToString()))));
         interfaces.Clear();
         interfaces.AddRange(current);
         LocalAddress = interfaces.FirstOrDefault()?.ToString() ?? "127.0.0.1";
@@ -221,27 +231,45 @@ public sealed class LanService : IAsyncDisposable
                 var packet = await udp!.ReceiveAsync(stopping.Token);
                 var message = LegacyProtocol.Decode(packet.Buffer);
                 if (message.From == settings.UserId || (message.To.Length > 0 && message.To != settings.UserId)) continue;
-                if (message.Type == "depart") { if (sessions.TryGetValue(message.From, out var departed)) departed.Client.Dispose(); continue; }
+                if (message.Type == "depart")
+                {
+                    if (sessions.TryGetValue(message.From, out var departed))
+                    {
+                        log?.Write("peer.depart", null, ("peer", departed.Id), ("address", packet.RemoteEndPoint.Address));
+                        departed.Client.Dispose();
+                    }
+                    continue;
+                }
                 if (message.Type != "announce" || sessions.ContainsKey(message.From)) continue;
                 var port = int.TryParse(message.Get("tcpport"), out var p) && p is > 0 and <= 65535 ? p : settings.Port;
                 _ = ConnectDiscoveredAsync(message.From, packet.RemoteEndPoint.Address.ToString(), port);
             }
             catch (OperationCanceledException) { break; }
             catch (ObjectDisposedException) { break; }
-            catch (Exception e) when (e is SocketException or System.Xml.XmlException or InvalidDataException) { Diagnostic?.Invoke($"Ignored discovery packet: {e.Message}"); }
+            catch (Exception e) when (e is SocketException or System.Xml.XmlException or InvalidDataException) { log?.Write("discovery.packet_rejected", e); Diagnostic?.Invoke($"Ignored discovery packet: {e.Message}"); }
         }
     }
 
     private async Task ConnectDiscoveredAsync(string id, string address, int port)
     {
-        try { await ConnectAsync(id, address, port); }
+        try { await ConnectAsync(id, address, port, automatic: true); }
         catch (Exception e) when (e is SocketException or IOException or OperationCanceledException or CryptographicException or ArgumentException)
         { if (!stopping.IsCancellationRequested) Diagnostic?.Invoke($"Could not connect to {address}: {e.Message}"); }
     }
 
-    public async Task ConnectAsync(string peerId, string address, int port)
+    public Task ConnectAsync(string peerId, string address, int port) => ConnectAsync(peerId, address, port, automatic: false);
+
+    private async Task ConnectAsync(string peerId, string address, int port, bool automatic)
     {
         if (peerId == settings.UserId || sessions.ContainsKey(peerId) || !connecting.TryAdd(peerId, 0)) return;
+        retryDelays.TryGetValue(peerId, out var previous);
+        bool sameEndpoint = previous.Address == address && previous.Port == port;
+        if (automatic && sameEndpoint && Environment.TickCount64 < previous.RetryAt)
+        {
+            connecting.TryRemove(peerId, out _);
+            return;
+        }
+        log?.Write("connection.attempt", null, ("peer", peerId), ("address", address), ("port", port));
         var client = new TcpClient { NoDelay = true };
         clients.TryAdd(client, 0);
         try
@@ -257,8 +285,21 @@ public sealed class LanService : IAsyncDisposable
             }
             _ = RunSessionAsync(session, false);
             await session.Ready.Task.WaitAsync(deadline.Token);
+            retryDelays.TryRemove(peerId, out _);
         }
-        catch { client.Dispose(); clients.TryRemove(client, out _); throw; }
+        catch (Exception e)
+        {
+            if (!stopping.IsCancellationRequested && (sameEndpoint || retryDelays.Count < 4096))
+            {
+                int failures = sameEndpoint ? Math.Min(previous.Failures + 1, 5) : 1;
+                int seconds = Math.Min(30 << (failures - 1), 300);
+                retryDelays[peerId] = (address, port, failures, Environment.TickCount64 + seconds * 1000L);
+            }
+            log?.Write("connection.failed", e, ("peer", peerId), ("address", address), ("port", port));
+            client.Dispose();
+            clients.TryRemove(client, out _);
+            throw;
+        }
         finally { connecting.TryRemove(peerId, out _); }
     }
 
@@ -276,7 +317,7 @@ public sealed class LanService : IAsyncDisposable
             }
             catch (OperationCanceledException) { break; }
             catch (ObjectDisposedException) { break; }
-            catch (SocketException e) { if (!stopping.IsCancellationRequested) Diagnostic?.Invoke(e.Message); }
+            catch (SocketException e) { if (!stopping.IsCancellationRequested) { log?.Write("connection.accept_failed", e); Diagnostic?.Invoke(e.Message); } }
         }
     }
 
@@ -324,11 +365,11 @@ public sealed class LanService : IAsyncDisposable
             }
         }
         catch (Exception e) when (e is IOException or SocketException or OperationCanceledException or CryptographicException or InvalidDataException or ObjectDisposedException)
-        { if (!stopping.IsCancellationRequested) Diagnostic?.Invoke($"Connection closed: {e.Message}"); }
+        { if (!stopping.IsCancellationRequested) { log?.Write("connection.greeting_failed", e); Diagnostic?.Invoke($"Connection closed: {e.Message}"); } }
         finally { if (owned) { client.Dispose(); clients.TryRemove(client, out _); } }
     }
 
-    private static async Task<string> ReadIdentityAsync(NetworkStream stream, CancellationToken ct)
+    private async Task<string> ReadIdentityAsync(NetworkStream stream, CancellationToken ct)
     {
         // The legacy identity has no length or terminator. Peers wait for PUBKEY
         // after writing it. An idle interval is the only available delimiter.
@@ -344,13 +385,22 @@ public sealed class LanService : IAsyncDisposable
             if (count == 0) throw new EndOfStreamException();
             bytes.Write(buffer, 0, count);
         }
-        var id = Encoding.ASCII.GetString(bytes.ToArray());
-        if (id.Length is < 1 or > 61 || id.Any(c => c < 33 || c > 126)) throw new InvalidDataException("Invalid peer identity.");
+        var raw = bytes.ToArray();
+        var id = Encoding.ASCII.GetString(raw);
+        // Legacy LAN Messenger appends the Windows logon name, which can contain spaces.
+        bool unsupportedBytes = raw.Any(value => value is < 32 or > 126);
+        if (raw.Length > 61 || unsupportedBytes || string.IsNullOrWhiteSpace(id))
+        {
+            log?.Write("connection.identity_rejected", null, ("bytes", raw.Length), ("unsupportedBytes", unsupportedBytes));
+            throw new InvalidDataException("Invalid peer identity.");
+        }
         return id;
     }
 
     private async Task RunSessionAsync(Session session, bool incoming)
     {
+        log?.Write("connection.open", null, ("peer", session.Id), ("address", session.Address),
+            ("localEndpoint", session.LocalEndpoint), ("incoming", incoming));
         using var handshake = CancellationTokenSource.CreateLinkedTokenSource(stopping.Token);
         handshake.CancelAfter(TimeSpan.FromSeconds(10));
         try
@@ -374,6 +424,7 @@ public sealed class LanService : IAsyncDisposable
                     CryptographicOperations.ZeroMemory(material);
                     await session.WriteAsync("HNDSHK", sealedMaterial, handshake.Token);
                     session.Ready.TrySetResult(true);
+                    log?.Write("connection.encrypted", null, ("peer", session.Id));
                 }
                 else if (frame.Type == "HNDSHK" && incoming && session.Cipher is null)
                 {
@@ -382,6 +433,7 @@ public sealed class LanService : IAsyncDisposable
                     session.Cipher = new(material);
                     CryptographicOperations.ZeroMemory(material);
                     session.Ready.TrySetResult(true);
+                    log?.Write("connection.encrypted", null, ("peer", session.Id));
                     await SendUserDataAsync(session, "get");
                 }
                 else if (frame.Type == "MESSAG" && session.Cipher is not null)
@@ -398,11 +450,13 @@ public sealed class LanService : IAsyncDisposable
         catch (Exception e) when (e is IOException or SocketException or OperationCanceledException or CryptographicException or System.Xml.XmlException or InvalidDataException or ArgumentException or ObjectDisposedException)
         {
             session.Ready.TrySetException(new IOException("Peer handshake or connection failed.", e));
+            if (!stopping.IsCancellationRequested) log?.Write("connection.session_failed", e, ("peer", session.Id), ("address", session.Address));
             if (!stopping.IsCancellationRequested) Diagnostic?.Invoke($"{session.Address}: {e.Message}");
         }
         finally
         {
             bool removed = sessions.TryRemove(new KeyValuePair<string, Session>(session.Id, session));
+            log?.Write("connection.closed", null, ("peer", session.Id), ("address", session.Address), ("shutdown", stopping.IsCancellationRequested), ("superseded", !removed));
             if (removed) PeerOffline?.Invoke(session.Id);
             session.Client.Dispose(); session.Cipher?.Dispose();
             clients.TryRemove(session.Client, out _);
@@ -420,6 +474,7 @@ public sealed class LanService : IAsyncDisposable
                 if (message.Get("userid") != session.Id) throw new InvalidDataException("User data identity mismatch.");
                 if (int.TryParse(message.Get("tcpport"), out int peerPort) && peerPort is > 0 and <= 65535) session.Port = peerPort;
                 knownPeers[session.Id] = (session.Address, session.Port);
+                retryDelays.TryRemove(session.Id, out _);
                 session.Version = DisplayVersion(Limit(message.Get("version"), 80));
                 if (message.Get("queryop") == "get") await SendUserDataAsync(session, "result");
                 PeerOnline?.Invoke(new() { Id = session.Id, Name = Limit(message.Get("name"), 100), Address = session.Address,
@@ -430,6 +485,8 @@ public sealed class LanService : IAsyncDisposable
                     // LAN Messenger only shares first name, last name and About in reply to a query, and
                     // exchanges profile pictures as avatar offers once a connection is up.
                     session.Introduced = true;
+                    if (!IsCydLanVersion(session.Version)) EnableTcpKeepAlive(session);
+                    log?.Write("peer.online", null, ("peer", session.Id), ("address", session.Address), ("version", session.Version));
                     _ = IntroduceAsync(session.Id);
                 }
                 break;
@@ -496,13 +553,18 @@ public sealed class LanService : IAsyncDisposable
             // Retry with the SAME ID so lost receipts do not duplicate messages.
             for (int attempt = 0; attempt < 3; attempt++)
             {
+                log?.Write(attempt == 0 ? "message.send" : "message.retry", null, ("peer", peerId), ("id", id), ("attempt", attempt + 1));
                 await SendAsync(peerId, "message", new() { ["message"] = text }, id);
-                try { return await completion.Task.WaitAsync(TimeSpan.FromSeconds(3), stopping.Token); }
+                try {
+                    bool delivered = await completion.Task.WaitAsync(TimeSpan.FromSeconds(3), stopping.Token);
+                    log?.Write(delivered ? "message.delivered" : "message.unconfirmed", null, ("peer", peerId), ("id", id));
+                    return delivered;
+                }
                 catch (TimeoutException) when (attempt < 2) { }
             }
             return false;
         }
-        catch (TimeoutException) { return false; }
+        catch (TimeoutException) { log?.Write("message.unconfirmed", null, ("peer", peerId), ("id", id)); return false; }
         finally { pending.TryRemove(key, out _); }
     }
 
@@ -539,9 +601,30 @@ public sealed class LanService : IAsyncDisposable
         try
         {
             while (await timer.WaitForNextTickAsync(stopping.Token))
-                await Task.WhenAll(sessions.Values.Where(s => s.Cipher is not null).Select(CheckSessionAsync));
+                await CheckPeersAsync();
         }
         catch (OperationCanceledException) { }
+    }
+    internal Task CheckPeersAsync() => Task.WhenAll(sessions.Values
+        .Where(s => s.Cipher is not null && IsCydLanVersion(s.Version))
+        .Select(CheckSessionAsync));
+
+    private void EnableTcpKeepAlive(Session session)
+    {
+        // Legacy peers may omit protocol ping receipts on otherwise usable connections.
+        // Let TCP detect a dead transport while still handling departures and socket closes normally.
+        try
+        {
+            var socket = session.Client.Client;
+            socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
+            socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveTime, 60);
+            socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveInterval, 10);
+            socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveRetryCount, 3);
+        }
+        catch (Exception e) when (e is SocketException or ObjectDisposedException or PlatformNotSupportedException)
+        {
+            log?.Write("connection.keepalive_configuration_failed", e, ("peer", session.Id));
+        }
     }
     private async Task CheckSessionAsync(Session session)
     {
@@ -554,7 +637,7 @@ public sealed class LanService : IAsyncDisposable
             await SendAsync(session.Id, "ping", [], id);
             if (!await completion.Task.WaitAsync(TimeSpan.FromSeconds(10), stopping.Token)) session.Client.Dispose();
         }
-        catch (Exception e) when (e is TimeoutException or IOException or SocketException or OperationCanceledException) { session.Client.Dispose(); }
+        catch (Exception e) when (e is TimeoutException or IOException or SocketException or OperationCanceledException) { if (!stopping.IsCancellationRequested) log?.Write("heartbeat.failed", e, ("peer", session.Id)); session.Client.Dispose(); }
         finally { pending.TryRemove(key, out _); }
     }
     private Task SendUserDataAsync(Session session, string operation) => SendAsync(session.Id, "userdata", new() {
@@ -831,7 +914,7 @@ public sealed class LanService : IAsyncDisposable
             transfer.Progress = 100; transfer.State = "Sent · receipt unavailable"; Report(transfer);
         }
         catch (Exception e) when (e is IOException or SocketException or OperationCanceledException or UnauthorizedAccessException)
-        { transfer.State = "Failed: " + e.Message; Report(transfer); }
+        { log?.Write("transfer.send_failed", e, ("peer", transfer.PeerId), ("id", transfer.Id), ("bytes", transfer.Size)); transfer.State = "Failed: " + e.Message; Report(transfer); }
     }
     private async Task ReceiveFileAsync(NetworkStream stream, FileTransfer transfer)
     {
@@ -861,6 +944,7 @@ public sealed class LanService : IAsyncDisposable
         }
         catch (Exception e) when (e is IOException or SocketException or OperationCanceledException or UnauthorizedAccessException)
         {
+            log?.Write("transfer.receive_failed", e, ("peer", transfer.PeerId), ("id", transfer.Id), ("bytes", transfer.Size));
             if (File.Exists(partial)) File.Delete(partial);
             transfer.State = "Failed: " + e.Message; Report(transfer);
         }
@@ -869,7 +953,8 @@ public sealed class LanService : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         if (stopping.IsCancellationRequested) return;
-        if (udp is not null)
+        log?.Write("network.stop");
+        if (udp is not null && multicastEnabled)
         {
             try { await udp.SendAsync(Encode("depart", null, []), new IPEndPoint(IPAddress.Parse(settings.Multicast), settings.Port)); }
             catch (Exception e) when (e is SocketException or ObjectDisposedException) { }
@@ -888,6 +973,7 @@ public sealed class LanService : IAsyncDisposable
         public string Address { get; } = address;
         public int Port { get; set; } = port;
         public TcpClient Client { get; } = client;
+        public EndPoint? LocalEndpoint { get; } = client.Client.LocalEndPoint;
         public bool Incoming { get; } = incoming;
         public NetworkStream Stream { get; } = client.GetStream();
         public LegacyCipher? Cipher { get; set; }
