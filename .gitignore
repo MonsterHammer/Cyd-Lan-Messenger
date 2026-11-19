@@ -4,3 +4,5 @@
 artifacts/
 .vs/
 *.user
+tools/lab/share/
+tools/lab/CydLanLab.wsb

@@ -39,15 +39,30 @@
               </ContextMenu>
             </Image.ContextMenu>
           </Image>
-          <Border Padding="14,11" CornerRadius="{DynamicResource FileBubbleCorner}" Visibility="{Binding HasFile, Converter={StaticResource Bool}}">
+          <Border Padding="14,11" CornerRadius="{DynamicResource FileBubbleCorner}" Visibility="{Binding HasFile, Converter={StaticResource Bool}}" Cursor="Hand" MouseLeftButtonUp="MessageFile_Click" ToolTip="Show in folder"
+                  HorizontalAlignment="{Binding HorizontalAlignment, RelativeSource={RelativeSource AncestorType=Grid}}">
+            <Border.ContextMenu>
+              <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                <MenuItem Header="Open" Tag="Open" Click="FileMenu_Click"/>
+                <MenuItem Header="Show in folder" Tag="Reveal" Click="FileMenu_Click"/>
+                <MenuItem Header="Copy file" Tag="Copy" Click="FileMenu_Click"/>
+                <MenuItem Header="Save a copy" Tag="Save" Click="FileMenu_Click"/>
+              </ContextMenu>
+            </Border.ContextMenu>
             <Border.Style><Style TargetType="Border"><Setter Property="Background" Value="{DynamicResource Surface}"/><Style.Triggers><DataTrigger Binding="{Binding Outgoing}" Value="True"><Setter Property="Background" Value="{DynamicResource AccentSoft}"/></DataTrigger></Style.Triggers></Style></Border.Style>
-            <StackPanel Orientation="Horizontal"><local:Glyph Data="{DynamicResource IconFile}" Size="20" Foreground="{DynamicResource Accent}" Margin="0,0,10,0"/><TextBlock Text="{Binding FileName}" FontSize="14" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="360"/></StackPanel>
+            <StackPanel>
+              <StackPanel Orientation="Horizontal"><local:Glyph Data="{DynamicResource IconFile}" Size="20" Foreground="{DynamicResource Accent}" Margin="0,0,10,0"/><TextBlock Text="{Binding FileName}" FontSize="14" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="360"/></StackPanel>
+              <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0" Visibility="{Binding AwaitingAnswer, Converter={StaticResource Bool}}">
+                <Button Content="Decline" Style="{StaticResource Secondary}" Margin="0,0,6,0" Click="MessageDeclineFile_Click" AutomationProperties.Name="Decline file"/>
+                <Button Content="Accept" Style="{StaticResource Primary}" Click="MessageAcceptFile_Click" AutomationProperties.Name="Accept file"/>
+              </StackPanel>
+            </StackPanel>
           </Border>
           <Border Padding="17,13" CornerRadius="{DynamicResource MessageBubbleCorner}" Visibility="{Binding HasText, Converter={StaticResource Bool}}">
             <Border.Style><Style TargetType="Border"><Setter Property="Background" Value="{DynamicResource Surface}"/><Style.Triggers><DataTrigger Binding="{Binding Outgoing}" Value="True"><Setter Property="Background" Value="{DynamicResource AccentSoft}"/></DataTrigger></Style.Triggers></Style></Border.Style>
             <StackPanel>
               <TextBlock Text="ANNOUNCEMENT" Foreground="{DynamicResource Accent}" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,6" Visibility="{Binding Broadcast, Converter={StaticResource Bool}}"/>
-              <TextBox Text="{Binding Text, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" FontSize="{DynamicResource MessageFontSize}" FontFamily="{DynamicResource MessageFontFamily}" Background="Transparent" BorderThickness="0" Padding="0"
+              <TextBox Text="{Binding Text, Mode=OneWay}" IsReadOnly="True" ContextMenu="{StaticResource ReadOnlyTextContextMenu}" TextWrapping="Wrap" FontSize="{DynamicResource MessageFontSize}" FontFamily="{DynamicResource MessageFontFamily}" Background="Transparent" BorderThickness="0" Padding="0"
                        Visibility="{Binding Text, Converter={StaticResource SmileyVisibility}, ConverterParameter=plain}"/>
               <!-- LAN Messenger emoticon codes are drawn as its pictures. -->
               <TextBlock local:SmileyText.Text="{Binding Text}" TextWrapping="Wrap" FontSize="{DynamicResource MessageFontSize}" FontFamily="{DynamicResource MessageFontFamily}" Foreground="{DynamicResource Ink}"
@@ -246,7 +261,7 @@
               <Grid x:Name="ChatContentGrid">
                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                 <Grid Grid.Row="1">
-                  <ScrollViewer x:Name="MessageScroller" VerticalScrollBarVisibility="Auto" Padding="26,20,26,4"><StackPanel MaxWidth="760" HorizontalAlignment="Stretch"><ItemsControl ItemsSource="{Binding Messages}" ItemTemplate="{StaticResource MessageTemplate}" HorizontalContentAlignment="Stretch"/></StackPanel></ScrollViewer>
+                  <ScrollViewer x:Name="MessageScroller" VerticalScrollBarVisibility="Auto" Padding="26,20,26,4" PreviewMouseDown="Conversation_Interacted"><StackPanel MaxWidth="760" HorizontalAlignment="Stretch"><ItemsControl ItemsSource="{Binding Messages}" ItemTemplate="{StaticResource MessageTemplate}" HorizontalContentAlignment="Stretch"/></StackPanel></ScrollViewer>
                   <StackPanel MaxWidth="370" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="25" Visibility="{Binding NoPeer, Converter={StaticResource Bool}}">
                     <Image Source="{DynamicResource BrandMark}" Width="64" Height="64"/>
                   </StackPanel>
@@ -310,7 +325,7 @@
                         </Border>
                       </Popup>
                       <Grid Grid.Column="2" Margin="4,0" VerticalAlignment="Center">
-                        <TextBox x:Name="Composer" Text="{Binding Draft, UpdateSourceTrigger=PropertyChanged}" Background="Transparent" BorderThickness="0" FontSize="{DynamicResource MessageFontSize}" FontFamily="{DynamicResource MessageFontFamily}" Padding="4,7" MinHeight="34" MaxHeight="160" AcceptsReturn="True" TextWrapping="Wrap" MaxLength="32000" VerticalScrollBarVisibility="Auto" IsEnabled="{Binding CanCompose}" PreviewKeyDown="Composer_KeyDown" TextChanged="Composer_TextChanged" ToolTip="Message" AutomationProperties.Name="Message composer"/>
+                        <TextBox x:Name="Composer" Text="{Binding Draft, UpdateSourceTrigger=PropertyChanged}" Background="Transparent" BorderThickness="0" FontSize="{DynamicResource MessageFontSize}" FontFamily="{DynamicResource MessageFontFamily}" Padding="4,7" MinHeight="34" MaxHeight="160" AcceptsReturn="True" TextWrapping="Wrap" MaxLength="32000" VerticalScrollBarVisibility="Auto" IsEnabled="{Binding CanCompose}" PreviewKeyDown="Composer_KeyDown" TextChanged="Composer_TextChanged" PreviewTextInput="Conversation_Interacted" PreviewMouseDown="Conversation_Interacted" ToolTip="Message" AutomationProperties.Name="Message composer"/>
                         <TextBlock Text="Message…" FontSize="15" Foreground="{DynamicResource Muted}" Margin="6,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Draft}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
                       </Grid>
                       <Button Grid.Column="3" Style="{StaticResource SendIcon}" VerticalAlignment="Bottom" IsEnabled="{Binding CanSend}" Click="Send_Click" ToolTip="Send" AutomationProperties.Name="Send message"><local:Glyph Data="{DynamicResource IconSend}" Size="19" StrokeThickness="2.2"/></Button>

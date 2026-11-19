@@ -74,7 +74,8 @@ public sealed class LegacyCipher : IDisposable
     }
     // LAN Messenger resets each packet to the negotiated IV. Preserve this legacy
     // behavior for compatibility; it is not an authenticated modern channel.
-    public byte[] Encrypt(byte[] clear) => aes.EncryptCbc(clear, aes.IV, PaddingMode.PKCS7);
-    public byte[] Decrypt(byte[] cipher) => aes.DecryptCbc(cipher, aes.IV, PaddingMode.PKCS7);
+    // A session may read from more than one socket (see LanService.RunSpareChannelAsync), so serialize use of the key.
+    public byte[] Encrypt(byte[] clear) { lock (aes) return aes.EncryptCbc(clear, aes.IV, PaddingMode.PKCS7); }
+    public byte[] Decrypt(byte[] cipher) { lock (aes) return aes.DecryptCbc(cipher, aes.IV, PaddingMode.PKCS7); }
     public void Dispose() => aes.Dispose();
 }

@@ -178,6 +178,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
             foreach (var message in history.Where(m => m.Outgoing && m.Delivery == "Sending…" && !m.HasImage && !m.HasFile)) message.Delivery = "Unconfirmed";
             // An image or file still pending when CydLan closed can no longer complete.
             foreach (var message in history.Where(m => m.Outgoing && (m.HasImage || m.HasFile) && (m.Delivery is "Sending…" or "Waiting for them to accept" or "Accepted" || m.Delivery.StartsWith("Accepted ·", StringComparison.Ordinal)))) message.Delivery = "Interrupted";
+            foreach (var message in history.Where(m => !m.Outgoing && m.HasFile && (m.Delivery is "Waiting" or "Accepted" || m.Delivery.StartsWith("Receiving", StringComparison.Ordinal)))) message.Delivery = "Interrupted";
             foreach (var peer in store.LoadPeers()) { peer.Online = false; peer.Unread = 0; Peers.Add(peer); }
             foreach (var group in store.LoadGroups()) { group.Unread = 0; Groups.Add(group); }
             foreach (var transfer in store.LoadTransfers())
@@ -387,7 +388,15 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         Save();
     }
     // What the sender sees under an image or file, following the transfer the way LAN Messenger reports it.
-    private static string DeliveryFor(FileTransfer t) => t.State switch
+    private static string DeliveryFor(FileTransfer t) => !t.Outgoing ? t.State switch
+    {
+        // What the receiver sees under a file someone offered.
+        "Waiting for approval" => "Waiting",
+        "Accepted" or "Connecting" => "Accepted",
+        "Transferring" => $"Receiving {t.Progress:0}%",
+        var state when state.StartsWith("Failed", StringComparison.Ordinal) => state,
+        _ => t.State,
+    } : t.State switch
     {
         "Waiting for approval" => t.Inline ? "Sending…" : "Waiting for them to accept",
         "Connecting" => "Accepted",
@@ -414,7 +423,19 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         if (!Transfers.Contains(transfer))
         {
             transfer.PeerName = Peers.FirstOrDefault(p => p.Id == transfer.PeerId)?.Name ?? transfer.PeerId; Transfers.Insert(0, transfer);
-            if (!transfer.Outgoing && !transfer.Inline && transfer.State == "Waiting for approval") Notify?.Invoke(transfer.PeerName, "Wants to send you " + transfer.Name);
+            if (!transfer.Outgoing && !transfer.Inline && transfer.State == "Waiting for approval")
+            {
+                Notify?.Invoke(transfer.PeerName, "Wants to send you " + transfer.Name);
+                // Offered files belong in the conversation timeline, like messages.
+                if (Peers.FirstOrDefault(p => p.Id == transfer.PeerId) is { } sender && !transferMessages.ContainsKey(transfer.Id))
+                {
+                    var offer = new ChatMessage { Id = transfer.Id, PeerId = sender.Id, FileName = transfer.Name, TransferId = transfer.Id, Delivery = DeliveryFor(transfer) };
+                    history.Add(offer); transferMessages[transfer.Id] = offer;
+                    sender.Preview = transfer.Name; sender.Typing = "";
+                    if (SelectedPeer?.Id != sender.Id || !IsConversationSection || !Replying) sender.Unread++;
+                    RefreshMessages(); Changed(nameof(PeopleSummary)); Save();
+                }
+            }
         }
         if (stateChanged) RefreshConversationFiles();
         if (transferMessages.TryGetValue(transfer.Id, out var sent))
@@ -449,6 +470,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     }
     /// <summary>Saves an offered file straight into the received files folder, as LAN Messenger does.</summary>
     public async Task AcceptFileAsync(FileTransfer transfer) { if (lan is not null) await RunAsync(() => lan.AcceptFileIntoAsync(transfer, ReceivedFilesFolder)); }
+    public FileTransfer? TransferFor(ChatMessage message) => Transfers.FirstOrDefault(t => t.Id == message.TransferId && t.PeerId == message.PeerId);
     public async Task DeclineFileAsync(FileTransfer transfer) { if (lan is not null) await RunAsync(() => lan.DeclineFileAsync(transfer)); }
     // ---------------- Group chat (LAN Messenger "chat rooms") ----------------
     // Wire format: groupmessage with thread + groupmsgop (request | join | message | leave), one copy per participant, never acknowledged.

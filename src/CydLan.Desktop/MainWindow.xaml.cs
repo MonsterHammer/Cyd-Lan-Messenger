@@ -146,6 +146,44 @@ public partial class MainWindow : Window
         if (((FrameworkElement)sender).DataContext is not FileTransfer { Path.Length: > 0 } transfer || !System.IO.File.Exists(transfer.Path)) { model.Toast = "File not found"; return; }
         System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", $"/select,\"{transfer.Path}\"") { UseShellExecute = true });
     }
+    // A file bubble in the conversation: clicking shows it in its folder; the menu offers the rest.
+    private void MessageFile_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (((FrameworkElement)sender).DataContext is ChatMessage message) RunFileAction(message, "Reveal");
+    }
+    private void FileMenu_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.MenuItem { DataContext: ChatMessage message, Tag: string action }) RunFileAction(message, action);
+    }
+    private void RunFileAction(ChatMessage message, string action)
+    {
+        string path = model.TransferFor(message)?.Path ?? "";
+        if (path.Length == 0 || !File.Exists(path)) { model.Toast = "File not found"; return; }
+        try
+        {
+            switch (action)
+            {
+                case "Open":
+                    if (RunnableExtensions.Contains(Path.GetExtension(path).ToLowerInvariant())) goto case "Reveal";
+                    Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+                    break;
+                case "Reveal":
+                    Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{Path.GetFullPath(path)}\"") { UseShellExecute = true });
+                    break;
+                case "Copy":
+                    System.Windows.Clipboard.SetFileDropList([Path.GetFullPath(path)]);
+                    break;
+                case "Save":
+                    var picker = new Microsoft.Win32.SaveFileDialog { Title = "Save a copy", FileName = Path.GetFileName(path) };
+                    if (picker.ShowDialog(this) == true) File.Copy(path, picker.FileName, overwrite: true);
+                    break;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ExternalException or System.ComponentModel.Win32Exception)
+        {
+            model.Toast = "File action failed";
+        }
+    }
     private void People_Click(object sender, RoutedEventArgs e) { Chat_Click(sender, e); sidebarVisible = true; UpdateCompactLayout(animate: true); PeopleSearch.Focus(); PeopleSearch.SelectAll(); }
     private void ToggleSidebar_Click(object sender, RoutedEventArgs e) { sidebarVisible = !sidebarVisible; UpdateCompactLayout(animate: true); }
     private void Window_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
@@ -211,6 +249,14 @@ public partial class MainWindow : Window
         bool open = panel.Visibility != Visibility.Visible;
         foreach (var other in new FrameworkElement[] { DetailsPanel, GroupPanel, FilesPanel }) other.Visibility = Visibility.Collapsed;
         if (open) panel.Visibility = Visibility.Visible;
+        UpdateCompactLayout();
+    }
+    // Side panels overlay the conversation, so working in the conversation closes them.
+    private void Conversation_Interacted(object sender, RoutedEventArgs e)
+    {
+        var panels = new FrameworkElement[] { DetailsPanel, GroupPanel, FilesPanel };
+        if (!panels.Any(p => p.Visibility == Visibility.Visible)) return;
+        foreach (var panel in panels) panel.Visibility = Visibility.Collapsed;
         UpdateCompactLayout();
     }
     private void FilesTab_Checked(object sender, RoutedEventArgs e) { if (model is not null) model.ConversationFilesSent = sender == SentTab; }
@@ -428,6 +474,8 @@ public partial class MainWindow : Window
     }
     private async void CancelOffer_Click(object sender, RoutedEventArgs e) { if (((FrameworkElement)sender).DataContext is FileTransfer transfer) await model.CancelOfferAsync(transfer); }
     private async void DeclineFile_Click(object sender, RoutedEventArgs e) { if (((System.Windows.Controls.Button)sender).DataContext is FileTransfer transfer) await model.DeclineFileAsync(transfer); }
+    private async void MessageAcceptFile_Click(object sender, RoutedEventArgs e) { if (((System.Windows.Controls.Button)sender).DataContext is ChatMessage message && model.TransferFor(message) is { } transfer) await model.AcceptFileAsync(transfer); }
+    private async void MessageDeclineFile_Click(object sender, RoutedEventArgs e) { if (((System.Windows.Controls.Button)sender).DataContext is ChatMessage message && model.TransferFor(message) is { } transfer) await model.DeclineFileAsync(transfer); }
     private void Settings_Click(object sender, RoutedEventArgs e) => PopupHost.ShowModal(this, new SettingsWindow(model));
     public void SetScrim(bool visible)
     {

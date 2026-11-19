@@ -25,33 +25,40 @@ public partial class App : System.Windows.Application
         bool captureSettings = e.Args.Contains("--settings-screenshot");
         bool capturing = captureTray || captureSettings || e.Args.Contains("--screenshot");
         bool preview = capturing || e.Args.Contains("--preview") || e.Args.Contains("--empty-preview");
+        // Lab mode: a separate profile bound to one local address (e.g. the Windows Sandbox adapter), so it never
+        // reaches real contacts or the office LAN. Usage: --lab 172.x.x.x
+        int labArg = Array.IndexOf(e.Args, "--lab");
+        System.Net.IPAddress? labAddress = null;
+        if (!preview && labArg >= 0 && (labArg + 1 >= e.Args.Length || !System.Net.IPAddress.TryParse(e.Args[labArg + 1], out labAddress)))
+        { System.Windows.MessageBox.Show("--lab needs a local IPv4 address.", "CydLan"); Shutdown(); return; }
+        string dataDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), labAddress is null ? "CydLan" : "CydLan-Lab");
         if (!capturing)
         {
-            mutex = new Mutex(true, "Local\\CydLan.Desktop", out var first);
+            mutex = new Mutex(true, labAddress is null ? "Local\\CydLan.Desktop" : "Local\\CydLan.Desktop.Lab", out var first);
             if (!first) { System.Windows.MessageBox.Show("CydLan is already running.", "CydLan"); Shutdown(); return; }
         }
         try
         {
             if (!preview)
             {
-                log = new DiagnosticLog(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CydLan", "logs"));
+                log = new DiagnosticLog(Path.Combine(dataDirectory, "logs"));
                 RegisterCrashLogging();
                 log.Write("application.start", null, ("version", typeof(App).Assembly.GetName().Version), ("runtime", Environment.Version), ("os", Environment.OSVersion.VersionString));
             }
-            model = new MainViewModel(preview, seedPreview: !e.Args.Contains("--empty-preview"), log: log);
+            model = new MainViewModel(preview, seedPreview: !e.Args.Contains("--empty-preview"), localStore: preview ? null : new LocalStore(dataDirectory), log: log);
             int themeArg = Array.IndexOf(e.Args, "--theme");
             if (preview && themeArg >= 0 && themeArg + 1 < e.Args.Length) model.Settings.Theme = ThemeManager.Normalize(e.Args[themeArg + 1]); // preview/screenshot override only
             ThemeManager.Apply(model.Settings.Theme);
             var window = new MainWindow(model);
             if (e.Args.Contains("--compact")) { window.Width = window.MinWidth; window.Height = window.MinHeight; }
-            window.Title = preview ? "CydLan · Offline preview" : "CydLan · LAN messenger";
+            window.Title = preview ? "CydLan · Offline preview" : labAddress is not null ? $"CydLan · Lab {labAddress}" : "CydLan · LAN messenger";
             if (e.Args.Contains("--transfers")) model.TransfersOpen = true;
             if (e.Args.Contains("--groups")) { model.GroupsOpen = true; model.SelectedGroup = model.Groups.FirstOrDefault(); }
             MainWindow = window;
             if (!capturing) CreateTray(window);
             if (!captureTray && (capturing || preview || !model.Settings.StartMinimized)) window.Show();
             if (e.Args.Contains("--details")) window.ShowConnectionDetails();
-            await model.StartAsync();
+            await model.StartAsync(bindAddress: labAddress);
             Window captureWindow = window;
             if (captureTray)
             {

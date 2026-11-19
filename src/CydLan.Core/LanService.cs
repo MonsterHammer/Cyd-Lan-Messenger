@@ -336,20 +336,30 @@ public sealed class LanService : IAsyncDisposable
                 var id = await ReadIdentityAsync(stream, deadline.Token);
                 if (id == settings.UserId) return;
                 var session = new Session(id, RemoteIPv4(client), settings.Port, client, true);
+                Session? spareFor = null;
                 lock (sessionGate)
                 {
                     if (sessions.TryGetValue(id, out var existing))
                     {
-                        // Resolve simultaneous connections consistently: the lower ID
-                        // initiates. Never replace a session that is already encrypted.
-                        if (existing.Cipher is not null || existing.Incoming || string.CompareOrdinal(settings.UserId, id) < 0) return;
-                        sessions[id] = session;
-                        existing.Client.Dispose();
+                        if (existing.Cipher is not null)
+                        {
+                            // Only a peer known to be LAN Messenger gets a held spare; another CydLan never dials twice.
+                            if (existing.Version.Length == 0 || IsCydLanVersion(existing.Version) || existing.Address != session.Address) return;
+                            spareFor = existing;
+                        }
+                        // Resolve simultaneous handshakes consistently: the lower ID initiates.
+                        else if (existing.Incoming || string.CompareOrdinal(settings.UserId, id) < 0) return;
+                        else
+                        {
+                            sessions[id] = session;
+                            existing.Client.Dispose();
+                        }
                     }
                     else if (!sessions.TryAdd(id, session)) return;
                 }
                 owned = false;
-                await RunSessionAsync(session, true);
+                if (spareFor is not null) await RunSpareChannelAsync(spareFor, client);
+                else await RunSessionAsync(session, true);
             }
             else if (Encoding.ASCII.GetString(prefix) == "FIL")
             {
@@ -395,6 +405,41 @@ public sealed class LanService : IAsyncDisposable
             throw new InvalidDataException("Invalid peer identity.");
         }
         return id;
+    }
+
+    /// <summary>
+    /// LAN Messenger 1.2.39 dials a contact again when our announcement arrives while it has not yet (or no longer)
+    /// listed us. It removes the contact when any of its connections to us closes, keeps one key per contact, and
+    /// sends through its newest connection. So a second connection is held open without a handshake, and frames
+    /// arriving on it are read with the established session's key. It closes with that session.
+    /// </summary>
+    private async Task RunSpareChannelAsync(Session owner, TcpClient client)
+    {
+        bool added;
+        lock (owner.Spares) { added = owner.Spares.Count < 8; if (added) owner.Spares.Add(client); }
+        log?.Write("connection.spare_open", null, ("peer", owner.Id), ("address", owner.Address), ("accepted", added));
+        try
+        {
+            if (!added || !sessions.TryGetValue(owner.Id, out var current) || current != owner) return;
+            var stream = client.GetStream();
+            while (!stopping.IsCancellationRequested)
+            {
+                var frame = await LegacyProtocol.ReadFrameAsync(stream, stopping.Token);
+                if (frame.Type != "MESSAG" || owner.Cipher is not { } cipher) continue;
+                var message = LegacyProtocol.Decode(cipher.Decrypt(frame.Payload));
+                if (message.From != owner.Id) throw new InvalidDataException("Peer identity mismatch.");
+                if (message.To.Length == 0 || message.To == settings.UserId) await HandleAsync(owner, message);
+            }
+        }
+        catch (Exception e) when (e is IOException or SocketException or OperationCanceledException or CryptographicException or System.Xml.XmlException or InvalidDataException or ArgumentException or ObjectDisposedException)
+        { if (!stopping.IsCancellationRequested) log?.Write("connection.spare_failed", e, ("peer", owner.Id)); }
+        finally
+        {
+            lock (owner.Spares) owner.Spares.Remove(client);
+            client.Dispose();
+            clients.TryRemove(client, out _);
+            log?.Write("connection.spare_closed", null, ("peer", owner.Id));
+        }
     }
 
     private async Task RunSessionAsync(Session session, bool incoming)
@@ -458,6 +503,7 @@ public sealed class LanService : IAsyncDisposable
             bool removed = sessions.TryRemove(new KeyValuePair<string, Session>(session.Id, session));
             log?.Write("connection.closed", null, ("peer", session.Id), ("address", session.Address), ("shutdown", stopping.IsCancellationRequested), ("superseded", !removed));
             if (removed) PeerOffline?.Invoke(session.Id);
+            lock (session.Spares) foreach (var spare in session.Spares) spare.Dispose();
             session.Client.Dispose(); session.Cipher?.Dispose();
             clients.TryRemove(session.Client, out _);
             if (removed)
@@ -982,6 +1028,8 @@ public sealed class LanService : IAsyncDisposable
         public string Version { get; set; } = "";
         /// <summary>Profile query and picture already sent for this connection.</summary>
         public bool Introduced { get; set; }
+        /// <summary>Extra LAN Messenger connections held open for this session; see RunSpareChannelAsync.</summary>
+        public List<TcpClient> Spares { get; } = [];
         public SemaphoreSlim WriteGate { get; } = new(1);
         public TaskCompletionSource<bool> Ready { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public async Task WriteAsync(string type, byte[] payload, CancellationToken ct)

@@ -54,7 +54,10 @@ public sealed class ChatMessage : Observable
     public bool Broadcast { get; set; }
     public DateTimeOffset Time { get; set; } = DateTimeOffset.Now;
     private string delivery = "Received";
-    public string Delivery { get => delivery; set { Set(ref delivery, value); Changed(nameof(CanRetry)); Changed(nameof(DeliveryProblem)); } }
+    public string Delivery { get => delivery; set { Set(ref delivery, value); Changed(nameof(CanRetry)); Changed(nameof(DeliveryProblem)); Changed(nameof(AwaitingAnswer)); } }
+    /// <summary>An incoming file offer that has not been accepted or declined yet.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool AwaitingAnswer => !Outgoing && HasFile && Delivery == "Waiting";
     /// <summary>The message (or its file) did not get through: shown in the warning colour.</summary>
     public bool DeliveryProblem => Delivery is "Declined" or "Cancelled" or "Aborted" or "Interrupted" or "Unconfirmed" || Delivery.StartsWith("Failed", StringComparison.Ordinal) || Delivery.StartsWith("Not sent", StringComparison.Ordinal);
     public bool CanRetry => Outgoing && !Broadcast && ImagePath.Length == 0 && FileName.Length == 0 && Delivery is "Failed" or "Unconfirmed";

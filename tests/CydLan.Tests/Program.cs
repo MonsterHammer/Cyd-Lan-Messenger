@@ -34,6 +34,7 @@ var tests = new (string Name, Func<Task> Run)[] {
     ("Real sockets: peer handshake, chat, receipts, typing and broadcast", TestPeers),
     ("Legacy fixture peer: inbound handshake, deduplication, numeric IDs", TestLegacyPeer),
     ("Legacy fixture acceptor: outbound 1024-bit RSA session and receipt", TestLegacyAcceptor),
+    ("Second LAN Messenger connection is held open, not closed or re-keyed", TestLegacySpareConnection),
     ("Mixed loopback: three CydLan services and two legacy fixture connections", TestMixedPeers),
     ("Simultaneous peer connections converge without a relay", TestSimultaneous),
     ("Directed UDP discovery and reconnect after a peer restarts", TestDiscoveryReconnect),
@@ -227,6 +228,52 @@ static async Task ExerciseLegacyPeer(LanService service, AppSettings settings, F
     await Until(() => count == 3);
     client.Dispose();
     await Until(() => wentOffline == 1);
+}
+// LAN Messenger 1.2.39 dials a contact again when an announcement arrives before it lists that contact, and
+// removes the contact when any connection to it closes. CydLan must keep that extra connection open without
+// a new handshake and read it with the established key.
+static async Task TestLegacySpareConnection()
+{
+    var settings = Settings("CydLan test");
+    await using var service = new LanService(settings);
+    await service.StartAsync(false, IPAddress.Loopback);
+    const string id = "00155DBA6B94Spare User";
+    int count = 0; bool online = false;
+    service.PeerOnline += peer => { if (peer.Id == id) online = true; };
+    service.MessageReceived += message => { if (message.PeerId == id && message.Text == "via spare") Interlocked.Increment(ref count); };
+    using var main = new TcpClient(); await main.ConnectAsync(IPAddress.Loopback, service.ListeningPort);
+    var stream = main.GetStream();
+    await stream.WriteAsync(Encoding.ASCII.GetBytes("MSG" + id));
+    var pub = await RawRead(stream);
+    using var rsa = RSA.Create(); rsa.ImportFromPem(Encoding.ASCII.GetString(pub.Payload));
+    var material = Enumerable.Range(0, 48).Select(i => (byte)(i * 3)).ToArray();
+    await RawWrite(stream, "HNDSHK", rsa.Encrypt(material, RSAEncryptionPadding.OaepSHA1));
+    using var aes = Aes.Create(); aes.Key = material[..32]; aes.IV = material[32..];
+    await RawRead(stream); // userdata get
+    byte[] Packet(string type, string msgId, params XElement[] body) => aes.EncryptCbc(Encoding.UTF8.GetBytes(new XElement("lmcmessage",
+        new XElement("head", new XElement("type", type), new XElement("from", id), new XElement("to", settings.UserId), new XElement("messageid", msgId)), new XElement("body", body)).ToString()), aes.IV);
+    await RawWrite(stream, "MESSAG", Packet("userdata", "1", new("userid", id), new("name", "Spare"), new("status", "chat"), new("queryop", "result"), new("version", "1.2.39")));
+    await Until(() => online);
+
+    using var spare = new TcpClient(); await spare.ConnectAsync(IPAddress.Loopback, service.ListeningPort);
+    var spareStream = spare.GetStream();
+    await spareStream.WriteAsync(Encoding.ASCII.GetBytes("MSG" + id));
+    var probe = new byte[1];
+    using (var quiet = new CancellationTokenSource(1500))
+    {
+        bool timedOut = false;
+        int read = -1;
+        try { read = await spareStream.ReadAsync(probe, quiet.Token); } catch (OperationCanceledException) { timedOut = true; }
+        Check(timedOut, $"The second connection must stay open with no new handshake (no PUBKEY, no close); read {read} bytes.");
+    }
+    await RawWrite(spareStream, "MESSAG", Packet("message", "71", new XElement("message", "via spare")));
+    await Until(() => count == 1);
+    var ack = await ReadMessage(stream, aes);
+    Check((string?)ack.Element("head")?.Element("type") == "acknowledge" && (string?)ack.Element("body")?.Element("messageid") == "71",
+        "A message read from the second connection is acknowledged on the established one.");
+    main.Dispose();
+    using var closed = new CancellationTokenSource(8000);
+    Check(await spareStream.ReadAsync(probe, closed.Token) == 0, "The second connection closes with the established session.");
 }
 static async Task TestMixedPeers()
 {
