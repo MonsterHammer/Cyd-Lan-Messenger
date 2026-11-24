@@ -24,7 +24,7 @@
       <Setter Property="Visibility" Value="{Binding IsActive, Converter={StaticResource Bool}}"/>
     </Style>
     <DataTemplate x:Key="MessageTemplate">
-      <Grid Margin="0,0,0,24">
+      <Grid Margin="0,0,0,16">
         <Grid.Style><Style TargetType="Grid"><Setter Property="HorizontalAlignment" Value="Left"/><Style.Triggers><DataTrigger Binding="{Binding Outgoing}" Value="True"><Setter Property="HorizontalAlignment" Value="Right"/></DataTrigger></Style.Triggers></Style></Grid.Style>
         <StackPanel MaxWidth="540">
           <TextBlock Text="{Binding SenderName}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource Muted}" Margin="4,0,0,5" Visibility="{Binding ShowSender, Converter={StaticResource Bool}}"/>
@@ -59,7 +59,8 @@
               </StackPanel>
             </StackPanel>
           </Border>
-          <Border Padding="17,13" CornerRadius="{DynamicResource MessageBubbleCorner}" Visibility="{Binding HasText, Converter={StaticResource Bool}}">
+          <Border x:Name="TextBubble" Padding="12,8" CornerRadius="{DynamicResource MessageBubbleCorner}" Visibility="{Binding HasText, Converter={StaticResource Bool}}"
+                  HorizontalAlignment="{Binding HorizontalAlignment, RelativeSource={RelativeSource AncestorType=Grid}}">
             <Border.Style><Style TargetType="Border"><Setter Property="Background" Value="{DynamicResource Surface}"/><Style.Triggers><DataTrigger Binding="{Binding Outgoing}" Value="True"><Setter Property="Background" Value="{DynamicResource AccentSoft}"/></DataTrigger></Style.Triggers></Style></Border.Style>
             <StackPanel>
               <TextBlock Text="ANNOUNCEMENT" Foreground="{DynamicResource Accent}" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,6" Visibility="{Binding Broadcast, Converter={StaticResource Bool}}"/>
@@ -72,7 +73,8 @@
               </TextBlock>
             </StackPanel>
           </Border>
-          <StackPanel Orientation="Horizontal" Margin="4,7,4,0">
+          <StackPanel x:Name="MessageMetadata" Orientation="Horizontal" Margin="4,4,4,0"
+                      HorizontalAlignment="{Binding HorizontalAlignment, RelativeSource={RelativeSource AncestorType=Grid}}">
             <TextBlock Text="{Binding TimeLabel}" FontSize="11" Foreground="{DynamicResource Faint}"/>
             <TextBlock Text=" · " FontSize="11" Foreground="{DynamicResource Faint}"/>
             <TextBlock Text="{Binding Delivery}" FontSize="11" MaxWidth="360" TextTrimming="CharacterEllipsis" ToolTip="{Binding Delivery}">
@@ -274,7 +276,7 @@
               <Grid x:Name="ChatContentGrid">
                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                 <Grid Grid.Row="1">
-                  <ScrollViewer x:Name="MessageScroller" VerticalScrollBarVisibility="Auto" Padding="26,20,26,4" PreviewMouseDown="Conversation_Interacted"><StackPanel MaxWidth="760" HorizontalAlignment="Stretch"><ItemsControl ItemsSource="{Binding Messages}" ItemTemplate="{StaticResource MessageTemplate}" HorizontalContentAlignment="Stretch"/></StackPanel></ScrollViewer>
+                  <ScrollViewer x:Name="MessageScroller" VerticalScrollBarVisibility="Auto" Padding="26,12,26,4" PreviewMouseDown="Conversation_Interacted"><StackPanel MaxWidth="760" HorizontalAlignment="Stretch"><ItemsControl x:Name="MessageList" ItemsSource="{Binding Messages}" ItemTemplate="{StaticResource MessageTemplate}" HorizontalContentAlignment="Stretch"/></StackPanel></ScrollViewer>
                   <StackPanel MaxWidth="370" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="25" Visibility="{Binding NoPeer, Converter={StaticResource Bool}}">
                     <Image Source="{DynamicResource BrandMark}" Width="64" Height="64"/>
                   </StackPanel>

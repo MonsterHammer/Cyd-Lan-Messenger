@@ -131,8 +131,38 @@ internal static class Program
             Check(!recentList.Items.Contains(sofia), "Deleting chat history should remove it from Recent.");
             peopleTab.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
             Check(!recentList.IsVisible && peopleTab.IsChecked == true, "People should restore the contact directory.");
+            preview.SelectedPeer = jamie;
+            var incoming = new ChatMessage { Text = "ASDF" };
+            var outgoing = new ChatMessage { Text = "OK", Outgoing = true, Delivery = "Delivered" };
+            var longMessage = new ChatMessage { Text = string.Concat(Enumerable.Repeat("A longer message still wraps in a compact window. ", 4)) };
+            preview.Messages.Add(incoming);
+            preview.Messages.Add(outgoing);
+            preview.Messages.Add(longMessage);
+            recentWindow.UpdateLayout();
+            var messageList = (System.Windows.Controls.ItemsControl)recentWindow.FindName("MessageList");
+            FrameworkElement RowPart(ChatMessage message, string name)
+            {
+                var row = (System.Windows.Controls.ContentPresenter)messageList.ItemContainerGenerator.ContainerFromItem(message);
+                return (FrameworkElement)messageList.ItemTemplate.FindName(name, row);
+            }
+            foreach (var message in new[] { incoming, outgoing })
+            {
+                var bubble = RowPart(message, "TextBubble");
+                var metadata = RowPart(message, "MessageMetadata");
+                var edge = message.Outgoing ? HorizontalAlignment.Right : HorizontalAlignment.Left;
+                Check(bubble.ActualWidth > 0 && bubble.ActualWidth < metadata.ActualWidth &&
+                    bubble.HorizontalAlignment == edge && metadata.HorizontalAlignment == edge,
+                    "A short bubble should size to its text and align with its timestamp on the correct side.");
+            }
+            var wrapped = RowPart(longMessage, "TextBubble");
+            Check(wrapped.ActualWidth <= messageList.ActualWidth && wrapped.ActualHeight > RowPart(incoming, "TextBubble").ActualHeight,
+                "A long message should wrap within the available chat width.");
+            preview.Messages.Remove(incoming);
+            preview.Messages.Remove(outgoing);
+            preview.Messages.Remove(longMessage);
             recentWindow.Close();
             Console.WriteLine("PASS  Recent chats, group navigation, live ordering, search and deletion");
+            Console.WriteLine("PASS  Short bubbles fit the text; long messages wrap");
 
             // Popups open over a dimmed main window, fit inside it, and cannot be moved outside it.
             var host = new MainWindow(preview) { Left = 100, Top = 100, Width = 800, Height = 560 }; host.Show();

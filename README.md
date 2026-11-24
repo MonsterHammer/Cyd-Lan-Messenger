@@ -4,7 +4,7 @@ A Windows desktop LAN messenger with a modern interface, system tray support, an
 
 ## Install and run
 
-Download the Windows x64 installer and its SHA-256 checksum from the [v0.1.7 release](https://github.com/MonsterHammer/Cyd-Lan-Messenger/releases/tag/v0.1.7). The unsigned installer includes the .NET runtime and installs for the current Windows user. The optional **Open CydLan** checkbox starts live LAN mode after setup.
+Download the Windows x64 installer and its SHA-256 checksum from the [latest release](https://github.com/MonsterHammer/Cyd-Lan-Messenger/releases/latest). The unsigned installer includes the .NET runtime and installs for the current Windows user. The optional **Open CydLan** checkbox starts live LAN mode after setup.
 
 Opening CydLan starts live LAN discovery and direct messaging. Contacts appear automatically when another compatible client is on the same network. Allow CydLan through Windows Firewall on **private networks** on both PCs. No internet connection or account is required.
 
