@@ -14,6 +14,7 @@ public partial class App : System.Windows.Application
     private Mutex? mutex;
     private Forms.NotifyIcon? tray;
     private TrayMenuWindow? trayMenu;
+    private MessageNotificationWindow? notification;
     private MainViewModel? model;
     private DiagnosticLog? log;
     private bool quitting;
@@ -55,7 +56,11 @@ public partial class App : System.Windows.Application
             if (e.Args.Contains("--transfers")) model.TransfersOpen = true;
             if (e.Args.Contains("--groups")) { model.GroupsOpen = true; model.SelectedGroup = model.Groups.FirstOrDefault(); }
             MainWindow = window;
-            if (!capturing) CreateTray(window);
+            if (!capturing)
+            {
+                CreateTray(window);
+                ConnectNotifications(window, model);
+            }
             if (!captureTray && (capturing || preview || !model.Settings.StartMinimized)) window.Show();
             if (e.Args.Contains("--details")) window.ShowConnectionDetails();
             await model.StartAsync(bindAddress: labAddress);
@@ -123,13 +128,19 @@ public partial class App : System.Windows.Application
             });
         };
         tray.DoubleClick += (_, _) => ShowWindow(window);
-        tray.BalloonTipClicked += (_, _) => ShowWindow(window);
-        model!.Notify += (name, text) => {
-            if (window.IsVisible && window.IsActive) return;
-            if (model.ShouldPlaySound) System.Media.SystemSounds.Asterisk.Play();
-            if (!model.ShouldAlert) return;
-            tray.BalloonTipTitle = name; tray.BalloonTipText = text.Length > 160 ? text[..160] + "…" : text;
-            tray.ShowBalloonTip(4000);
+    }
+    internal void ConnectNotifications(MainWindow window, MainViewModel source)
+    {
+        source.Notify += (name, text) => {
+            if (quitting) return;
+            if (source.ShouldPlaySound) System.Media.SystemSounds.Asterisk.Play();
+            if (!source.ShouldAlert) return;
+            if (notification is null)
+            {
+                notification = new MessageNotificationWindow(() => ShowWindow(window));
+                notification.Closed += (_, _) => notification = null;
+            }
+            notification.Present(name, text);
         };
     }
     private static Icon MakeIcon()
@@ -166,6 +177,7 @@ public partial class App : System.Windows.Application
         finally
         {
             trayMenu?.CloseOnce();
+            notification?.Close();
             tray?.Dispose(); mutex?.Dispose(); Shutdown(Environment.ExitCode);
         }
     }

@@ -102,6 +102,38 @@ internal static class Program
             themed.Close(); ThemeManager.Apply("light");
             Console.WriteLine("PASS  Live theme switching, Pixel controls and icons, Cancel restores appearance");
 
+            var recentWindow = new MainWindow(preview);
+            recentWindow.Show();
+            var recentList = (System.Windows.Controls.ListBox)recentWindow.FindName("RecentList");
+            var recentTab = (System.Windows.Controls.RadioButton)recentWindow.FindName("RecentTab");
+            var peopleTab = (System.Windows.Controls.RadioButton)recentWindow.FindName("PeopleTab");
+            recentTab.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+            var group = preview.Groups.Single();
+            Check(recentList.IsVisible && recentList.Items.Cast<object>().SequenceEqual(new object[] { jamie, group }),
+                "Recent should show only conversations with activity, newest first.");
+            Capture(recentWindow, Path.Combine(Path.GetFullPath("artifacts"), "recent-chats-tested.png"));
+            recentList.SelectedItem = group;
+            Check(preview.InGroup && preview.SelectedGroup == group, "Selecting a recent group should open it.");
+            preview.GroupsOpen = false;
+            recentList.SelectedItem = group;
+            Check(preview.InGroup, "Selecting the same recent group should reopen it from the Chats section.");
+            preview.GroupsOpen = false;
+            var sofia = preview.Peers[1];
+            preview.SelectedPeer = sofia;
+            await preview.SendAsync();
+            Check(recentList.Items[0] == sofia && recentList.SelectedItem == sofia,
+                "Sending should move the chat to the top and preserve its selection.");
+            preview.Search = group.Name;
+            Check(recentList.Items.Count == 1 && recentList.Items[0] == group, "Recent should filter by group name.");
+            preview.Search = "";
+            preview.SelectedPeer = sofia;
+            preview.DeleteConversation();
+            Check(!recentList.Items.Contains(sofia), "Deleting chat history should remove it from Recent.");
+            peopleTab.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+            Check(!recentList.IsVisible && peopleTab.IsChecked == true, "People should restore the contact directory.");
+            recentWindow.Close();
+            Console.WriteLine("PASS  Recent chats, group navigation, live ordering, search and deletion");
+
             // Popups open over a dimmed main window, fit inside it, and cannot be moved outside it.
             var host = new MainWindow(preview) { Left = 100, Top = 100, Width = 800, Height = 560 }; host.Show();
             var popup = new SettingsWindow(preview);
@@ -223,20 +255,42 @@ internal static class Program
                 var retry = model.Messages.Single(); retry.Delivery = "Unconfirmed";
                 await model.RetryAsync(retry);
                 Check(retry.Delivery == "Delivered" && peerMessageCount == 1, "Desktop retry must confirm delivery without duplicating the message.");
+                var alertHost = new MainWindow(model);
+                ((App)Application.Current).ConnectNotifications(alertHost, model);
+                alertHost.Show();
+                alertHost.Activate();
+                await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+                Check(alertHost.IsActive && model.ShouldAlert, "The foreground notification test needs an active window and default alerts.");
+                model.Replying = true;
+                MessageNotificationWindow? Alert() => Application.Current.Windows.OfType<MessageNotificationWindow>().SingleOrDefault();
                 Check(await peer.SendChatAsync(model.Settings.UserId, "Peer → desktop ✅\nMessages and receipts are working.", "14001"), "Desktop did not acknowledge inbound chat.");
                 await Until(() => model.Messages.Count == 2);
                 Check(model.SelectedPeer.Unread == 0, "A focused conversation should not accumulate unread messages.");
+                Check(Alert() is { IsVisible: true, IsActive: false } && alertHost.IsActive &&
+                    FindText(Alert()!, "Peer → desktop ✅ Messages and receipts are working.") is not null,
+                    "An inbound message should show a preview without taking focus.");
+                Capture(Alert()!, Path.Combine(Path.GetFullPath("artifacts"), "message-notification-tested.png"));
+                Alert()!.Close();
+                model.Settings.Notifications = false;
                 model.TransfersOpen = true;
                 Check(await peer.SendChatAsync(model.Settings.UserId, "A message while viewing file transfers", "14003"), "Transfers view stopped receiving chat.");
                 await Until(() => model.SelectedPeer.Unread == 1);
+                Check(Alert() is null, "Turning notifications off should silence visual alerts.");
                 model.TransfersOpen = false;
                 Check(model.SelectedPeer.Unread == 1, "Opening a conversation must not mark it read before the user replies.");
                 model.Replying = true;
                 Check(model.SelectedPeer.Unread == 0, "Engaging the composer must clear the unread count.");
+                model.Settings.Notifications = true;
+                alertHost.Hide();
                 model.Replying = false;
                 Check(await peer.SendChatAsync(model.Settings.UserId, "A message while the window is inactive", "14002"), "Inactive window stopped receiving chat.");
                 await Until(() => model.SelectedPeer.Unread == 1);
                 Check(model.PeopleSummary.Contains("1 unread"), "Unread totals did not update.");
+                Check(Alert() is { IsVisible: true } && !alertHost.IsVisible, "Hidden CydLan should still show notifications.");
+                ClickNamed(Alert()!, "Open CydLan");
+                Check(alertHost.IsVisible && Alert() is null, "Clicking the alert should reopen CydLan.");
+                alertHost.Close();
+                Console.WriteLine("PASS  Default message notifications in the foreground and while hidden");
                 Console.WriteLine("PASS  Live desktop discovery, send/receive, receipts and unread counts");
 
                 // Images: CydLan peers exchange them inline (auto-accepted, shown in the chat); plain offers still need approval.
@@ -439,6 +493,9 @@ internal static class Program
             Check(restored.Messages.Count(m => m.HasText && m.GroupId.Length == 0) == 4 && restored.Messages.First().CanRetry, "History or retry state did not survive restart.");
             Check(restored.Messages.Count(m => m.HasImage && File.Exists(m.ImagePath)) == 2, "Sent and received images did not survive restart.");
             Check(restored.Groups.Count == 2 && restored.Groups.Any(g => g.Name == "Lunch"), "Groups did not survive restart.");
+            Check(restored.RecentChats.Contains(restored.SelectedPeer) &&
+                restored.RecentChats.Contains(restored.Groups.Single(g => g.Name == "Lunch")) &&
+                !restored.SelectedPeer.Online, "Recent should include saved direct and group chats after restart, including offline contacts.");
             Check(restored.Transfers.Count >= 3 && restored.Settings.FirstName == "Home", "File history and profile did not survive restart.");
             Check(restored.Settings.DisplayName == "Home desktop updated", "Preferences were not persisted.");
             Console.WriteLine("PASS  Desktop restart restores history, drafts, profile and retry state");

@@ -57,6 +57,33 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     }
     public ObservableCollection<string> Diagnostics { get; } = [];
     public ICollectionView People { get; }
+    public ObservableCollection<object> RecentChats { get; } = [];
+    private bool showRecentChats;
+    public bool ShowRecentChats
+    {
+        get => showRecentChats;
+        set
+        {
+            if (!Set(ref showRecentChats, value)) return;
+            Changed(nameof(ShowPeopleDirectory)); Changed(nameof(ShowRecentList));
+        }
+    }
+    public bool ShowPeopleDirectory => ShowPeopleList && !ShowRecentChats;
+    public bool ShowRecentList => ShowPeopleList && ShowRecentChats;
+    public object? SelectedRecentChat
+    {
+        get => IsGroupsSection ? SelectedGroup : SelectedPeer;
+        set
+        {
+            switch (value)
+            {
+                case Peer peer when peer == SelectedPeer: Broadcasting = false; break;
+                case Peer peer: SelectedPeer = peer; break;
+                case GroupChat group when group == SelectedGroup: GroupsOpen = true; break;
+                case GroupChat group: SelectedGroup = group; break;
+            }
+        }
+    }
     private Peer? selected;
     private GroupChat? selectedGroup;
     private bool groupsOpen;
@@ -89,7 +116,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
             MessageSearch = ""; SectionChanged();
         }
     }
-    public string Search { get => search; set { if (Set(ref search, value)) People.Refresh(); } }
+    public string Search { get => search; set { if (Set(ref search, value)) { People.Refresh(); RefreshRecentChats(); } } }
     public string MessageSearch { get => messageSearch; set { if (Set(ref messageSearch, value)) RefreshMessages(); } }
     private string DraftKey => GroupsOpen ? (SelectedGroup is { } g ? "group:" + g.Id : "groups") : Broadcasting ? "broadcast" : SelectedPeer?.Id ?? "none";
     public string Draft { get => drafts.GetValueOrDefault(DraftKey, ""); set { drafts[DraftKey] = value; Changed(); Changed(nameof(CanSend)); } }
@@ -135,10 +162,10 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     {
         replying = false;
         foreach (var name in new[] { nameof(TransfersOpen), nameof(Broadcasting), nameof(GroupsOpen), nameof(ChatOpen), nameof(IsConversationSection), nameof(IsBroadcastSection),
-            nameof(IsGroupsSection), nameof(IsFilesSection), nameof(ShowPeopleList), nameof(ShowGroupList), nameof(InGroup), nameof(HasPeer), nameof(NoPeer), nameof(NoGroup),
+            nameof(IsGroupsSection), nameof(IsFilesSection), nameof(ShowPeopleList), nameof(ShowPeopleDirectory), nameof(ShowRecentList), nameof(ShowGroupList), nameof(InGroup), nameof(HasPeer), nameof(NoPeer), nameof(NoGroup),
             nameof(HasDetails), nameof(SelectedGroupMembers), nameof(SectionTitle), nameof(ChatTitle), nameof(ChatSubtitle), nameof(Draft) })
             Changed(name);
-        Changed(nameof(SelectedGroup)); Changed(nameof(SelectedPeer));
+        Changed(nameof(SelectedGroup)); Changed(nameof(SelectedPeer)); Changed(nameof(SelectedRecentChat));
         AttachmentsSwitched(); ComposeChanged(); RefreshMessages(true); RefreshConversationFiles();
     }
     private void AttachmentsSwitched() { Changed(nameof(Attachments)); Changed(nameof(HasAttachments)); Changed(nameof(CanSend)); }
@@ -214,6 +241,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
                 var peer = Peers.FirstOrDefault(p => p.Id == message.PeerId);
                 if (peer is null) return;
                 history.Add(message); peer.Preview = message.Text.ReplaceLineEndings(" ");
+                RefreshRecentChats();
                 if (SelectedPeer?.Id != peer.Id || !IsConversationSection || !Replying) peer.Unread++;
                 peer.Typing = "";
                 RefreshMessages(); Changed(nameof(PeopleSummary)); Save(); Notify?.Invoke(peer.Name, message.Text);
@@ -233,7 +261,30 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         People.SortDescriptions.Add(new(nameof(Peer.Name), ListSortDirection.Ascending));
         foreach (var peer in Peers) peer.PropertyChanged += PeerChanged;
         if (preview && seedPreview) SeedPreview();
+        RefreshRecentChats();
         ApplySettings();
+    }
+    private void RefreshRecentChats()
+    {
+        bool ContainsSearch(string text) => text.Contains(Search, StringComparison.OrdinalIgnoreCase);
+        var byConversation = history.ToLookup(m => (IsGroup: m.GroupId.Length > 0, Id: m.GroupId.Length > 0 ? m.GroupId : m.PeerId));
+        var ordered = Peers.Select(p => (Chat: (object)p, Messages: byConversation[(false, p.Id)], Matches: ContainsSearch(p.Name) || ContainsSearch(p.Address)))
+            .Concat(Groups.Select(g => (Chat: (object)g, Messages: byConversation[(true, g.Id)], Matches: ContainsSearch(g.Name))))
+            .Where(c => c.Messages.Any() && (c.Matches || c.Messages.Any(m => ContainsSearch(m.Text) || ContainsSearch(m.FileName))))
+            .OrderByDescending(c => c.Messages.Max(m => m.Time))
+            .Select(c => c.Chat).ToList();
+
+        // Keep selected rows when new activity changes their position.
+        var included = ordered.ToHashSet();
+        for (int i = RecentChats.Count - 1; i >= 0; i--)
+            if (!included.Contains(RecentChats[i])) RecentChats.RemoveAt(i);
+        for (int i = 0; i < ordered.Count; i++)
+        {
+            int previous = RecentChats.IndexOf(ordered[i]);
+            if (previous < 0) RecentChats.Insert(i, ordered[i]);
+            else if (previous != i) RecentChats.Move(previous, i);
+        }
+        Changed(nameof(SelectedRecentChat));
     }
     private void ComposeChanged() { Changed(nameof(CanCompose)); Changed(nameof(CanSend)); Changed(nameof(CanAttach)); }
     private void MarkConversationRead()
@@ -247,7 +298,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         if (sender == SelectedPeer) { Changed(nameof(ChatSubtitle)); Changed(nameof(ChatTitle)); ComposeChanged(); }
         if (e.PropertyName == nameof(Peer.Unread)) Changed(nameof(PeopleSummary));
     }
-    private void UpdateCounts() { Changed(nameof(OnlineCount)); Changed(nameof(LocalAddress)); Changed(nameof(DeviceLabel)); Changed(nameof(NetworkEndpoint)); Changed(nameof(PeopleSummary)); ComposeChanged(); Changed(nameof(ChatSubtitle)); People.Refresh(); }
+    private void UpdateCounts() { Changed(nameof(OnlineCount)); Changed(nameof(LocalAddress)); Changed(nameof(DeviceLabel)); Changed(nameof(NetworkEndpoint)); Changed(nameof(PeopleSummary)); ComposeChanged(); Changed(nameof(ChatSubtitle)); People.Refresh(); if (Search.Length > 0) RefreshRecentChats(); }
     private static void UI(Action action) => System.Windows.Application.Current.Dispatcher.BeginInvoke(action);
     public async Task StartAsync(bool discovery = true, IPAddress? bindAddress = null)
     {
@@ -278,7 +329,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
                 history.Add(new() { PeerId = sample.Id, Outgoing = true, Delivery = "Preview only", ImagePath = file.IsImage ? KeepCopy(file.Path) : "", FileName = file.IsImage ? "" : file.Name });
             if (text.Length > 0) history.Add(new() { PeerId = sample.Id, Text = text, Outgoing = true, Delivery = "Preview only" });
             sample.Preview = text.Length > 0 ? text.ReplaceLineEndings(" ") : files.Any(f => f.IsImage) ? "Photo" : files[0].Name;
-            Attachments.Clear(); Draft = ""; RefreshMessages(true);
+            Attachments.Clear(); Draft = ""; RefreshRecentChats(); RefreshMessages(true);
             return;
         }
         if (files.Count > 0) await SendAttachmentsAsync(SelectedPeer!, files);
@@ -292,7 +343,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         var message = new ChatMessage { PeerId = peer.Id, Text = text, Outgoing = true, Delivery = "Sending…" };
         // Legacy peers parse message IDs as signed 64-bit decimal integers.
         message.Id = NextMessageId().ToString();
-        history.Add(message); Draft = ""; peer.Preview = text.ReplaceLineEndings(" "); RefreshMessages(true); Save();
+        history.Add(message); Draft = ""; peer.Preview = text.ReplaceLineEndings(" "); RefreshRecentChats(); RefreshMessages(true); Save();
         await DeliverAsync(message);
     }
     public async Task RetryAsync(ChatMessage message)
@@ -371,7 +422,11 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
             catch (Exception e) when (e is IOException or UnauthorizedAccessException) { log?.Write("attachment.prepare_failed", e); Toast = $"{file.Name} couldn't be prepared: {e.Message}"; continue; }
             history.Add(message); queued.Add((message, path, file.IsImage));
         }
-        if (queued.Count > 0) peer.Preview = queued[^1].Image ? "Photo" : queued[^1].Message.FileName;
+        if (queued.Count > 0)
+        {
+            peer.Preview = queued[^1].Image ? "Photo" : queued[^1].Message.FileName;
+            RefreshRecentChats();
+        }
         RefreshMessages(true); Save();
         foreach (var (message, path, image) in queued)
         {
@@ -432,6 +487,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
                     var offer = new ChatMessage { Id = transfer.Id, PeerId = sender.Id, FileName = transfer.Name, TransferId = transfer.Id, Delivery = DeliveryFor(transfer) };
                     history.Add(offer); transferMessages[transfer.Id] = offer;
                     sender.Preview = transfer.Name; sender.Typing = "";
+                    RefreshRecentChats();
                     if (SelectedPeer?.Id != sender.Id || !IsConversationSection || !Replying) sender.Unread++;
                     RefreshMessages(); Changed(nameof(PeopleSummary)); Save();
                 }
@@ -458,6 +514,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
             }
             history.Add(new() { Id = transfer.Id, PeerId = peer.Id, ImagePath = transfer.Path, Delivery = "Received" });
             peer.Preview = "Photo"; peer.Typing = "";
+            RefreshRecentChats();
             if (SelectedPeer?.Id != peer.Id || !IsConversationSection || !Replying) peer.Unread++;
             RefreshMessages(); Changed(nameof(PeopleSummary)); Save(); Notify?.Invoke(peer.Name, "Sent you a photo");
         }
@@ -501,7 +558,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     public void RenameGroup(GroupChat group, string name)
     {
         if (string.IsNullOrWhiteSpace(name)) return;
-        group.Name = name.Trim(); Changed(nameof(ChatTitle)); Save();
+        group.Name = name.Trim(); Changed(nameof(ChatTitle)); if (Search.Length > 0) RefreshRecentChats(); Save();
     }
     public async Task LeaveGroupAsync(GroupChat group)
     {
@@ -509,13 +566,14 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
             foreach (var id in group.Members.Where(id => Peers.Any(p => p.Id == id && p.Online)).ToList())
                 await RunAsync(() => lan.SendGroupAsync(id, group.Id, "leave"), false);
         Groups.Remove(group); history.RemoveAll(m => m.GroupId == group.Id);
+        RefreshRecentChats();
         SelectedGroup = Groups.FirstOrDefault(); if (SelectedGroup is null) SectionChanged();
         Save();
     }
     private async Task SendGroupMessageAsync(GroupChat group, string text)
     {
         var message = new ChatMessage { GroupId = group.Id, Text = text, Outgoing = true, Delivery = "Sending…", Id = NextMessageId().ToString() };
-        history.Add(message); Draft = ""; group.Preview = "You: " + text.ReplaceLineEndings(" "); RefreshMessages(true);
+        history.Add(message); Draft = ""; group.Preview = "You: " + text.ReplaceLineEndings(" "); RefreshRecentChats(); RefreshMessages(true);
         if (Preview || lan is null) { message.Delivery = "Preview only"; return; }
         int sent = 0, total = group.Members.Count;
         foreach (var id in group.Members.Where(id => Peers.Any(p => p.Id == id && p.Online)).ToList())
@@ -550,6 +608,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
                 AddMember(group, senderId);
                 history.Add(new() { GroupId = thread, PeerId = senderId, SenderName = sender.Name, Text = text, Delivery = "Received" });
                 group.Preview = $"{sender.Name}: {text.ReplaceLineEndings(" ")}";
+                RefreshRecentChats();
                 if (SelectedGroup != group || !IsGroupsSection || !Replying) group.Unread++;
                 if (SelectedGroup == group && IsGroupsSection) RefreshMessages();
                 Notify?.Invoke($"{sender.Name} · {group.Name}", text);
@@ -610,6 +669,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     {
         var removed = history.FindAll(match);
         history.RemoveAll(match);
+        RefreshRecentChats();
         // Pictures are CydLan's own copies; files saved to the received files folder are kept.
         foreach (var image in removed.Select(m => m.ImagePath).Where(p => p.Length > 0 && Path.GetFullPath(p).StartsWith(Path.GetFullPath(ImagesDirectory), StringComparison.OrdinalIgnoreCase)))
             if (!history.Any(m => string.Equals(m.ImagePath, image, StringComparison.OrdinalIgnoreCase))) TryDelete(image);

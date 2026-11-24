@@ -99,6 +99,8 @@ public partial class MainWindow : Window
     }
     private void Close_Click(object sender, RoutedEventArgs e) => Hide();
     private void Chat_Click(object sender, RoutedEventArgs e) { model.TransfersOpen = false; model.Broadcasting = false; model.GroupsOpen = false; }
+    private void PeopleTab_Click(object sender, RoutedEventArgs e) => model.ShowRecentChats = false;
+    private void RecentTab_Click(object sender, RoutedEventArgs e) => model.ShowRecentChats = true;
     private void Groups_Click(object sender, RoutedEventArgs e)
     {
         model.TransfersOpen = false; model.GroupsOpen = true;

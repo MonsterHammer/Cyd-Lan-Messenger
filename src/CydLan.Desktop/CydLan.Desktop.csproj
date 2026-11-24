@@ -7,12 +7,13 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>../../assets/brand/cydlan.ico</ApplicationIcon>
     <AssemblyName>CydLan</AssemblyName>
-    <Version>0.1.7</Version>
+    <Version>0.1.8</Version>
     <Product>CydLan</Product>
     <!-- WPF owns the window DPI policy; WinForms is used only for NotifyIcon. -->
     <NoWarn>$(NoWarn);WFO0003</NoWarn>
   </PropertyGroup>
   <ItemGroup><ProjectReference Include="../CydLan.Core/CydLan.Core.csproj" /></ItemGroup>
+  <ItemGroup><InternalsVisibleTo Include="CydLan.Desktop.Tests" /></ItemGroup>
   <ItemGroup><Resource Include="../../assets/brand/cydlan.ico" Link="Assets/cydlan.ico" /></ItemGroup>
   <!-- LAN Messenger 1.2.39 emoticon pictures (GPL-3.0-or-later); see THIRD-PARTY-NOTICES.md. -->
   <ItemGroup><Resource Include="../../assets/smileys/*.png" LinkBase="Assets/smileys" /></ItemGroup>
