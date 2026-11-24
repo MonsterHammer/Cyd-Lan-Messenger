@@ -65,7 +65,9 @@ public sealed class ChatMessage : Observable
     /// <summary>Local copy of an image sent or received in this conversation; empty for text messages.</summary>
     public string ImagePath { get; set; } = "";
     /// <summary>Name of a non-image file offered in this conversation; empty otherwise.</summary>
-    public string FileName { get; set; } = "";
+    private string fileName = "";
+    public string FileName { get => fileName; set { if (Set(ref fileName, value)) Changed(nameof(HasFile)); } }
+    public bool FolderAttachment { get; set; }
     /// <summary>File-transfer ID backing an image or file message, so its delivery state can follow the transfer.</summary>
     public string TransferId { get; set; } = "";
     /// <summary>Legacy group-chat thread this message belongs to; empty for one-to-one chat.</summary>
@@ -87,6 +89,7 @@ public sealed class FileTransfer : Observable
     public bool Outgoing { get; init; }
     /// <summary>A CydLan-to-CydLan image shown in the conversation instead of the transfers list.</summary>
     public bool Inline { get; init; }
+    public bool Folder { get; init; }
     /// <summary>A profile picture (LAN Messenger "avatar" transfer); never listed with ordinary files.</summary>
     public bool Avatar { get; init; }
     public DateTimeOffset Time { get; init; } = DateTimeOffset.Now;
@@ -94,6 +97,7 @@ public sealed class FileTransfer : Observable
     public string PeerName { get; set; } = "LAN peer";
     public string DirectionLabel => $"{(Outgoing ? "To" : "From")} {PeerName}";
     public string Path { get; set; } = "";
+    internal FolderArchive? Archive { get; init; }
     private string state = "Waiting for approval";
     private double progress;
     public string State
@@ -133,6 +137,27 @@ public sealed class AppSettings
     public bool StartMinimized { get; set; }
     /// <summary>Desktop colour theme: "light", "dark" or "system".</summary>
     public string Theme { get; set; } = "light";
+    public string ChatBackgroundPath { get; set; } = "";
+    public double ChatBackgroundOpacity { get; set; } = .26;
+    public string TypingEffect { get; set; } = "off";
+    public string ClickEffect { get; set; } = "off";
+    public bool SteampunkEngineEnabled { get; set; }
+    public bool SakuraPetalsEnabled { get; set; }
+    public double EffectIntensity { get; set; } = .75;
+    public double? TypingIntensity { get; set; }
+    public double? ClickIntensity { get; set; }
+    public bool ThemeDetailsEnabled { get; set; }
+    public double EngineIntensity { get; set; } = .85;
+    public double PetalIntensity { get; set; } = .75;
+    public bool FirefliesEnabled { get; set; }
+    public double FireflyIntensity { get; set; } = .65;
+    public bool RainEnabled { get; set; }
+    public double RainIntensity { get; set; } = .65;
+    public bool SnowEnabled { get; set; }
+    public double SnowIntensity { get; set; } = .65;
+    public double InkBloomIntensity { get; set; } = .65;
+    public bool SendPulseEnabled { get; set; }
+    public double SendPulseIntensity { get; set; } = .65;
     public int Port { get; set; } = 50000;
     public string Multicast { get; set; } = "239.255.100.100";
 
@@ -154,6 +179,7 @@ public sealed class AppSettings
     public bool KeepHistory { get; set; } = true;
     public bool KeepFileHistory { get; set; } = true;
     // Alerts
+    public bool NotificationPreviews { get; set; }
     public bool AlertsWhenBusy { get; set; } = true;
     public bool AlertsWhenDnd { get; set; }
     public bool Sounds { get; set; } = true;

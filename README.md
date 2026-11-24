@@ -20,15 +20,18 @@ If a contact does not appear, open **Preferences → Network → Connect by IP**
 
 Use `--preview` for an explicitly offline design preview. Sample contacts, preview messages, and preview preferences stay in memory; preview and screenshot modes open no network sockets or application settings files.
 
-Closing the window keeps CydLan running in the system tray. Double-click its tray icon to reopen it; use **Quit CydLan** in the tray menu to exit. Settings can start it in the tray when launched; automatic launch at Windows sign-in is not yet implemented.
+Closing the window keeps CydLan running in the system tray. Double-click its tray icon to reopen it; use **Quit CydLan** in the tray menu to exit. Preferences include starting minimized and launching at Windows sign-in.
 
 ## Included
 
 - Automatic IPv4 multicast discovery, adapter refresh, directed IP discovery, and saved-contact reconnection, with one-hop multicast scope.
 - Direct chat with UTF-8 text, delivery acknowledgments, duplicate suppression, typing indicators, and online/offline labels. Chat headers show profile pictures or initials. CydLan peers use application heartbeats and legacy peers use TCP keepalive.
-- Group rooms and LAN Messenger emoticons. Appearance options include Light, Dark, Match Windows, Ocean, Lavender, Ember, and Pixel. Pixel uses square controls and grid-drawn icons.
+- Group rooms and LAN Messenger emoticons.
+- Appearance combines themes, fonts, chat backgrounds, and optional visual effects. Falling petals, fireflies, rain, snowfall, ink bloom, send pulse, and the title-bar engine follow the active palette and offer individual intensity controls.
+- Appearance groups effects by location and interaction. Optional theme details add static decorations to Sakura, Steampunk, Forest, and Paper.
 - Broadcast announcements sent individually to connected peers.
 - File offers with save/decline or optional auto-accept, progress, and support for empty files. The Files view and conversation file panel show transfers. The default receive folder is `Documents\Received Files`. Incoming files are staged until the advertised byte count is received. Existing destination files are preserved.
+- Folder transfers work with peers that support LAN Messenger’s native folder protocol. CydLan offers a ZIP for an entirely empty folder or a peer that lacks folder support.
 - Search people, IP addresses, and saved messages; search within a conversation.
 - Local conversation history with chat deletion, saved contacts, per-contact and broadcast drafts, unread counts, profile settings, and tray notifications. Nonempty drafts survive a normal restart.
 - Selectable message text, manual retry for failed/unconfirmed messages, and preserved scroll position while reading older messages.
@@ -64,7 +67,7 @@ The wire protocol is based on upstream LAN Messenger and tested with independent
 
 Legacy mode preserves the old RSA-OAEP-SHA1 handshake and AES-256-CBC message format. It does not authenticate peer identities, and the old format has no message authentication. File payloads use the original unencrypted TCP file stream. Use it on a trusted local network. The app does not silently advertise stronger protection than the protocol supplies.
 
-Folder transfers, Public Chat, IPv6 discovery, message editing/reactions, and Windows sign-in startup are not implemented. Folder offers are declined. Group rooms and profile pictures interoperate with LAN Messenger 1.2.39. A sender can confirm bytes were written to the connection, but legacy file transfers have no final application receipt; the UI states that limitation. Transfers are not persisted across restarts. Separate VLANs, Wi-Fi client isolation, and VPN filtering can prevent discovery.
+Public Chat, IPv6 discovery, and message editing or reactions are not implemented. Native folder transfers carry files and their relative paths, so empty subfolders are omitted. Group rooms and profile pictures interoperate with LAN Messenger 1.2.39. A sender can confirm bytes were written to the connection, but legacy file transfers have no final application receipt; the UI states that limitation. Separate VLANs, Wi-Fi client isolation, and VPN filtering can prevent discovery.
 
 ## License
 

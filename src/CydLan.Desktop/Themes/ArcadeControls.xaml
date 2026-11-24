@@ -1,0 +1,28 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Geometry x:Key="IconChat">M5,4 H19 L22,7 V15 L19,18 H10 L5,22 V18 H2 V7 Z M7,11 H9 M11,11 H13 M15,11 H17</Geometry>
+    <Geometry x:Key="IconUsers">M5,5 H12 L14,7 V11 L12,13 H5 L3,11 V7 Z M2,21 V18 L5,16 H12 L16,18 V21 M17,5 H20 L22,7 V11 L20,13 H17 M18,16 L22,18 V21</Geometry>
+    <Geometry x:Key="IconSettings">M7,3 H17 L21,7 V17 L17,21 H7 L3,17 V7 Z M7,12 H17 M12,7 V17 M7,7 H8 M16,16 H17</Geometry>
+    <Geometry x:Key="IconSend">M12,2 L22,13 H16 V20 H8 V13 H2 Z M10,22 H14</Geometry>
+    <Geometry x:Key="IconPlus">M12,4 V20 M4,12 H20 M5,5 L7,7 M17,17 L19,19</Geometry>
+    <Geometry x:Key="IconTransfer">M3,16 H8 V19 H16 V16 H21 V22 H3 Z M12,16 V3 M7,8 L12,3 L17,8</Geometry>
+    <Geometry x:Key="IconFolder">M2,6 H10 L13,9 H22 V19 L20,21 H4 L2,19 Z M5,13 H19</Geometry>
+    <CornerRadius x:Key="ControlCorner">5</CornerRadius>
+    <CornerRadius x:Key="PanelCorner">8</CornerRadius>
+    <CornerRadius x:Key="ComposerCorner">10</CornerRadius>
+    <CornerRadius x:Key="MessageBubbleCorner">7</CornerRadius>
+    <CornerRadius x:Key="FileBubbleCorner">6</CornerRadius>
+    <CornerRadius x:Key="MarkerCorner">2</CornerRadius>
+    <Geometry x:Key="IconSidebar">M6,3 H18 L21,6 V18 L18,21 H6 L3,18 V6 Z M8,4 V20 M12,8 H17 M12,12 H18 M12,16 H16</Geometry>
+    <Geometry x:Key="IconMegaphone">M3,10 H7 L19,5 V19 L7,14 H3 Z M7,14 L9,20 H12 M21,8 H23 M21,12 H23 M21,16 H23</Geometry>
+    <Geometry x:Key="IconSearch">M8,3 H13 L18,8 V13 L13,18 H8 L3,13 V8 Z M16,16 L21,21 M7,8 L10,6</Geometry>
+    <Geometry x:Key="IconRefresh">M21,3 V9 H15 M20,9 L16,4 H8 L3,9 V15 L8,20 H16 L20,16</Geometry>
+    <Geometry x:Key="IconInfo">M6,3 H18 L21,6 V18 L18,21 H6 L3,18 V6 Z M12,16 V11 M12,7 H12.1</Geometry>
+    <Geometry x:Key="IconSmile">M6,3 H18 L21,6 V18 L18,21 H6 L3,18 V6 Z M8,9 V11 M16,9 V11 M7,14 L9,16 H15 L17,14</Geometry>
+    <Geometry x:Key="IconFile">M5,2 H14 L20,8 V20 L18,22 H5 Z M14,2 V8 H20 M8,12 H17 M8,16 H14</Geometry>
+    <Geometry x:Key="IconDownload">M3,16 V20 L5,22 H19 L21,20 V16 M12,3 V15 M7,10 L12,15 L17,10 M6,18 H8 M16,18 H18</Geometry>
+    <Geometry x:Key="IconMore">M4,11 H6 V13 H4 Z M11,11 H13 V13 H11 Z M18,11 H20 V13 H18 Z</Geometry>
+    <Geometry x:Key="IconQuit">M9,3 H5 L3,5 V19 L5,21 H9 M9,12 H21 M16,7 L21,12 L16,17</Geometry>
+    <Geometry x:Key="IconClose">M6,6 L18,18 M6,18 L18,6 M3,8 V3 H8 M16,21 H21 V16</Geometry>
+    <Geometry x:Key="IconChevronDown">M5,8 L12,15 L19,8 M9,16 L12,19 L15,16</Geometry>
+    <Geometry x:Key="IconCheck">M4,12 L9,17 L20,6 M4,16 L9,21 L15,15</Geometry>
+</ResourceDictionary>

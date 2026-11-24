@@ -2,6 +2,7 @@ using System.Net;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using FontFamily = System.Windows.Media.FontFamily;
 
 namespace CydLan.Desktop;
@@ -34,6 +35,7 @@ public partial class SettingsWindow : Window
         KeepHistoryBox.IsChecked = s.KeepHistory; KeepFileHistoryBox.IsChecked = s.KeepFileHistory;
         // Alerts
         NotificationsBox.IsChecked = s.Notifications; AlertsBusyBox.IsChecked = s.AlertsWhenBusy; AlertsDndBox.IsChecked = s.AlertsWhenDnd;
+        NotificationPreviewsBox.IsChecked = s.NotificationPreviews;
         SoundsBox.IsChecked = s.Sounds; SoundsBusyBox.IsChecked = s.SoundsWhenBusy; SoundsDndBox.IsChecked = s.SoundsWhenDnd;
         // Network
         PortBox.Text = s.Port.ToString(); MulticastBox.Text = s.Multicast;
@@ -42,6 +44,27 @@ public partial class SettingsWindow : Window
         // Appearance (live preview; Cancel restores)
         originalTheme = ThemeManager.Normalize(s.Theme);
         ThemeBox.SelectedValue = originalTheme;
+        backgroundPath = s.ChatBackgroundPath;
+        BackgroundOpacityBox.Value = model.ChatBackgroundOpacity;
+        ShowBackground(model.ChatBackground);
+        TypingEffectBox.SelectedValue = ChatEffects.Normalize(s.TypingEffect, typing: true);
+        ClickEffectBox.SelectedValue = ChatEffects.Normalize(s.ClickEffect);
+        SteampunkEngineBox.IsChecked = s.SteampunkEngineEnabled;
+        SakuraPetalsBox.IsChecked = s.SakuraPetalsEnabled;
+        TypingIntensityBox.Value = model.TypingIntensity;
+        ClickIntensityBox.Value = model.ClickIntensity;
+        ThemeDetailsBox.IsChecked = s.ThemeDetailsEnabled;
+        EngineIntensityBox.Value = model.EngineIntensity;
+        PetalIntensityBox.Value = model.PetalIntensity;
+        FirefliesBox.IsChecked = s.FirefliesEnabled;
+        FireflyIntensityBox.Value = s.FireflyIntensity;
+        RainBox.IsChecked = s.RainEnabled;
+        RainIntensityBox.Value = s.RainIntensity;
+        SnowBox.IsChecked = s.SnowEnabled;
+        SnowIntensityBox.Value = s.SnowIntensity;
+        InkBloomIntensityBox.Value = s.InkBloomIntensity;
+        SendPulseBox.IsChecked = s.SendPulseEnabled;
+        SendPulseIntensityBox.Value = s.SendPulseIntensity;
         Closed += (_, _) =>
         {
             if (!saved) ThemeManager.Apply(originalTheme);
@@ -67,6 +90,49 @@ public partial class SettingsWindow : Window
         unsavedAvatars.Add(path); avatarPath = path; ShowAvatar();
     }
     private void RemoveAvatar_Click(object sender, RoutedEventArgs e) { avatarPath = ""; ShowAvatar(); }
+    private string backgroundPath = "";
+    private BitmapImage? chosenBackground;
+    private void ShowBackground(ImageSource? image)
+    {
+        BackgroundPreview.Source = image;
+        BackgroundAdjustments.Visibility = image is null ? Visibility.Collapsed : Visibility.Visible;
+        RemoveBackgroundButton.IsEnabled = image is not null || backgroundPath.Length > 0;
+    }
+    private void ChooseBackground_Click(object sender, RoutedEventArgs e)
+    {
+        var picker = new Microsoft.Win32.OpenFileDialog { Title = "Chat background", Filter = "Images|*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.webp" };
+        if (picker.ShowDialog(this) != true) return;
+        if (Images.LoadChatBackground(picker.FileName) is not { } image)
+        {
+            BackgroundError.Text = "The image couldn't be opened.";
+            return;
+        }
+        chosenBackground = image;
+        BackgroundError.Text = "";
+        ShowBackground(image);
+    }
+    private void RemoveBackground_Click(object sender, RoutedEventArgs e)
+    {
+        chosenBackground = null;
+        backgroundPath = "";
+        BackgroundError.Text = "";
+        ShowBackground(null);
+    }
+    private void PreviewTyping_Click(object sender, RoutedEventArgs e) => PreviewEffect((FrameworkElement)sender, TypingEffectBox, typing: true);
+    private void PreviewClick_Click(object sender, RoutedEventArgs e) => PreviewEffect((FrameworkElement)sender, ClickEffectBox, typing: false);
+    private void PreviewSendPulse_Click(object sender, RoutedEventArgs e)
+    {
+        var button = (FrameworkElement)sender;
+        var center = button.TranslatePoint(new System.Windows.Point(button.ActualWidth / 2, button.ActualHeight / 2), SendPulsePreview);
+        SendPulsePreview.PlaySendPulse(center, SendPulseIntensityBox.Value);
+    }
+    private void PreviewEffect(FrameworkElement button, System.Windows.Controls.ComboBox choice, bool typing)
+    {
+        var position = button.TranslatePoint(new System.Windows.Point(button.ActualWidth / 2, button.ActualHeight / 2), EffectPreview);
+        string? effect = choice.SelectedValue as string;
+        double intensity = !typing ? ClickIntensityBox.Value : effect == "ink" ? InkBloomIntensityBox.Value : TypingIntensityBox.Value;
+        EffectPreview.Play(position, effect, SelectedTheme, typing, intensity);
+    }
     private string SelectedTheme => ThemeManager.Normalize(ThemeBox.SelectedValue as string);
     private void Theme_Changed(object sender, SelectionChangedEventArgs e)
     {
@@ -88,6 +154,7 @@ public partial class SettingsWindow : Window
     {
         foreach (var page in new[] { GeneralPage, AccountPage, MessagesPage, HistoryPage, AlertsPage, NetworkPage, FilesPage, AppearancePage, AboutPage })
             page.Visibility = page.Name == name ? Visibility.Visible : Visibility.Collapsed;
+        PreferencesScroller.ScrollToTop();
     }
     private void Font_Changed(object sender, SelectionChangedEventArgs e) => UpdateFontPreview();
     private void UpdateFontPreview()
@@ -131,6 +198,18 @@ public partial class SettingsWindow : Window
         var multicast = MulticastBox.Text.Trim();
         if (!IPAddress.TryParse(multicast, out var group) || group.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork || group.GetAddressBytes()[0] is < 224 or > 239)
         { ShowPage("NetworkPage"); MulticastBox.Focus(); return; }
+        if (chosenBackground is not null)
+        {
+            try { backgroundPath = model.SaveChatBackground(chosenBackground); }
+            catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException or NotSupportedException)
+            {
+                ShowPage("AppearancePage");
+                BackgroundGroup.IsExpanded = true;
+                BackgroundError.Text = "The background couldn't be saved.";
+                BackgroundError.BringIntoView();
+                return;
+            }
+        }
         bool networkChanged = port != model.Settings.Port || multicast != model.Settings.Multicast;
         string defaultFolder = CydLan.Core.AppSettings.DefaultReceivedFilesFolder;
         await model.SavePreferencesAsync(s =>
@@ -144,11 +223,32 @@ public partial class SettingsWindow : Window
             s.SendWithCtrlEnter = SendCtrlEnter.IsChecked == true; s.TrimMessages = TrimBox.IsChecked == true;
             s.KeepHistory = KeepHistoryBox.IsChecked == true; s.KeepFileHistory = KeepFileHistoryBox.IsChecked == true;
             s.Notifications = NotificationsBox.IsChecked == true; s.AlertsWhenBusy = AlertsBusyBox.IsChecked == true; s.AlertsWhenDnd = AlertsDndBox.IsChecked == true;
+            s.NotificationPreviews = NotificationPreviewsBox.IsChecked == true;
             s.Sounds = SoundsBox.IsChecked == true; s.SoundsWhenBusy = SoundsBusyBox.IsChecked == true; s.SoundsWhenDnd = SoundsDndBox.IsChecked == true;
             s.Port = port; s.Multicast = multicast;
             s.ReceivedFilesFolder = string.Equals(FolderBox.Text, defaultFolder, StringComparison.OrdinalIgnoreCase) ? "" : FolderBox.Text;
             s.AutoAcceptFiles = AutoAcceptBox.IsChecked == true;
             s.Theme = SelectedTheme;
+            s.ChatBackgroundPath = backgroundPath;
+            s.ChatBackgroundOpacity = BackgroundOpacityBox.Value;
+            s.TypingEffect = ChatEffects.Normalize(TypingEffectBox.SelectedValue as string, typing: true);
+            s.ClickEffect = ChatEffects.Normalize(ClickEffectBox.SelectedValue as string);
+            s.SteampunkEngineEnabled = SteampunkEngineBox.IsChecked == true;
+            s.SakuraPetalsEnabled = SakuraPetalsBox.IsChecked == true;
+            s.TypingIntensity = TypingIntensityBox.Value;
+            s.ClickIntensity = ClickIntensityBox.Value;
+            s.ThemeDetailsEnabled = ThemeDetailsBox.IsChecked == true;
+            s.EngineIntensity = EngineIntensityBox.Value;
+            s.PetalIntensity = PetalIntensityBox.Value;
+            s.FirefliesEnabled = FirefliesBox.IsChecked == true;
+            s.FireflyIntensity = FireflyIntensityBox.Value;
+            s.RainEnabled = RainBox.IsChecked == true;
+            s.RainIntensity = RainIntensityBox.Value;
+            s.SnowEnabled = SnowBox.IsChecked == true;
+            s.SnowIntensity = SnowIntensityBox.Value;
+            s.InkBloomIntensity = InkBloomIntensityBox.Value;
+            s.SendPulseEnabled = SendPulseBox.IsChecked == true;
+            s.SendPulseIntensity = SendPulseIntensityBox.Value;
         });
         if (networkChanged) model.Toast = "Restart CydLan to use the new network settings.";
         saved = true; Close();

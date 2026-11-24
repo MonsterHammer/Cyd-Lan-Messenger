@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Collections.Concurrent;
+using System.IO.Compression;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
@@ -163,9 +164,9 @@ static async Task TestLegacyPeer()
     var settings = Settings("CydLan test");
     await using var service = new LanService(settings);
     await service.StartAsync(false, IPAddress.Loopback);
-    await ExerciseLegacyPeer(service, settings);
+    await ExerciseLegacyPeer(service, settings, testFolder: true);
 }
-static async Task ExerciseLegacyPeer(LanService service, AppSettings settings, Func<Task>? whileConnected = null)
+static async Task ExerciseLegacyPeer(LanService service, AppSettings settings, Func<Task>? whileConnected = null, bool testFolder = false)
 {
     int count = 0; string? name = null;
     const string id = "001122334455Legacy User";
@@ -189,7 +190,11 @@ static async Task ExerciseLegacyPeer(LanService service, AppSettings settings, F
         var packet = new XElement("lmcmessage", new XElement("head", new XElement("type", type), new XElement("from", id), new XElement("to", settings.UserId), new XElement("messageid", msgId)), new XElement("body", body));
         await RawWrite(stream, "MESSAG", aes.EncryptCbc(Encoding.UTF8.GetBytes(packet.ToString()), aes.IV));
     }
-    await Send("userdata", "1", new("userid", id), new("name", "Old LAN Messenger"), new("status", "chat"), new("queryop", "result"), new("version", "1.2.35"));
+    using var folderListener = new TcpListener(IPAddress.Loopback, 0);
+    if (testFolder) folderListener.Start();
+    int folderPort = testFolder ? ((IPEndPoint)folderListener.LocalEndpoint).Port : 50000;
+    await Send("userdata", "1", new("userid", id), new("name", "Old LAN Messenger"), new("status", "chat"),
+        new("queryop", "result"), new("version", testFolder ? "1.2.39" : "1.2.35"), new("usercaps", testFolder ? "7" : "3"), new("tcpport", folderPort));
     await Until(() => name == "Old LAN Messenger");
     await Send("message", "22", new XElement("message", "Legacy hello"));
     await Send("message", "22", new XElement("message", "Legacy hello"));
@@ -226,6 +231,45 @@ static async Task ExerciseLegacyPeer(LanService service, AppSettings settings, F
     Check(groupText == "Room hello 🙂", "A stacked-header group message addressed to us must be delivered.");
     await Send("message", "23", new XElement("message", "Still connected"));
     await Until(() => count == 3);
+    var lastAck = await ReadMessage(stream, aes);
+    Check((string?)lastAck.Element("body")?.Element("messageid") == "23", "The final legacy chat must be acknowledged.");
+    if (testFolder)
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "CydLan-tests-" + Guid.NewGuid().ToString("N"));
+        var folderPath = Directory.CreateDirectory(Path.Combine(directory, "Project", "Nested")).Parent!.FullName;
+        try
+        {
+            byte[] content = Encoding.UTF8.GetBytes("Legacy folder content");
+            await File.WriteAllBytesAsync(Path.Combine(folderPath, "Nested", "report.txt"), content);
+            var folder = await service.OfferFolderAsync(id, folderPath);
+            var folderOffer = await ReadMessage(stream, aes);
+            var body = folderOffer.Element("body");
+            Check((string?)folderOffer.Element("head")?.Element("type") == "folder" &&
+                (string?)body?.Element("folderid") == folder.Id && (string?)body?.Element("filecount") == "1" &&
+                (string?)body?.Element("filename") == "Project", "The legacy peer should receive one native folder offer.");
+            await Send("folder", "61", new("folderid", folder.Id), new("fileid", folder.Id),
+                new("filetype", "folder"), new("fileop", "accept"), new("mode", "receive"));
+            var fileOffer = await ReadMessage(stream, aes);
+            body = fileOffer.Element("body");
+            string fileId = (string)body!.Element("fileid")!;
+            Check((string?)fileOffer.Element("head")?.Element("type") == "file" && (string?)body.Element("filetype") == "folder" &&
+                (string?)body.Element("folderid") == folder.Id && (string?)body.Element("relpath") == "Nested/report.txt",
+                "The legacy peer should receive the file with its native relative path.");
+            await Send("file", "62", new("fileid", fileId), new("filetype", "folder"), new("fileop", "accept"),
+                new("mode", "receive"), new("filesize", content.Length));
+            using var transfer = await folderListener.AcceptTcpClientAsync().WaitAsync(TimeSpan.FromSeconds(5));
+            var data = transfer.GetStream();
+            byte[] greeting = new byte[36 + settings.UserId.Length];
+            await data.ReadExactlyAsync(greeting);
+            Check(Encoding.ASCII.GetString(greeting) == "FILE" + fileId + settings.UserId, "The folder file should use the regular FILE greeting.");
+            await data.WriteAsync("START"u8.ToArray());
+            byte[] received = new byte[content.Length];
+            await data.ReadExactlyAsync(received);
+            Check(received.SequenceEqual(content), "The legacy peer should receive the exact file contents.");
+            await Until(() => folder.State == "Sent · receipt unavailable");
+        }
+        finally { DeleteTestDirectory(directory); }
+    }
     client.Dispose();
     await Until(() => wentOffline == 1);
 }
@@ -455,6 +499,40 @@ static async Task TestFiles()
         }
         var declined = await one.OfferFileAsync(b.UserId, Path.Combine(directory, "source-0.bin")); await Until(() => !offers.IsEmpty); offers.TryDequeue(out var offer);
         await two.DeclineFileAsync(offer!); await Until(() => declined.State == "Declined");
+        var sourceFolder = Directory.CreateDirectory(Path.Combine(directory, "Project"));
+        Directory.CreateDirectory(Path.Combine(sourceFolder.FullName, "Empty"));
+        Directory.CreateDirectory(Path.Combine(sourceFolder.FullName, "Nested"));
+        byte[] folderData = RandomNumberGenerator.GetBytes(120_000);
+        await File.WriteAllBytesAsync(Path.Combine(sourceFolder.FullName, "Nested", "report.bin"), folderData);
+        await File.WriteAllTextAsync(Path.Combine(sourceFolder.FullName, "readme.txt"), "notes");
+        var folder = await one.OfferFolderAsync(b.UserId, sourceFolder.FullName);
+        await Until(() => !offers.IsEmpty);
+        Check(offers.TryDequeue(out var folderOffer) && folderOffer is { Name: "Project", Folder: true },
+            "A capable peer should receive a single native folder offer.");
+        Check(!Directory.Exists(Path.Combine(directory, "Project [1]")), "Nothing should be saved before the folder is accepted.");
+        await two.AcceptFileIntoAsync(folderOffer!, directory);
+        await Until(() => folderOffer!.State == "Received" && folder.State == "Sent · receipt unavailable");
+        Check(folderOffer!.Path == Path.Combine(directory, "Project [1]"), "Receiving a folder must not overwrite a directory.");
+        Check((await File.ReadAllBytesAsync(Path.Combine(folderOffer.Path, "Nested", "report.bin"))).SequenceEqual(folderData) &&
+            await File.ReadAllTextAsync(Path.Combine(folderOffer.Path, "readme.txt")) == "notes", "The native folder should preserve file contents and nesting.");
+        Check(!Directory.EnumerateDirectories(directory, "*.partial").Any(), "Folder transfer should leave no staging directory.");
+
+        var emptyFolder = await one.OfferFolderAsync(b.UserId, Path.Combine(sourceFolder.FullName, "Empty"));
+        await Until(() => !offers.IsEmpty);
+        Check(offers.TryDequeue(out var zipOffer) && zipOffer is { Name: "Empty.zip", Folder: false },
+            "A completely empty folder should still be sendable as a ZIP.");
+        await two.AcceptFileIntoAsync(zipOffer!, directory);
+        await Until(() => zipOffer!.State == "Received" && !File.Exists(emptyFolder.Archive!.Path));
+        using (var zip = ZipFile.OpenRead(zipOffer!.Path))
+        {
+            Check(zip.GetEntry("Empty/") is not null, "The ZIP fallback should preserve an empty directory.");
+        }
+        var declinedFolder = await one.OfferFolderAsync(b.UserId, sourceFolder.FullName);
+        await Until(() => !offers.IsEmpty);
+        Check(offers.TryDequeue(out var secondZipOffer), "The second folder should remain a separate offer.");
+        await two.DeclineFileAsync(secondZipOffer!);
+        await Until(() => declinedFolder.State == "Declined");
+        Check(File.Exists(Path.Combine(sourceFolder.FullName, "Nested", "report.bin")), "Declining a folder must keep the original folder.");
         string existing = Path.Combine(directory, "existing.bin"); await File.WriteAllTextAsync(existing, "Keep this file");
         await one.OfferFileAsync(b.UserId, Path.Combine(directory, "source-190123.bin")); await Until(() => !offers.IsEmpty); offers.TryDequeue(out var overwrite);
         await two.AcceptFileAsync(overwrite!, existing); await Until(() => overwrite!.State.StartsWith("Failed"));

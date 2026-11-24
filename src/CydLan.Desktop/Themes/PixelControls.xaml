@@ -32,5 +32,4 @@
   <CornerRadius x:Key="FileBubbleCorner">0</CornerRadius>
   <CornerRadius x:Key="MessageBubbleCorner">0</CornerRadius>
   <CornerRadius x:Key="OverlayCorner">0</CornerRadius>
-  <CornerRadius x:Key="WorkspaceCorner">0</CornerRadius>
 </ResourceDictionary>

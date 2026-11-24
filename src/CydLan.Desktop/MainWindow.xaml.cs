@@ -34,13 +34,19 @@ public partial class MainWindow : Window
         Deactivated += (_, _) => model.Replying = false;
         Composer.PreviewMouseDown += (_, _) => model.Replying = true;
         Composer.PreviewTextInput += (_, _) => model.Replying = true;
+        PreviewMouseLeftButtonDown += (_, args) =>
+            EffectLayer.Play(args.GetPosition(EffectLayer), model.Settings.ClickEffect, model.Settings.Theme, typing: false, model.ClickIntensity);
         Closing += (_, args) => { if (System.Windows.Application.Current is App { IsQuitting: true }) return; args.Cancel = true; Hide(); };
         typingTimer.Tick += async (_, _) => { typingTimer.Stop(); await StopTypingAsync(); };
         SizeChanged += (_, _) => UpdateCompactLayout();
         SourceInitialized += (_, _) =>
         {
             PopupHost.RoundCorners(this);
-            if (PresentationSource.FromVisual(this) is HwndSource source) source.AddHook(RespectMonitorWorkArea);
+            if (PresentationSource.FromVisual(this) is HwndSource source)
+            {
+                source.AddHook(RespectMonitorWorkArea);
+                ConfigureTaskbar(source);
+            }
         };
         PreviewKeyDown += Window_PreviewKeyDown;
         // Paste images/files into the composer: covers Win+Shift+S screenshots, copied images and copied files.
@@ -53,6 +59,7 @@ public partial class MainWindow : Window
         model.PropertyChanged += async (_, args) => {
             if (args.PropertyName == nameof(model.HasPeer) && !model.HasPeer) { DetailsPanel.Visibility = Visibility.Collapsed; FilesPanel.Visibility = Visibility.Collapsed; UpdateCompactLayout(); }
             if (args.PropertyName == nameof(model.InGroup) && !model.InGroup) { GroupPanel.Visibility = Visibility.Collapsed; UpdateCompactLayout(); }
+            if (args.PropertyName == nameof(model.SelectedPeer)) ConversationFileScroller.ScrollToTop();
             if (args.PropertyName == nameof(model.SelectedPeer) || args.PropertyName == nameof(model.Broadcasting)) { typingTimer.Stop(); await StopTypingAsync(); }
         };
     }
@@ -138,14 +145,14 @@ public partial class MainWindow : Window
     private static readonly string[] RunnableExtensions = [".exe", ".com", ".bat", ".cmd", ".ps1", ".vbs", ".js", ".jse", ".wsf", ".msi", ".msix", ".scr", ".lnk", ".reg", ".hta", ".cpl", ".jar"];
     private void OpenFile_Click(object sender, RoutedEventArgs e)
     {
-        if (((FrameworkElement)sender).DataContext is not FileTransfer { Path.Length: > 0 } transfer || !System.IO.File.Exists(transfer.Path)) { model.Toast = "File not found"; return; }
+        if (((FrameworkElement)sender).DataContext is not FileTransfer { Path.Length: > 0 } transfer || !PathExists(transfer.Path)) { model.Toast = "Attachment not found"; return; }
         if (RunnableExtensions.Contains(System.IO.Path.GetExtension(transfer.Path).ToLowerInvariant())) { ShowFile_Click(sender, e); return; }
         try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(transfer.Path) { UseShellExecute = true }); }
         catch (System.ComponentModel.Win32Exception ex) { model.Toast = ex.Message; }
     }
     private void ShowFile_Click(object sender, RoutedEventArgs e)
     {
-        if (((FrameworkElement)sender).DataContext is not FileTransfer { Path.Length: > 0 } transfer || !System.IO.File.Exists(transfer.Path)) { model.Toast = "File not found"; return; }
+        if (((FrameworkElement)sender).DataContext is not FileTransfer { Path.Length: > 0 } transfer || !PathExists(transfer.Path)) { model.Toast = "Attachment not found"; return; }
         System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", $"/select,\"{transfer.Path}\"") { UseShellExecute = true });
     }
     // A file bubble in the conversation: clicking shows it in its folder; the menu offers the rest.
@@ -160,7 +167,7 @@ public partial class MainWindow : Window
     private void RunFileAction(ChatMessage message, string action)
     {
         string path = model.TransferFor(message)?.Path ?? "";
-        if (path.Length == 0 || !File.Exists(path)) { model.Toast = "File not found"; return; }
+        if (!PathExists(path)) { model.Toast = "Attachment not found"; return; }
         try
         {
             switch (action)
@@ -176,6 +183,7 @@ public partial class MainWindow : Window
                     System.Windows.Clipboard.SetFileDropList([Path.GetFullPath(path)]);
                     break;
                 case "Save":
+                    if (message.FolderAttachment) break;
                     var picker = new Microsoft.Win32.SaveFileDialog { Title = "Save a copy", FileName = Path.GetFileName(path) };
                     if (picker.ShowDialog(this) == true) File.Copy(path, picker.FileName, overwrite: true);
                     break;
@@ -186,6 +194,7 @@ public partial class MainWindow : Window
             model.Toast = "File action failed";
         }
     }
+    private static bool PathExists(string path) => File.Exists(path) || Directory.Exists(path);
     private void People_Click(object sender, RoutedEventArgs e) { Chat_Click(sender, e); sidebarVisible = true; UpdateCompactLayout(animate: true); PeopleSearch.Focus(); PeopleSearch.SelectAll(); }
     private void ToggleSidebar_Click(object sender, RoutedEventArgs e) { sidebarVisible = !sidebarVisible; UpdateCompactLayout(animate: true); }
     private void Window_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
@@ -261,7 +270,33 @@ public partial class MainWindow : Window
         foreach (var panel in panels) panel.Visibility = Visibility.Collapsed;
         UpdateCompactLayout();
     }
-    private void FilesTab_Checked(object sender, RoutedEventArgs e) { if (model is not null) model.ConversationFilesSent = sender == SentTab; }
+    private void FilesTab_Checked(object sender, RoutedEventArgs e)
+    {
+        if (model is null) return;
+        model.ConversationFilesSent = sender == SentTab;
+        ConversationFileScroller.ScrollToTop();
+    }
+    private void FilesPanel_VisibilityChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if (model is null) return;
+        model.SetConversationFilesOpen((bool)e.NewValue);
+        if ((bool)e.NewValue) ConversationFileScroller.ScrollToTop();
+    }
+    private void PageFiles_Click(object sender, RoutedEventArgs e)
+    {
+        model.PageConversationFiles(sender == OlderFilesButton);
+        ConversationFileScroller.ScrollToTop();
+    }
+    private void PageMessages_Click(object sender, RoutedEventArgs e)
+    {
+        bool older = sender == OlderMessagesButton;
+        model.PageMessages(older);
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (older) MessageScroller.ScrollToEnd();
+            else MessageScroller.ScrollToTop();
+        }, DispatcherPriority.Loaded);
+    }
     private void More_Click(object sender, RoutedEventArgs e)
     {
         var menu = MoreButton.ContextMenu;
@@ -315,7 +350,27 @@ public partial class MainWindow : Window
         bool panelOpen = DetailsPanel.Visibility == Visibility.Visible || GroupPanel.Visibility == Visibility.Visible || FilesPanel.Visibility == Visibility.Visible;
         ChatContentGrid.Margin = panelOpen && conversationWidth >= 790 ? new Thickness(0,0,242,0) : new Thickness(0);
     }
-    private async void Send_Click(object sender, RoutedEventArgs e) => await model.SendAsync();
+    private async void Send_Click(object sender, RoutedEventArgs e) => await SendWithFeedbackAsync();
+
+    private async Task SendWithFeedbackAsync()
+    {
+        var conversation = (model.SelectedPeer, model.SelectedGroup, model.IsBroadcastSection, model.IsGroupsSection);
+        if (await model.SendAsync() && model.Settings.SendPulseEnabled && WindowState != WindowState.Minimized &&
+            conversation == (model.SelectedPeer, model.SelectedGroup, model.IsBroadcastSection, model.IsGroupsSection) &&
+            model.ChatOpen && SendButton.IsVisible && SystemParameters.ClientAreaAnimation)
+        {
+            double intensity = Math.Clamp(model.Settings.SendPulseIntensity, .1, 1);
+            var bounce = new DoubleAnimation(1, 1 + .22 * intensity, TimeSpan.FromMilliseconds(145))
+            {
+                AutoReverse = true,
+                FillBehavior = FillBehavior.Stop
+            };
+            SendGlyphScale.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleXProperty, bounce);
+            SendGlyphScale.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleYProperty, bounce);
+            EffectLayer.PlaySendPulse(SendButton.TranslatePoint(new System.Windows.Point(SendButton.ActualWidth / 2, SendButton.ActualHeight / 2),
+                EffectLayer), intensity);
+        }
+    }
     private async void Retry_Click(object sender, RoutedEventArgs e) { if (((System.Windows.Controls.Button)sender).DataContext is ChatMessage message) await model.RetryAsync(message); }
     // Preferences › Messages: Enter sends (Shift+Enter = new line), or Ctrl+Enter sends (Enter = new line), like LAN Messenger.
     private async void Composer_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
@@ -323,12 +378,32 @@ public partial class MainWindow : Window
         if (e.Key != Key.Enter) return;
         bool ctrl = Keyboard.Modifiers.HasFlag(ModifierKeys.Control), shift = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
         bool send = model.Settings.SendWithCtrlEnter ? ctrl : !shift && !ctrl;
-        if (send) { e.Handled = true; await model.SendAsync(); }
+        if (send) { PlayWordEffect(Composer.CaretIndex); e.Handled = true; await SendWithFeedbackAsync(); }
         else if (ctrl) { e.Handled = true; Composer.SelectedText = Environment.NewLine; Composer.CaretIndex = Composer.SelectionStart + Composer.SelectionLength; Composer.SelectionLength = 0; }
+    }
+    private void PlayWordEffect(int wordEnd)
+    {
+        string effect = model.Settings.TypingEffect;
+        if (ChatEffects.Normalize(effect, typing: true) == "off" || WindowState == WindowState.Minimized ||
+            wordEnd <= 0 || wordEnd > Composer.Text.Length || !char.IsLetterOrDigit(Composer.Text, wordEnd - 1)) return;
+        var caret = Composer.GetRectFromCharacterIndex(wordEnd - 1, trailingEdge: true);
+        var anchor = caret.IsEmpty
+            ? new System.Windows.Point(Composer.Padding.Left + 8, Composer.ActualHeight / 2)
+            : caret.TopRight;
+        EffectLayer.Play(Composer.TranslatePoint(anchor, EffectLayer), effect, model.Settings.Theme,
+            typing: true, effect == "ink" ? model.Settings.InkBloomIntensity : model.TypingIntensity);
     }
     private async void Composer_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
     {
         if (model is null) return;
+        if (Composer.IsKeyboardFocused && e.Changes.Count == 1 && e.Changes.First() is { AddedLength: > 0 and <= 2, RemovedLength: 0 } change &&
+            change.Offset + change.AddedLength <= Composer.Text.Length)
+        {
+            var inserted = Composer.Text.AsSpan(change.Offset, change.AddedLength);
+            if (inserted.SequenceEqual("\r\n") || (inserted.Length == 1 &&
+                (char.IsWhiteSpace(inserted[0]) || ".,!?;:。、！？；：".Contains(inserted[0]))))
+                PlayWordEffect(change.Offset);
+        }
         if (string.IsNullOrWhiteSpace(Composer.Text)) { typingTimer.Stop(); await StopTypingAsync(); return; }
         if (model.Broadcasting || model.SelectedPeer?.Online != true) return;
         typingTimer.Stop(); typingTimer.Start();
@@ -354,6 +429,14 @@ public partial class MainWindow : Window
     {
         if (sender is FrameworkElement { DataContext: ChatMessage message }) try { System.Windows.Clipboard.SetText(message.Text); } catch (System.Runtime.InteropServices.ExternalException) { }
     }
+    private void AttachmentMenu_Click(object sender, RoutedEventArgs e)
+    {
+        var button = (FrameworkElement)sender;
+        var menu = button.ContextMenu;
+        menu.PlacementTarget = button;
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Top;
+        menu.IsOpen = true;
+    }
     private void Attach_Click(object sender, RoutedEventArgs e)
     {
         if (model.SelectedPeer is null || !model.SelectedPeer.Online) { model.Toast = "No online contact selected"; return; }
@@ -362,11 +445,17 @@ public partial class MainWindow : Window
         if (picker.ShowDialog(this) == true) AttachFiles(picker.FileNames);
         Composer.Focus();
     }
+    private void AttachFolder_Click(object sender, RoutedEventArgs e)
+    {
+        if (!model.CanAttach) { model.Toast = "No online contact selected"; return; }
+        var picker = new OpenFolderDialog { Title = "Attach folder" };
+        if (picker.ShowDialog(this) == true) AttachFiles([picker.FolderName]);
+        Composer.Focus();
+    }
     private void AttachFiles(IEnumerable<string> paths)
     {
         foreach (var path in paths)
         {
-            if (System.IO.Directory.Exists(path)) { model.Toast = "Folders are not supported"; continue; }
             if (model.AddAttachment(path) is { } problem) { model.Toast = problem; break; }
         }
     }

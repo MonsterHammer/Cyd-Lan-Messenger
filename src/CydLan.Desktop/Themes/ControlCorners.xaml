@@ -9,5 +9,4 @@
     <CornerRadius x:Key="FileBubbleCorner">14</CornerRadius>
     <CornerRadius x:Key="MessageBubbleCorner">15</CornerRadius>
     <CornerRadius x:Key="OverlayCorner">16</CornerRadius>
-    <CornerRadius x:Key="WorkspaceCorner">12,0,0,0</CornerRadius>
 </ResourceDictionary>

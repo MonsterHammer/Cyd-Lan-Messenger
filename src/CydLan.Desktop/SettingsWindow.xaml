@@ -7,6 +7,38 @@
         ResizeMode="NoResize" WindowStyle="None">
   <shell:WindowChrome.WindowChrome><shell:WindowChrome CaptionHeight="0" ResizeBorderThickness="0" GlassFrameThickness="0"/></shell:WindowChrome.WindowChrome>
   <Window.Resources>
+    <Style x:Key="AppearanceGroup" TargetType="Expander">
+      <Setter Property="Margin" Value="0,0,0,8"/>
+      <Setter Property="Template"><Setter.Value>
+        <ControlTemplate TargetType="Expander">
+          <StackPanel>
+            <ToggleButton x:Name="HeaderSite" IsChecked="{Binding IsExpanded, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                          Content="{TemplateBinding Header}" AutomationProperties.Name="{Binding Header, RelativeSource={RelativeSource TemplatedParent}}"
+                          FocusVisualStyle="{StaticResource FocusRing}" Cursor="Hand">
+              <ToggleButton.Template><ControlTemplate TargetType="ToggleButton">
+                <Border x:Name="HeaderSurface" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Line}"
+                        BorderThickness="1" CornerRadius="{DynamicResource ControlCorner}" Padding="12,9">
+                  <DockPanel>
+                    <local:Glyph x:Name="Arrow" DockPanel.Dock="Right" Data="{DynamicResource IconChevronDown}" Size="14"
+                                 Foreground="{DynamicResource Muted}" RenderTransformOrigin=".5,.5"/>
+                    <ContentPresenter VerticalAlignment="Center" TextElement.Foreground="{DynamicResource Ink}" TextElement.FontWeight="SemiBold"/>
+                  </DockPanel>
+                </Border>
+                <ControlTemplate.Triggers>
+                  <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="HeaderSurface" Property="Background" Value="{DynamicResource Hover}"/></Trigger>
+                  <Trigger Property="IsChecked" Value="True"><Setter TargetName="Arrow" Property="RenderTransform"><Setter.Value><RotateTransform Angle="180"/></Setter.Value></Setter></Trigger>
+                </ControlTemplate.Triggers>
+              </ControlTemplate></ToggleButton.Template>
+            </ToggleButton>
+            <ContentPresenter x:Name="ExpandedContent" Content="{TemplateBinding Content}" Margin="12,10,12,4" Visibility="Collapsed"/>
+          </StackPanel>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsExpanded" Value="True"><Setter TargetName="ExpandedContent" Property="Visibility" Value="Visible"/></Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value></Setter>
+    </Style>
+    <BooleanToVisibilityConverter x:Key="Bool"/>
     <Style x:Key="Segment" TargetType="RadioButton">
       <Setter Property="Foreground" Value="{DynamicResource Muted}"/><Setter Property="Cursor" Value="Hand"/><Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="RadioButton">
@@ -21,11 +53,35 @@
     <Style x:Key="Heading" TargetType="TextBlock"><Setter Property="FontSize" Value="17"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Margin" Value="0,0,0,16"/></Style>
     <Style x:Key="Page" TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Setter Property="Margin" Value="0,0,8,12"/></Style>
     <Style TargetType="CheckBox" BasedOn="{StaticResource {x:Type CheckBox}}"><Setter Property="Margin" Value="0,0,0,12"/></Style>
+    <Style x:Key="BackgroundSlider" TargetType="Slider">
+      <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
+      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Slider">
+        <Grid Height="24">
+          <Grid.Resources>
+            <Style TargetType="RepeatButton">
+              <Setter Property="Focusable" Value="False"/>
+              <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="RepeatButton"><Border Background="Transparent"/></ControlTemplate></Setter.Value></Setter>
+            </Style>
+          </Grid.Resources>
+          <Border Height="3" Background="{DynamicResource Line}" CornerRadius="{DynamicResource MarkerCorner}" VerticalAlignment="Center"/>
+          <Track x:Name="PART_Track">
+            <Track.DecreaseRepeatButton><RepeatButton Command="Slider.DecreaseLarge"/></Track.DecreaseRepeatButton>
+            <Track.Thumb>
+              <Thumb Width="14" Height="16">
+                <Thumb.Template><ControlTemplate TargetType="Thumb"><Border Background="{DynamicResource Accent}" CornerRadius="{DynamicResource CheckCorner}" Cursor="Hand"/></ControlTemplate></Thumb.Template>
+              </Thumb>
+            </Track.Thumb>
+            <Track.IncreaseRepeatButton><RepeatButton Command="Slider.IncreaseLarge"/></Track.IncreaseRepeatButton>
+          </Track>
+        </Grid>
+      </ControlTemplate></Setter.Value></Setter>
+    </Style>
   </Window.Resources>
   <Border BorderBrush="{DynamicResource Line}" BorderThickness="1">
     <Grid>
       <Grid.ColumnDefinitions><ColumnDefinition Width="180"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
       <Border Background="{DynamicResource Sidebar}">
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <StackPanel x:Name="NavPanel" Margin="8,0">
           <Grid x:Name="TitleBar" Background="Transparent" Height="56"><TextBlock Text="Preferences" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" Margin="12,0,0,0"/></Grid>
           <RadioButton Style="{StaticResource FilterRow}" Content="General" Tag="GeneralPage" Checked="Page_Checked" IsChecked="True"/>
@@ -38,13 +94,14 @@
           <RadioButton Style="{StaticResource FilterRow}" Content="Appearance" Tag="AppearancePage" Checked="Page_Checked"/>
           <RadioButton Style="{StaticResource FilterRow}" Content="About" Tag="AboutPage" Checked="Page_Checked"/>
         </StackPanel>
+        </ScrollViewer>
       </Border>
       <Grid Grid.Column="1" Margin="24,0,20,16">
         <Grid.RowDefinitions><RowDefinition Height="56"/><RowDefinition Height="*"/><RowDefinition Height="46"/></Grid.RowDefinitions>
         <Grid x:Name="DragArea" Background="Transparent">
           <Button Style="{StaticResource Icon}" Width="30" Height="30" HorizontalAlignment="Right" ToolTip="Close" Click="Cancel_Click"><local:Glyph Data="{DynamicResource IconClose}" Size="16"/></Button>
         </Grid>
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+        <ScrollViewer x:Name="PreferencesScroller" Grid.Row="1" VerticalScrollBarVisibility="Auto">
           <Grid>
             <StackPanel x:Name="GeneralPage" Style="{StaticResource Page}" Visibility="Visible">
               <TextBlock Text="General" Style="{StaticResource Heading}"/>
@@ -78,14 +135,6 @@
 
             <StackPanel x:Name="MessagesPage" Style="{StaticResource Page}">
               <TextBlock Text="Messages" Style="{StaticResource Heading}"/>
-              <Grid>
-                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="12"/><ColumnDefinition Width="130"/></Grid.ColumnDefinitions>
-                <StackPanel><TextBlock Text="Font" Style="{StaticResource Label}"/><ComboBox x:Name="FontBox" MaxDropDownHeight="260" SelectionChanged="Font_Changed" AutomationProperties.Name="Message font"/></StackPanel>
-                <StackPanel Grid.Column="2"><TextBlock Text="Size" Style="{StaticResource Label}"/><ComboBox x:Name="SizeBox" SelectionChanged="Font_Changed" AutomationProperties.Name="Message text size"><ComboBoxItem Content="Small" Tag="small"/><ComboBoxItem Content="Medium" Tag="medium"/><ComboBoxItem Content="Large" Tag="large"/></ComboBox></StackPanel>
-              </Grid>
-              <Border Background="{DynamicResource Surface}" CornerRadius="{DynamicResource ComposerCorner}" Padding="14,10" Margin="0,12,0,18" HorizontalAlignment="Left">
-                <TextBlock x:Name="FontPreview" Text="The quick brown fox jumps over the lazy dog."/>
-              </Border>
               <TextBlock Text="Send with" Style="{StaticResource Label}"/>
               <Border Background="{DynamicResource Surface}" CornerRadius="{DynamicResource ControlCorner}" Padding="3" Margin="0,0,0,16" Width="260" HorizontalAlignment="Left">
                 <UniformGrid Columns="2">
@@ -107,6 +156,9 @@
             <StackPanel x:Name="AlertsPage" Style="{StaticResource Page}">
               <TextBlock Text="Alerts" Style="{StaticResource Heading}"/>
               <CheckBox x:Name="NotificationsBox" Content="Show notifications"/>
+              <CheckBox x:Name="NotificationPreviewsBox" Margin="24,0,0,12" IsEnabled="{Binding IsChecked, ElementName=NotificationsBox}">
+                <TextBlock Text="Show message previews in popups" TextWrapping="Wrap"/>
+              </CheckBox>
               <CheckBox x:Name="AlertsBusyBox" Margin="24,0,0,12"><TextBlock Text="Show notifications while Busy" TextWrapping="Wrap"/></CheckBox>
               <CheckBox x:Name="AlertsDndBox" Margin="24,0,0,20"><TextBlock Text="Show notifications during Do not disturb" TextWrapping="Wrap"/></CheckBox>
               <CheckBox x:Name="SoundsBox" Content="Play sounds"/>
@@ -163,40 +215,228 @@
                 <ComboBoxItem Content="Ocean" Tag="ocean"/>
                 <ComboBoxItem Content="Lavender" Tag="lavender"/>
                 <ComboBoxItem Content="Ember" Tag="ember"/>
+                <ComboBoxItem Content="Forest" Tag="forest"/>
+                <ComboBoxItem Content="Sand" Tag="sand"/>
+                <ComboBoxItem Content="Anime" Tag="anime"/>
+                <ComboBoxItem Content="Sakura" Tag="sakura"/>
+                <ComboBoxItem Content="Steampunk" Tag="steampunk"/>
+                <ComboBoxItem Content="Aurora" Tag="aurora"/>
+                <ComboBoxItem Content="Paper" Tag="paper"/>
+                <ComboBoxItem Content="Arcade" Tag="arcade"/>
                 <ComboBoxItem Content="Pixel" Tag="pixel"/>
               </ComboBox>
-              <TextBlock Text="Preview" Style="{StaticResource Label}" Margin="0,18,0,6"/>
-              <Border x:Name="ThemePreview" Background="{DynamicResource Canvas}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="{DynamicResource PanelCorner}" ClipToBounds="True" Height="190" AutomationProperties.Name="Theme preview">
-                <Grid>
-                  <Grid.ColumnDefinitions><ColumnDefinition Width="150"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                  <Border Background="{DynamicResource Sidebar}" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,1,0" Padding="8">
-                    <StackPanel>
-                      <Border Background="{DynamicResource RowSelected}" CornerRadius="{DynamicResource ControlCorner}" Padding="6">
-                        <StackPanel Orientation="Horizontal">
-                          <Grid Width="22" Height="22"><Ellipse Fill="{DynamicResource Avatar}"/><Ellipse Width="7" Height="7" Fill="{DynamicResource Online}" HorizontalAlignment="Right" VerticalAlignment="Bottom"/></Grid>
-                          <TextBlock Text="Alex" Margin="8,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Ink}"/>
+              <CheckBox x:Name="ThemeDetailsBox" Content="Theme details" Margin="0,12,0,4" Visibility="{DynamicResource ThemeDetailsVisibility}"/>
+              <Expander x:Name="ThemePreviewGroup" Header="Theme preview" Margin="0,10,0,8" Style="{StaticResource AppearanceGroup}">
+                <Border x:Name="ThemePreview" Background="{DynamicResource Canvas}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="{DynamicResource PanelCorner}" ClipToBounds="True" Height="182" local:Rounded.Radius="{Binding CornerRadius.TopLeft, RelativeSource={RelativeSource Self}}" AutomationProperties.Name="Theme preview">
+                  <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="150"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <Border Background="{DynamicResource Sidebar}" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,1,0">
+                      <Grid>
+                        <local:ThemeDecoration Zone="Sidebar" Visibility="{Binding IsChecked, ElementName=ThemeDetailsBox, Converter={StaticResource Bool}}"/>
+                      <StackPanel Margin="8">
+                        <Border Background="{DynamicResource RowSelected}" CornerRadius="{DynamicResource ControlCorner}" Padding="6">
+                          <StackPanel Orientation="Horizontal">
+                            <Grid Width="22" Height="22"><Ellipse Fill="{DynamicResource Avatar}"/><Ellipse Width="7" Height="7" Fill="{DynamicResource Online}" HorizontalAlignment="Right" VerticalAlignment="Bottom"/></Grid>
+                            <TextBlock Text="Alex" Margin="8,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Ink}"/>
+                          </StackPanel>
+                        </Border>
+                        <StackPanel Orientation="Horizontal" Margin="6,8,0,0">
+                          <Grid Width="22" Height="22"><Ellipse Fill="{DynamicResource Avatar}"/><Ellipse Width="7" Height="7" Fill="{DynamicResource Away}" HorizontalAlignment="Right" VerticalAlignment="Bottom"/></Grid>
+                          <TextBlock Text="Sam" Margin="8,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Muted}"/>
                         </StackPanel>
-                      </Border>
-                      <StackPanel Orientation="Horizontal" Margin="6,8,0,0">
-                        <Grid Width="22" Height="22"><Ellipse Fill="{DynamicResource Avatar}"/><Ellipse Width="7" Height="7" Fill="{DynamicResource Away}" HorizontalAlignment="Right" VerticalAlignment="Bottom"/></Grid>
-                        <TextBlock Text="Sam" Margin="8,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Muted}"/>
                       </StackPanel>
-                    </StackPanel>
-                  </Border>
-                  <Grid Grid.Column="1" Margin="12">
-                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                    <Border HorizontalAlignment="Left" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="{DynamicResource MessageBubbleCorner}" Padding="10,6">
-                      <TextBlock Text="Lunch at noon?" Foreground="{DynamicResource Ink}"/>
+                      </Grid>
                     </Border>
-                    <Border Grid.Row="1" HorizontalAlignment="Right" Margin="0,8,0,0" Background="{DynamicResource Accent}" CornerRadius="{DynamicResource MessageBubbleCorner}" Padding="10,6">
-                      <TextBlock Text="Sounds good" Foreground="{DynamicResource AccentInk}"/>
-                    </Border>
-                    <Border Grid.Row="3" Background="{DynamicResource Input}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="{DynamicResource ComposerCorner}" Padding="10,6">
-                      <TextBlock Text="Message" Foreground="{DynamicResource Faint}"/>
-                    </Border>
+                    <Grid Grid.Column="1" Margin="12">
+                      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                      <Border HorizontalAlignment="Left" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="{DynamicResource MessageBubbleCorner}" Padding="10,6">
+                        <TextBlock Text="Lunch at noon?" Foreground="{DynamicResource Ink}"/>
+                      </Border>
+                      <Border Grid.Row="1" HorizontalAlignment="Right" Margin="0,8,0,0" Background="{DynamicResource Accent}" CornerRadius="{DynamicResource MessageBubbleCorner}" Padding="10,6">
+                        <TextBlock Text="Sounds good" Foreground="{DynamicResource AccentInk}"/>
+                      </Border>
+                      <local:ThemeDecoration Grid.Row="2" Zone="Title" Width="116" Height="32" HorizontalAlignment="Right"
+                                             Visibility="{Binding IsChecked, ElementName=ThemeDetailsBox, Converter={StaticResource Bool}}"/>
+                      <Border Grid.Row="3" Background="{DynamicResource Input}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="{DynamicResource ComposerCorner}">
+                        <Grid>
+                          <local:ThemeDecoration Zone="Composer" Visibility="{Binding IsChecked, ElementName=ThemeDetailsBox, Converter={StaticResource Bool}}"/>
+                          <TextBlock Text="Message" Foreground="{DynamicResource Faint}" Margin="10,6"/>
+                        </Grid>
+                      </Border>
+                    </Grid>
                   </Grid>
-                </Grid>
-              </Border>
+                </Border>
+              </Expander>
+              <TextBlock Text="Effects" Style="{StaticResource Heading}" Margin="0,12,0,8"/>
+              <Expander x:Name="AmbientEffectsGroup" Header="Ambient effects" Style="{StaticResource AppearanceGroup}">
+                <StackPanel>
+                  <CheckBox x:Name="SakuraPetalsBox" Content="Falling petals" Margin="0,8,0,8"/>
+                  <StackPanel Visibility="{Binding IsChecked, ElementName=SakuraPetalsBox, Converter={StaticResource Bool}}">
+                    <DockPanel Margin="0,0,0,6">
+                      <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=PetalIntensityBox, StringFormat=P0}" Foreground="{DynamicResource Muted}"/>
+                      <TextBlock Text="Petal intensity" Style="{StaticResource Label}" Margin="0"/>
+                    </DockPanel>
+                    <Slider x:Name="PetalIntensityBox" Style="{StaticResource BackgroundSlider}" Minimum=".1" Maximum="1" TickFrequency=".05"
+                            SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True" AutomationProperties.Name="Petal intensity" Margin="0,0,0,8"/>
+                    <Border Height="86" Background="{DynamicResource Canvas}" BorderBrush="{DynamicResource Line}" BorderThickness="1"
+                            CornerRadius="{DynamicResource PanelCorner}" ClipToBounds="True">
+                      <local:SakuraPetals x:Name="PetalsPreview" Intensity="{Binding Value, ElementName=PetalIntensityBox}"/>
+                    </Border>
+                  </StackPanel>
+                  <CheckBox x:Name="FirefliesBox" Content="Fireflies" Margin="0,8,0,8"/>
+                  <StackPanel Visibility="{Binding IsChecked, ElementName=FirefliesBox, Converter={StaticResource Bool}}">
+                    <Slider x:Name="FireflyIntensityBox" Style="{StaticResource BackgroundSlider}" Minimum=".1" Maximum="1"
+                            TickFrequency=".05" SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True"
+                            AutomationProperties.Name="Fireflies intensity" Margin="0,0,0,8"/>
+                    <Border Height="64" Background="{DynamicResource Canvas}" BorderBrush="{DynamicResource Line}" BorderThickness="1"
+                            CornerRadius="{DynamicResource PanelCorner}" ClipToBounds="True">
+                      <local:WeatherEffect Kind="Fireflies" Intensity="{Binding Value, ElementName=FireflyIntensityBox}"/>
+                    </Border>
+                  </StackPanel>
+                  <CheckBox x:Name="RainBox" Content="Rain on glass" Margin="0,8,0,8"/>
+                  <StackPanel Visibility="{Binding IsChecked, ElementName=RainBox, Converter={StaticResource Bool}}">
+                    <Slider x:Name="RainIntensityBox" Style="{StaticResource BackgroundSlider}" Minimum=".1" Maximum="1"
+                            TickFrequency=".05" SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True"
+                            AutomationProperties.Name="Rain on glass intensity" Margin="0,0,0,8"/>
+                    <Border Height="64" Background="{DynamicResource Canvas}" BorderBrush="{DynamicResource Line}" BorderThickness="1"
+                            CornerRadius="{DynamicResource PanelCorner}" ClipToBounds="True">
+                      <local:WeatherEffect Kind="Rain" Intensity="{Binding Value, ElementName=RainIntensityBox}"/>
+                    </Border>
+                  </StackPanel>
+                  <CheckBox x:Name="SnowBox" Content="Snowfall" Margin="0,8,0,8"/>
+                  <StackPanel Visibility="{Binding IsChecked, ElementName=SnowBox, Converter={StaticResource Bool}}">
+                    <Slider x:Name="SnowIntensityBox" Style="{StaticResource BackgroundSlider}" Minimum=".1" Maximum="1"
+                            TickFrequency=".05" SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True"
+                            AutomationProperties.Name="Snowfall intensity" Margin="0,0,0,8"/>
+                    <Border Height="64" Background="{DynamicResource Canvas}" BorderBrush="{DynamicResource Line}" BorderThickness="1"
+                            CornerRadius="{DynamicResource PanelCorner}" ClipToBounds="True">
+                      <local:WeatherEffect Kind="Snow" Intensity="{Binding Value, ElementName=SnowIntensityBox}"/>
+                    </Border>
+                  </StackPanel>
+                </StackPanel>
+              </Expander>
+              <Expander x:Name="InteractionEffectsGroup" Header="Interaction effects" Style="{StaticResource AppearanceGroup}">
+                <StackPanel>
+                  <TextBlock Text="Typing effect" Style="{StaticResource Label}"/>
+                  <ComboBox x:Name="TypingEffectBox" SelectedValuePath="Tag" AutomationProperties.Name="Typing effect" Margin="0,0,0,14">
+                    <ComboBoxItem Content="Off" Tag="off"/>
+                    <ComboBoxItem Content="Match theme" Tag="theme"/>
+                    <ComboBoxItem Content="Sparkles" Tag="sparkles"/>
+                    <ComboBoxItem Content="Steam" Tag="steam"/>
+                    <ComboBoxItem Content="Ripple" Tag="ripple"/>
+                    <ComboBoxItem Content="Ink bloom" Tag="ink"/>
+                  </ComboBox>
+                  <StackPanel>
+                    <StackPanel.Style><Style TargetType="StackPanel"><Style.Triggers>
+                      <DataTrigger Binding="{Binding SelectedValue, ElementName=TypingEffectBox}" Value="off"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+                      <DataTrigger Binding="{Binding SelectedValue, ElementName=TypingEffectBox}" Value="ink"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+                    </Style.Triggers></Style></StackPanel.Style>
+                    <DockPanel Margin="0,0,0,6">
+                      <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=TypingIntensityBox, StringFormat=P0}" Foreground="{DynamicResource Muted}"/>
+                      <TextBlock Text="Typing intensity" Style="{StaticResource Label}" Margin="0"/>
+                    </DockPanel>
+                    <Slider x:Name="TypingIntensityBox" Style="{StaticResource BackgroundSlider}" Minimum=".1" Maximum="1"
+                            TickFrequency=".05" SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True"
+                            AutomationProperties.Name="Typing intensity" Margin="0,0,0,14"/>
+                  </StackPanel>
+                  <StackPanel>
+                    <StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers>
+                      <DataTrigger Binding="{Binding SelectedValue, ElementName=TypingEffectBox}" Value="ink"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+                    </Style.Triggers></Style></StackPanel.Style>
+                    <TextBlock Text="Ink bloom intensity" Style="{StaticResource Label}"/>
+                    <Slider x:Name="InkBloomIntensityBox" Style="{StaticResource BackgroundSlider}" Minimum=".1" Maximum="1"
+                            TickFrequency=".05" SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True"
+                            AutomationProperties.Name="Ink bloom intensity" Margin="0,0,0,14"/>
+                  </StackPanel>
+                  <TextBlock Text="Mouse click effect" Style="{StaticResource Label}"/>
+                  <ComboBox x:Name="ClickEffectBox" SelectedValuePath="Tag" AutomationProperties.Name="Mouse click effect" Margin="0,0,0,14">
+                    <ComboBoxItem Content="Off" Tag="off"/>
+                    <ComboBoxItem Content="Match theme" Tag="theme"/>
+                    <ComboBoxItem Content="Sparkles" Tag="sparkles"/>
+                    <ComboBoxItem Content="Steam" Tag="steam"/>
+                    <ComboBoxItem Content="Ripple" Tag="ripple"/>
+                  </ComboBox>
+                  <StackPanel>
+                    <StackPanel.Style><Style TargetType="StackPanel"><Style.Triggers>
+                      <DataTrigger Binding="{Binding SelectedValue, ElementName=ClickEffectBox}" Value="off"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+                    </Style.Triggers></Style></StackPanel.Style>
+                    <DockPanel Margin="0,0,0,6">
+                      <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=ClickIntensityBox, StringFormat=P0}" Foreground="{DynamicResource Muted}"/>
+                      <TextBlock Text="Click intensity" Style="{StaticResource Label}" Margin="0"/>
+                    </DockPanel>
+                    <Slider x:Name="ClickIntensityBox" Style="{StaticResource BackgroundSlider}" Minimum=".1" Maximum="1"
+                            TickFrequency=".05" SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True"
+                            AutomationProperties.Name="Click intensity" Margin="0,0,0,14"/>
+                  </StackPanel>
+                  <Grid>
+                    <StackPanel Orientation="Horizontal">
+                      <Button Content="Preview typing" Style="{StaticResource Secondary}" Click="PreviewTyping_Click"/>
+                      <Button Content="Preview click" Style="{StaticResource Secondary}" Click="PreviewClick_Click" Margin="8,0,0,0"/>
+                    </StackPanel>
+                    <local:ChatEffects x:Name="EffectPreview" IsHitTestVisible="False"/>
+                  </Grid>
+                  <CheckBox x:Name="SendPulseBox" Content="Send pulse" Margin="0,8,0,8"/>
+                  <StackPanel Visibility="{Binding IsChecked, ElementName=SendPulseBox, Converter={StaticResource Bool}}">
+                    <Slider x:Name="SendPulseIntensityBox" Style="{StaticResource BackgroundSlider}" Minimum=".1" Maximum="1"
+                            TickFrequency=".05" SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True"
+                            AutomationProperties.Name="Send pulse intensity" Margin="0,0,0,8"/>
+                    <Grid>
+                      <Button Content="Preview send pulse" HorizontalAlignment="Left" Style="{StaticResource Secondary}" Click="PreviewSendPulse_Click"/>
+                      <local:ChatEffects x:Name="SendPulsePreview" IsHitTestVisible="False"/>
+                    </Grid>
+                  </StackPanel>
+                </StackPanel>
+              </Expander>
+              <Expander x:Name="TitleEffectsGroup" Header="Title bar effects" Style="{StaticResource AppearanceGroup}">
+                <StackPanel>
+                  <CheckBox x:Name="SteampunkEngineBox" Content="Steampunk engine" Margin="0,16,0,8"/>
+                  <StackPanel Visibility="{Binding IsChecked, ElementName=SteampunkEngineBox, Converter={StaticResource Bool}}">
+                    <DockPanel Margin="0,0,0,6">
+                      <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=EngineIntensityBox, StringFormat=P0}" Foreground="{DynamicResource Muted}"/>
+                      <TextBlock Text="Engine intensity" Style="{StaticResource Label}" Margin="0"/>
+                    </DockPanel>
+                    <Slider x:Name="EngineIntensityBox" Style="{StaticResource BackgroundSlider}" Minimum=".1" Maximum="1" TickFrequency=".05"
+                            SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True" AutomationProperties.Name="Engine intensity" Margin="0,0,0,8"/>
+                    <local:SteampunkEngine x:Name="EnginePreview" Width="294" Height="36" HorizontalAlignment="Left" IsHitTestVisible="False"
+                                          Opacity="{Binding Value, ElementName=EngineIntensityBox}"/>
+                  </StackPanel>
+                </StackPanel>
+              </Expander>
+              <Separator Margin="0,12,0,8" Background="{DynamicResource Line}"/>
+              <Expander x:Name="FontsGroup" Header="Fonts" Style="{StaticResource AppearanceGroup}">
+                <StackPanel>
+                  <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="12"/><ColumnDefinition Width="130"/></Grid.ColumnDefinitions>
+                    <StackPanel><TextBlock Text="Message font" Style="{StaticResource Label}"/><ComboBox x:Name="FontBox" MaxDropDownHeight="260" SelectionChanged="Font_Changed" AutomationProperties.Name="Message font"/></StackPanel>
+                    <StackPanel Grid.Column="2"><TextBlock Text="Size" Style="{StaticResource Label}"/><ComboBox x:Name="SizeBox" SelectionChanged="Font_Changed" AutomationProperties.Name="Message text size"><ComboBoxItem Content="Small" Tag="small"/><ComboBoxItem Content="Medium" Tag="medium"/><ComboBoxItem Content="Large" Tag="large"/></ComboBox></StackPanel>
+                  </Grid>
+                  <Border Background="{DynamicResource Surface}" CornerRadius="{DynamicResource ComposerCorner}" Padding="14,10" Margin="0,12,0,18" HorizontalAlignment="Left">
+                    <TextBlock x:Name="FontPreview" Text="The quick brown fox jumps over the lazy dog." TextWrapping="Wrap"/>
+                  </Border>
+                </StackPanel>
+              </Expander>
+              <Expander x:Name="BackgroundGroup" Header="Background" Style="{StaticResource AppearanceGroup}">
+                <StackPanel>
+                  <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                    <Button Content="Choose image" Style="{StaticResource Secondary}" Click="ChooseBackground_Click"/>
+                    <Button x:Name="RemoveBackgroundButton" Content="Remove" Style="{StaticResource Secondary}" Margin="8,0,0,0" Click="RemoveBackground_Click"/>
+                  </StackPanel>
+                  <StackPanel x:Name="BackgroundAdjustments" Visibility="Collapsed">
+                    <Grid Margin="0,0,0,6">
+                      <TextBlock Text="Image opacity" Style="{StaticResource Label}"/>
+                      <TextBlock Text="{Binding Value, ElementName=BackgroundOpacityBox, StringFormat=P0}" HorizontalAlignment="Right" Style="{StaticResource Label}"/>
+                    </Grid>
+                    <Slider x:Name="BackgroundOpacityBox" Style="{StaticResource BackgroundSlider}" Minimum=".10" Maximum=".55" TickFrequency=".05"
+                            SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True" AutomationProperties.Name="Background image opacity" Margin="0,0,0,14"/>
+                    <Border Background="{DynamicResource Canvas}" BorderBrush="{DynamicResource Line}" BorderThickness="1"
+                            CornerRadius="{DynamicResource PanelCorner}" Height="142" ClipToBounds="True">
+                      <Image x:Name="BackgroundPreview" Stretch="UniformToFill" Opacity="{Binding Value, ElementName=BackgroundOpacityBox}"
+                             AutomationProperties.Name="Chat background preview"/>
+                    </Border>
+                  </StackPanel>
+                  <TextBlock x:Name="BackgroundError" Foreground="{DynamicResource Danger}" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                </StackPanel>
+              </Expander>
             </StackPanel>
             <StackPanel x:Name="AboutPage" Style="{StaticResource Page}">
               <TextBlock Text="About" Style="{StaticResource Heading}"/>
@@ -211,7 +451,7 @@
         </ScrollViewer>
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Bottom">
           <Button Content="Cancel" Style="{StaticResource Secondary}" Click="Cancel_Click" Margin="0,0,8,0"/>
-          <Button Content="Save" Style="{StaticResource Primary}" Click="Save_Click"/>
+          <Button Content="Save" AutomationProperties.Name="Save" Style="{StaticResource Primary}" Click="Save_Click"/>
         </StackPanel>
       </Grid>
     </Grid>

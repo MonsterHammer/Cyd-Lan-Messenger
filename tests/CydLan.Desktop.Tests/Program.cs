@@ -1,7 +1,9 @@
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -19,12 +21,16 @@ internal static class Program
     }
 
     [STAThread]
-    private static int Main()
+    private static int Main(string[] args)
     {
         int exitCode = 0;
         TestApplication? app = null;
         app = new TestApplication { RunTests = async () => {
-            try { await RunAsync(); }
+            try
+            {
+                if (args.Contains("--effects-benchmark")) await RunEffectsBenchmarkAsync();
+                else await RunAsync(args.Contains("--offline"), args.Contains("--startup-loopback"));
+            }
             catch (Exception e) { Console.WriteLine("FAIL  " + e); exitCode = 1; }
             finally { await app!.QuitAsync(); }
         } };
@@ -35,13 +41,32 @@ internal static class Program
     }
 
     private static void Check(bool ok, string reason) { if (!ok) throw new Exception(reason); }
+
+    private static async Task RunEffectsBenchmarkAsync()
+    {
+        await using var model = new MainViewModel(preview: true);
+        await model.SavePreferencesAsync(settings =>
+        {
+            settings.FirefliesEnabled = settings.RainEnabled = settings.SnowEnabled = true;
+            settings.FireflyIntensity = settings.RainIntensity = settings.SnowIntensity = 1;
+        });
+        ThemeManager.Apply(ThemeManager.Ocean);
+        var window = new MainWindow(model) { WindowState = WindowState.Maximized };
+        window.Show();
+        window.Activate();
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(window.IsActive && window.WindowState == WindowState.Maximized, "The effects benchmark needs an active maximized preview.");
+        Console.WriteLine($"READY {Environment.ProcessId} {window.ActualWidth:0}x{window.ActualHeight:0}");
+        await Task.Delay(TimeSpan.FromSeconds(14));
+        window.Close();
+    }
     private static async Task Until(Func<bool> predicate)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(8));
         while (!predicate()) await Task.Delay(15, deadline.Token);
     }
 
-    private static async Task RunAsync()
+    private static async Task RunAsync(bool offlineOnly, bool startupLoopback)
     {
         await using (var preview = new MainViewModel(preview: true))
         {
@@ -69,16 +94,27 @@ internal static class Program
             await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
             Check(FindText(prefs, "Show notifications during Do not disturb") is { IsVisible: true } &&
                 FindText(prefs, "Play sounds during Do not disturb") is { IsVisible: true }, "Alert labels should identify the action and status.");
+            var popupOption = (System.Windows.Controls.CheckBox)prefs.FindName("NotificationPreviewsBox");
+            Check(popupOption is { IsVisible: true, IsEnabled: true, IsChecked: false }, "Popup previews should be an unchecked option by default.");
             prefs.ShowPage("AppearancePage");
             var themeBox = (System.Windows.Controls.ComboBox)prefs.FindName("ThemeBox");
             var chatButton = (System.Windows.Controls.Button)themed.FindName("ChatNav");
             var chatGlyph = (Glyph)chatButton.Content;
             var standardGlyph = chatGlyph.Data;
+            string[] primaryIconNames = ["Chat", "Users", "Settings", "Send", "Folder", "Megaphone", "File", "Search"];
+            string[] detailIconNames = ["Sidebar", "Refresh", "Info", "Smile", "Plus", "Transfer", "Download", "More", "Quit", "Close", "ChevronDown", "Check"];
+            var standardIcons = primaryIconNames.Concat(detailIconNames)
+                .ToDictionary(name => name, name => themed.FindResource("Icon" + name));
+            string appearanceArtifacts = Path.GetFullPath("artifacts");
+            Directory.CreateDirectory(appearanceArtifacts);
             var buttonRoot = (System.Windows.Controls.Grid)chatButton.Template.FindName("Root", chatButton);
             var buttonChrome = (System.Windows.Controls.Border)buttonRoot.Children[0];
             foreach (var (mode, ink) in new[] {
                 ("dark", "#FFECECEC"), ("ocean", "#FFE9F5FF"), ("lavender", "#FF282039"),
-                ("ember", "#FFFFF0E3"), ("pixel", "#FFF0F7D9"), ("light", "#FF1D2326")
+                ("ember", "#FFFFF0E3"), ("forest", "#FFECF7EE"), ("sand", "#FF30261E"),
+                ("anime", "#FF302039"), ("sakura", "#FF39262F"), ("steampunk", "#FFF5E3C7"), ("aurora", "#FFE8F9F5"),
+                ("paper", "#FF232A28"), ("arcade", "#FFF4F1FF"),
+                ("pixel", "#FFF0F7D9"), ("light", "#FF1D2326")
             })
             {
                 themeBox.SelectedValue = mode;
@@ -86,7 +122,17 @@ internal static class Program
                 bool pixel = mode == "pixel";
                 Check((buttonChrome.CornerRadius.TopLeft == 0) == pixel,
                     $"Incorrect button shape in {mode}: {buttonChrome.CornerRadius}, app resource {themed.FindResource("ControlCorner")}.");
-                Check((!ReferenceEquals(chatGlyph.Data, standardGlyph)) == pixel, $"Incorrect chat geometry in {mode}.");
+                bool customIcons = mode is not ("light" or "dark");
+                Check((!ReferenceEquals(chatGlyph.Data, standardGlyph)) == customIcons, $"Incorrect chat geometry in {mode}.");
+                bool fullIconSet = mode is "pixel" or "anime" or "sakura" or "steampunk" or "aurora" or "paper" or "arcade";
+                foreach (string name in primaryIconNames.Concat(detailIconNames))
+                {
+                    bool expected = fullIconSet || (customIcons && primaryIconNames.Contains(name));
+                    Check((!ReferenceEquals(themed.FindResource("Icon" + name), standardIcons[name])) == expected,
+                        $"Incorrect Icon{name} when switching to {mode}.");
+                }
+                if (mode is "forest" or "sakura" or "steampunk")
+                    Capture(themed, Path.Combine(appearanceArtifacts, $"theme-{mode}-icons-tested.png"));
                 foreach (Window w in new Window[] { themed, prefs })
                 {
                     string actual = ((SolidColorBrush)w.Foreground).Color.ToString();
@@ -99,8 +145,117 @@ internal static class Program
             themeBox.SelectedValue = "pixel";
             prefs.Close();
             Check(ReferenceEquals(chatGlyph.Data, standardGlyph), "Cancel did not restore the original icons.");
-            themed.Close(); ThemeManager.Apply("light");
+            Check(preview.Settings.TypingEffect == "off" && preview.Settings.ClickEffect == "off" && preview.ChatBackground is null,
+                "Changing themes must leave effects and backgrounds off by default.");
+            var composer = (System.Windows.Controls.TextBox)themed.FindName("Composer");
+            var effects = (ChatEffects)themed.FindName("EffectLayer");
+            Check(!effects.IsHitTestVisible && ChatEffects.Resolve("theme", "anime", true) == "sparkles" &&
+                ChatEffects.Resolve("theme", "steampunk", false) == "steam" &&
+                ChatEffects.Resolve("ripple", "steampunk", true) == "ripple",
+                "Themes should style opted-in effects without overriding a selected effect.");
+            string previousDraft = preview.Draft;
+            composer.Text = "hello";
+            composer.CaretIndex = composer.Text.Length;
+            themed.Activate();
+            composer.Focus();
+            themed.UpdateLayout();
+            TypeInComposer(composer, " ");
+            Check(effects.Children.Count == 0 && composer.Text == "hello ", "Typing effects should be off by default.");
+            preview.Settings.TypingEffect = "sparkles";
+            TypeInComposer(composer, "world");
+            TypeInComposer(composer, "!");
+            Check(effects.Children.Count == (SystemParameters.ClientAreaAnimation ? 1 : 0) && composer.Text == "hello world!",
+                "Completing a word with punctuation should animate without changing the typed text.");
+            preview.Settings.TypingEffect = "off";
+            preview.Settings.ClickEffect = "steam";
+            int beforeClick = effects.Children.Count;
+            themed.RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(System.Windows.Input.Mouse.PrimaryDevice, 0, System.Windows.Input.MouseButton.Left)
+                { RoutedEvent = UIElement.PreviewMouseLeftButtonDownEvent });
+            Check(effects.Children.Count == beforeClick + (SystemParameters.ClientAreaAnimation ? 1 : 0),
+                "Mouse effects should work independently of typing effects.");
+            preview.Settings.ClickEffect = "off";
+            preview.Draft = previousDraft;
             Console.WriteLine("PASS  Live theme switching, Pixel controls and icons, Cancel restores appearance");
+
+            var enginePrefs = new SettingsWindow(preview) { Owner = themed };
+            enginePrefs.Show();
+            ((System.Windows.Controls.ComboBox)enginePrefs.FindName("ThemeBox")).SelectedValue = ThemeManager.Steampunk;
+            enginePrefs.ShowPage("AppearancePage");
+            ((System.Windows.Controls.Expander)enginePrefs.FindName("TitleEffectsGroup")).IsExpanded = true;
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            var engineToggle = (System.Windows.Controls.CheckBox)enginePrefs.FindName("SteampunkEngineBox");
+            var enginePreview = (SteampunkEngine)enginePrefs.FindName("EnginePreview");
+            var engine = (SteampunkEngine)themed.FindName("TitleEngine");
+            Check(engineToggle.IsVisible && engineToggle.IsChecked == false && !enginePreview.IsVisible && !engine.IsVisible,
+                $"The Steampunk engine must be opt-in. Toggle visible={engineToggle.IsVisible}; checked={engineToggle.IsChecked}; preview visible={enginePreview.IsVisible}; engine visible={engine.IsVisible}.");
+            engineToggle.IsChecked = true;
+            Check(enginePreview.IsVisible && !engine.IsVisible, "The toggle should preview the engine before saving.");
+            ClickNamed(enginePrefs, "Save");
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            Check(engine.IsVisible && !engine.IsHitTestVisible && preview.Settings.SteampunkEngineEnabled,
+                "Saving should reveal the engine in the title bar without intercepting input.");
+            if (SystemParameters.ClientAreaAnimation)
+                await Until(() => engine.ShaftAngle > 10);
+            else
+                Check(engine.ShaftAngle == 0, "Reduced motion should leave the engine still.");
+            Capture(themed, Path.Combine(appearanceArtifacts, "steampunk-engine-tested.png"));
+            themed.WindowState = WindowState.Minimized;
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            Check(engine.ShaftAngle == 0, "Minimizing must stop the engine animation.");
+            themed.WindowState = WindowState.Normal;
+            ThemeManager.Apply(ThemeManager.Anime);
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            Check(engine.IsVisible && engine.Tint == ThemeAccent() && preview.Settings.SteampunkEngineEnabled,
+                "Switching themes should recolor the enabled engine.");
+            await preview.SavePreferencesAsync(st => { st.SteampunkEngineEnabled = false; st.Theme = ThemeManager.Light; });
+            Console.WriteLine("PASS  Optional Steampunk engine preview, motion, minimize and theme switching");
+
+            var sakuraPrefs = new SettingsWindow(preview) { Owner = themed };
+            sakuraPrefs.Show();
+            ((System.Windows.Controls.ComboBox)sakuraPrefs.FindName("ThemeBox")).SelectedValue = ThemeManager.Sakura;
+            sakuraPrefs.ShowPage("AppearancePage");
+            ((System.Windows.Controls.Expander)sakuraPrefs.FindName("AmbientEffectsGroup")).IsExpanded = true;
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            var petalsToggle = (System.Windows.Controls.CheckBox)sakuraPrefs.FindName("SakuraPetalsBox");
+            var petalsPreview = (SakuraPetals)sakuraPrefs.FindName("PetalsPreview");
+            var petals = (SakuraPetals)themed.FindName("ConversationPetals");
+            var intensity = (System.Windows.Controls.Slider)sakuraPrefs.FindName("PetalIntensityBox");
+            Check(petalsToggle.IsVisible && petalsToggle.IsChecked == false && !petalsPreview.IsVisible && !petals.IsVisible,
+                "Sakura petals must be opt-in.");
+            petalsToggle.IsChecked = true;
+            intensity.Value = .35;
+            Check(petalsPreview.IsVisible && !petals.IsVisible && petalsPreview.Intensity == .35,
+                "The toggle and intensity should preview the petals before saving.");
+            ClickNamed(sakuraPrefs, "Save");
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            Check(petals.IsVisible && !petals.IsHitTestVisible && preview.Settings.SakuraPetalsEnabled && !engine.IsVisible &&
+                petals.Intensity == .35 && petals.Tint == ThemeAccent(),
+                "Petals should appear behind chat without intercepting input or enabling the engine.");
+            if (SystemParameters.ClientAreaAnimation)
+                await Until(() => petals.Progress > .005);
+            else
+                Check(petals.Progress == 0, "Reduced motion should leave petals still.");
+            Capture(themed, Path.Combine(appearanceArtifacts, "sakura-tested.png"));
+            themed.Hide();
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            Check(petals.Progress == 0, "Hiding the chat should stop the petal animation.");
+            themed.Show();
+            ThemeManager.Apply(ThemeManager.Steampunk);
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            Check(petals.IsVisible && petals.Tint == ThemeAccent() && petals.Tint.R > petals.Tint.G && petals.Tint.G > petals.Tint.B,
+                "Steampunk should give the same petals a warm brown palette.");
+            await preview.SavePreferencesAsync(st => { st.SteampunkEngineEnabled = true; st.EngineIntensity = .65; st.Theme = ThemeManager.Steampunk; });
+            Capture(themed, Path.Combine(appearanceArtifacts, "appearance-steampunk-effects-tested.png"));
+            ThemeManager.Apply(ThemeManager.Ocean);
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            Check(petals.IsVisible && engine.IsVisible && petals.Tint == ThemeAccent() && engine.Tint == ThemeAccent() &&
+                engine.Opacity == .65 && petals.Intensity == .35, "Both effects should follow the theme and use independent strengths.");
+            await preview.SavePreferencesAsync(st => { st.SakuraPetalsEnabled = false; st.SteampunkEngineEnabled = false; st.Theme = ThemeManager.Light; });
+            ThemeManager.Apply(ThemeManager.Light);
+            themed.Close();
+            Console.WriteLine("PASS  Optional Sakura theme petals, preview, motion and visibility");
+            await TestAdditionalEffectsAsync(appearanceArtifacts);
+            await TestThemeDetailsAsync(appearanceArtifacts);
 
             var recentWindow = new MainWindow(preview);
             recentWindow.Show();
@@ -164,6 +319,37 @@ internal static class Program
             Console.WriteLine("PASS  Recent chats, group navigation, live ordering, search and deletion");
             Console.WriteLine("PASS  Short bubbles fit the text; long messages wrap");
 
+            var startupAlert = new MainWindow(preview) { ShowInTaskbar = false };
+            IntPtr foregroundBeforeAlert = GetForegroundWindow();
+            startupAlert.RequestTaskbarAttention();
+            Check(startupAlert.IsVisible && startupAlert.ShowInTaskbar && IsIconic(new WindowInteropHelper(startupAlert).Handle) &&
+                !startupAlert.IsActive && GetForegroundWindow() == foregroundBeforeAlert,
+                "The first alert in a tray-only session should create a minimized taskbar button without taking focus.");
+            startupAlert.Close();
+            const string taskbarTestTitle = "CydLan tray alert test";
+            var hiddenAlert = new MainWindow(preview) { Title = taskbarTestTitle };
+            hiddenAlert.Show();
+            hiddenAlert.Hide();
+            var foregroundHost = new Window { Title = "CydLan test foreground", ShowInTaskbar = false, Width = 260, Height = 150 };
+            foregroundHost.Show();
+            foregroundHost.Activate();
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            var foreground = GetForegroundWindow();
+            preview.Settings.Sounds = false;
+            ((App)Application.Current).ConnectNotifications(hiddenAlert, preview);
+            preview.NotifyIncoming("Offline sender", "Private sample message");
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            IntPtr hiddenHandle = new WindowInteropHelper(hiddenAlert).Handle;
+            const int appWindow = 0x00040000, toolWindow = 0x00000080;
+            int extendedStyle = GetWindowLong(hiddenHandle, -20);
+            Check(hiddenAlert.ShowInTaskbar && IsIconic(hiddenHandle) &&
+                (extendedStyle & (appWindow | toolWindow)) == appWindow &&
+                !hiddenAlert.IsActive && GetForegroundWindow() == foreground,
+                $"Tray return should stay minimized and preserve focus. Taskbar={hiddenAlert.ShowInTaskbar}; minimized={IsIconic(hiddenHandle)}; active={hiddenAlert.IsActive}; foreground before={foreground}, after={GetForegroundWindow()}.");
+            hiddenAlert.Close();
+            foregroundHost.Close();
+            Console.WriteLine("PASS  Tray-only startup and incoming alert restore a private minimized taskbar window");
+
             // Popups open over a dimmed main window, fit inside it, and cannot be moved outside it.
             var host = new MainWindow(preview) { Left = 100, Top = 100, Width = 800, Height = 560 }; host.Show();
             var popup = new SettingsWindow(preview);
@@ -226,6 +412,12 @@ internal static class Program
                 Math.Abs(contentStart.X - workArea.Left) <= 2 && Math.Abs(contentStart.Y - workArea.Top) <= 2 &&
                 Math.Abs(contentEnd.X - workArea.Right) <= 2 && Math.Abs(contentEnd.Y - workArea.Bottom) <= 2,
                 $"Maximized content runs from {contentStart} to {contentEnd} but the work area is {workArea}.");
+            var chat = (FrameworkElement)motion.FindName("ChatContentGrid");
+            var wideMessageList = (FrameworkElement)motion.FindName("MessageList");
+            var composerSurface = (FrameworkElement)motion.FindName("ComposerSurface");
+            Check(chat.ActualWidth - wideMessageList.ActualWidth is >= 48 and <= 70 &&
+                Math.Abs(chat.ActualWidth - composerSurface.ActualWidth - 52) < 1,
+                $"The timeline and composer should fill the maximized chat pane with gutters. Chat={chat.ActualWidth}, messages={wideMessageList.ActualWidth}, composer={composerSurface.ActualWidth}.");
             Capture(motion, Path.Combine(Path.GetFullPath("artifacts"), "chat-maximized-tested.png"));
             ClickNamed(motion, "Restore");
             await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
@@ -263,6 +455,18 @@ internal static class Program
         var remoteSettings = new AppSettings { DisplayName = "Experiment peer", Port = 0 };
         try
         {
+            await TestOfflinePagingAsync(Path.Combine(directory, "paging"));
+            await TestStartupRosterAsync(Path.Combine(directory, "startup"));
+            if (startupLoopback)
+            {
+                await TestStartupConnectionAsync(Path.Combine(directory, "startup-loopback"), port);
+                return;
+            }
+            if (offlineOnly)
+            {
+                Console.WriteLine("PASS  Local desktop checks completed with networking disabled.");
+                return;
+            }
             await using (var peer = new LanService(remoteSettings))
             await using (var model = new MainViewModel(localStore: store))
             {
@@ -290,37 +494,61 @@ internal static class Program
                 alertHost.Show();
                 alertHost.Activate();
                 await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
-                Check(alertHost.IsActive && model.ShouldAlert, "The foreground notification test needs an active window and default alerts.");
+                Check(alertHost.IsActive && model.ShouldAlert && !model.ShouldShowNotificationPopup,
+                    "The foreground notification test needs an active window and taskbar-only alerts by default.");
                 model.Replying = true;
-                MessageNotificationWindow? Alert() => Application.Current.Windows.OfType<MessageNotificationWindow>().SingleOrDefault();
+                var alertHandle = new WindowInteropHelper(alertHost).Handle;
+                int windowCount = Application.Current.Windows.Count;
+                string alertTitle = alertHost.Title;
                 Check(await peer.SendChatAsync(model.Settings.UserId, "Peer → desktop ✅\nMessages and receipts are working.", "14001"), "Desktop did not acknowledge inbound chat.");
                 await Until(() => model.Messages.Count == 2);
                 Check(model.SelectedPeer.Unread == 0, "A focused conversation should not accumulate unread messages.");
-                Check(Alert() is { IsVisible: true, IsActive: false } && alertHost.IsActive &&
-                    FindText(Alert()!, "Peer → desktop ✅ Messages and receipts are working.") is not null,
-                    "An inbound message should show a preview without taking focus.");
-                Capture(Alert()!, Path.Combine(Path.GetFullPath("artifacts"), "message-notification-tested.png"));
-                Alert()!.Close();
+                Check(Application.Current.Windows.Count == windowCount && alertHost.IsActive,
+                    "An inbound message should not open an alert window or interrupt a focused chat.");
                 model.Settings.Notifications = false;
+                alertHost.Hide();
                 model.TransfersOpen = true;
                 Check(await peer.SendChatAsync(model.Settings.UserId, "A message while viewing file transfers", "14003"), "Transfers view stopped receiving chat.");
                 await Until(() => model.SelectedPeer.Unread == 1);
-                Check(Alert() is null, "Turning notifications off should silence visual alerts.");
+                Check(!alertHost.IsVisible && Application.Current.Windows.Count == windowCount,
+                    "Turning notifications off should keep CydLan hidden in the tray.");
                 model.TransfersOpen = false;
                 Check(model.SelectedPeer.Unread == 1, "Opening a conversation must not mark it read before the user replies.");
                 model.Replying = true;
                 Check(model.SelectedPeer.Unread == 0, "Engaging the composer must clear the unread count.");
                 model.Settings.Notifications = true;
-                alertHost.Hide();
                 model.Replying = false;
+                var foregroundWindow = new Window { Title = "Taskbar test", Width = 280, Height = 160, ShowInTaskbar = false };
+                foregroundWindow.Show();
+                foregroundWindow.Activate();
+                await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+                IntPtr foreground = GetForegroundWindow();
                 Check(await peer.SendChatAsync(model.Settings.UserId, "A message while the window is inactive", "14002"), "Inactive window stopped receiving chat.");
                 await Until(() => model.SelectedPeer.Unread == 1);
                 Check(model.PeopleSummary.Contains("1 unread"), "Unread totals did not update.");
-                Check(Alert() is { IsVisible: true } && !alertHost.IsVisible, "Hidden CydLan should still show notifications.");
-                ClickNamed(Alert()!, "Open CydLan");
-                Check(alertHost.IsVisible && Alert() is null, "Clicking the alert should reopen CydLan.");
+                Check(alertHost.IsVisible && alertHost.ShowInTaskbar && alertHost.WindowState == WindowState.Minimized &&
+                    IsIconic(alertHandle) && !alertHost.IsActive && GetForegroundWindow() == foreground &&
+                    Application.Current.Windows.Count == windowCount + 1 && alertHost.Title == alertTitle,
+                    $"Expected a private taskbar alert. Visible: {alertHost.IsVisible}, taskbar: {alertHost.ShowInTaskbar}, " +
+                    $"state: {alertHost.WindowState}, native minimized: {IsIconic(alertHandle)}, active: {alertHost.IsActive}, " +
+                    $"foreground before/after: {foreground}/{GetForegroundWindow()}.");
+                foregroundWindow.Close();
+                App.ShowWindow(alertHost);
+                Check(alertHost.IsVisible && !IsIconic(alertHandle) && model.SelectedPeer.Unread == 1,
+                    "Restoring the chat should leave the message unread until the user engages the composer.");
+                await model.SavePreferencesAsync(s => s.NotificationPreviews = true);
+                Check(store.LoadSettings().NotificationPreviews, "The popup opt-in should be saved.");
+                const string popupText = "Message with popup previews enabled";
+                Check(await peer.SendChatAsync(model.Settings.UserId, popupText, "14004"), "The popup test message was not delivered.");
+                MessageNotificationWindow? popup = null;
+                await Until(() => (popup = Application.Current.Windows.OfType<MessageNotificationWindow>().SingleOrDefault()) is { IsVisible: true });
+                Check(popup is { IsActive: false } && FindText(popup, popupText) is not null,
+                    "Opting in should show a message preview without taking focus.");
+                await model.SavePreferencesAsync(s => s.NotificationPreviews = false);
+                Check(!popup!.IsVisible && !store.LoadSettings().NotificationPreviews,
+                    "Turning previews off should dismiss the current popup and save the preference.");
                 alertHost.Close();
-                Console.WriteLine("PASS  Default message notifications in the foreground and while hidden");
+                Console.WriteLine("PASS  Private taskbar alerts by default and persistent opt-in popup previews");
                 Console.WriteLine("PASS  Live desktop discovery, send/receive, receipts and unread counts");
 
                 // Images: CydLan peers exchange them inline (auto-accepted, shown in the chat); plain offers still need approval.
@@ -393,12 +621,28 @@ internal static class Program
                 Check(offer.Path == expectedCopy && File.ReadAllBytes(expectedCopy).SequenceEqual(File.ReadAllBytes(png)) && File.ReadAllText(Path.Combine(receivedFolder, offer.Name)) == "already here",
                     "An accepted file must be saved as \"name [1].ext\" beside an existing one.");
                 // The conversation's files panel: Received and Sent tabs for the open person only.
+                model.SetConversationFilesOpen(true);
                 model.ConversationFilesSent = false;
                 Check(model.ConversationFiles.Cast<FileTransfer>().Any() && model.ConversationFiles.Cast<FileTransfer>().All(t => !t.Outgoing && t.PeerId == model.SelectedPeer!.Id), "The Received tab lists only files from this person.");
                 model.ConversationFilesSent = true;
                 Check(model.ConversationFiles.Cast<FileTransfer>().All(t => t.Outgoing) && model.ConversationSentCount == model.Transfers.Count(t => t.Outgoing), "The Sent tab lists only files sent to this person.");
                 model.ConversationFilesSent = false;
                 Console.WriteLine("PASS  Inline images both ways; accepted files saved like LAN Messenger; files panel tabs");
+
+                var projectFolder = Directory.CreateDirectory(Path.Combine(directory, "Project files"));
+                File.WriteAllText(Path.Combine(projectFolder.FullName, "report.txt"), "project notes");
+                Check(model.AddAttachment(projectFolder.FullName) is null &&
+                    model.Attachments.Single() is { IsFolder: true, Name: "Project files" } && model.CanSend,
+                    "The composer should accept a folder attachment.");
+                await model.SendAsync();
+                var folderBubble = model.Messages.Last();
+                Check(folderBubble is { FolderAttachment: true, FileName: "Project files", Delivery: "Waiting for them to accept" } &&
+                    model.TransferFor(folderBubble)?.Path == projectFolder.FullName, "The outgoing folder should use the existing file bubble and keep its local source.");
+                FileTransfer? folderOffer = null;
+                await Until(() => { lock (peerTransfers) return (folderOffer = peerTransfers.SingleOrDefault(t => t.Folder && t.Name == "Project files")) is not null; });
+                await peer.DeclineFileAsync(folderOffer!);
+                await Until(() => folderBubble.Delivery == "Declined");
+                Console.WriteLine("PASS  Attach and send a folder through the file-transfer flow");
 
                 // A sent file's bubble follows the legacy outcome: waiting → declined / accepted → sent / cancelled.
                 string doc = Path.Combine(directory, "notes.txt"); File.WriteAllText(doc, new string('x', 200_000));
@@ -467,10 +711,22 @@ internal static class Program
                 Check((double)Application.Current.Resources["MessageFontSize"] == 17, "Message text size should change right away.");
                 Check(model.Settings.SendWithCtrlEnter && model.Settings.FirstName == "Home", "Preferences should be stored.");
                 await model.SavePreferencesAsync(st => { st.MessageFontSize = "medium"; st.SendWithCtrlEnter = false; });
+                var chosenBackground = Images.LoadChatBackground(png) ?? throw new Exception("A local PNG should load as a background.");
+                string backgroundPath = model.SaveChatBackground(chosenBackground);
+                await model.SavePreferencesAsync(st =>
+                {
+                    st.ChatBackgroundPath = backgroundPath; st.ChatBackgroundOpacity = .4;
+                    st.TypingEffect = "theme"; st.ClickEffect = "ripple"; st.MessageFont = "Consolas"; st.SteampunkEngineEnabled = true;
+                    st.SakuraPetalsEnabled = true;
+                });
                 Console.WriteLine("PASS  Files filters and preferences (font size, profile, send key)");
 
                 var window = new MainWindow(model); window.Show();
                 await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+                var background = (System.Windows.Controls.Image)window.FindName("ChatBackgroundImage");
+                Check(background.Source is not null && background.Opacity == .4 && !background.IsHitTestVisible &&
+                    ((FontFamily)Application.Current.Resources["MessageFontFamily"]).Source.Contains("Consolas"),
+                    "Background and font choices should apply independently in chat.");
                 var loading = new FileTransfer
                 {
                     Id = "progress-ui-test", PeerId = model.SelectedPeer!.Id, Name = "Test attachment.bin",
@@ -505,6 +761,18 @@ internal static class Program
                 var preferences = new SettingsWindow(model) { Owner = window }; preferences.Show();
                 await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
                 Capture(preferences, Path.Combine(artifacts, "live-preferences-tested.png"));
+                preferences.ShowPage("AppearancePage");
+                ((System.Windows.Controls.Expander)preferences.FindName("BackgroundGroup")).IsExpanded = true;
+                ((System.Windows.Controls.Expander)preferences.FindName("FontsGroup")).IsExpanded = true;
+                await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+                var previewImage = (System.Windows.Controls.Image)preferences.FindName("BackgroundPreview");
+                var opacityControl = (System.Windows.Controls.Slider)preferences.FindName("BackgroundOpacityBox");
+                Check(previewImage.IsVisible && previewImage.Source == background.Source && opacityControl.IsVisible &&
+                    opacityControl.Value == .4 && opacityControl.Template.FindName("PART_Track", opacityControl) is not null,
+                    "The background settings should preview the saved background with its own opacity control.");
+                Capture(preferences, Path.Combine(artifacts, "customization-background-tested.png"));
+                Check(((FrameworkElement)preferences.FindName("FontBox")).IsVisible && previewImage.IsVisible,
+                    "Font and background controls should share Appearance.");
                 preferences.Close(); window.Hide();
 
                 await model.SaveProfileAsync("Home desktop updated", "away", false, false);
@@ -520,7 +788,7 @@ internal static class Program
             await using var restored = new MainViewModel(localStore: store);
             restored.SelectedPeer = restored.Peers.Single();
             Check(restored.Draft == "Draft kept after restart", "Draft did not survive restart.");
-            Check(restored.Messages.Count(m => m.HasText && m.GroupId.Length == 0) == 4 && restored.Messages.First().CanRetry, "History or retry state did not survive restart.");
+            Check(restored.Messages.Count(m => m.HasText && m.GroupId.Length == 0) == 5 && restored.Messages.First().CanRetry, "History or retry state did not survive restart.");
             Check(restored.Messages.Count(m => m.HasImage && File.Exists(m.ImagePath)) == 2, "Sent and received images did not survive restart.");
             Check(restored.Groups.Count == 2 && restored.Groups.Any(g => g.Name == "Lunch"), "Groups did not survive restart.");
             Check(restored.RecentChats.Contains(restored.SelectedPeer) &&
@@ -528,6 +796,13 @@ internal static class Program
                 !restored.SelectedPeer.Online, "Recent should include saved direct and group chats after restart, including offline contacts.");
             Check(restored.Transfers.Count >= 3 && restored.Settings.FirstName == "Home", "File history and profile did not survive restart.");
             Check(restored.Settings.DisplayName == "Home desktop updated", "Preferences were not persisted.");
+            Check(restored.ChatBackground is not null && restored.ChatBackgroundOpacity == .4 &&
+                restored.Settings is { TypingEffect: "theme", ClickEffect: "ripple", MessageFont: "Consolas", SteampunkEngineEnabled: true, SakuraPetalsEnabled: true },
+                "The background, font and each effect should survive restart independently.");
+            string savedBackground = restored.Settings.ChatBackgroundPath;
+            await restored.SavePreferencesAsync(st => st.ChatBackgroundPath = "");
+            Check(restored.ChatBackground is null && !File.Exists(savedBackground) && restored.Settings.ClickEffect == "ripple",
+                "Removing the background should remove its managed copy and keep the effect preferences.");
             Console.WriteLine("PASS  Desktop restart restores history, drafts, profile and retry state");
 
             // Delete chat removes only the open conversation (and CydLan's picture copies); delete all chats removes every one.
@@ -552,6 +827,291 @@ internal static class Program
                 throw new InvalidOperationException("Refusing cleanup outside the desktop test directory.");
             Directory.Delete(full, true);
         }
+    }
+
+    private static Color ThemeAccent() => ((SolidColorBrush)Application.Current.Resources["Accent"]).Color;
+
+    private static async Task TestStartupRosterAsync(string directory)
+    {
+        var store = new LocalStore(directory);
+        var bitmap = BitmapSource.Create(112, 112, 96, 96, PixelFormats.Bgr32, null, new byte[112 * 112 * 4], 112 * 4);
+        var people = Enumerable.Range(1, 72).Select(index =>
+        {
+            var encoder = new PngBitmapEncoder();
+            encoder.Frames.Add(BitmapFrame.Create(bitmap));
+            var path = Path.Combine(directory, $"avatar-{index}.png");
+            using (var stream = File.Create(path)) encoder.Save(stream);
+            return new Peer { Id = $"contact-{index}", Name = $"Saved contact {index:00}", AvatarPath = path };
+        }).ToArray();
+        store.SavePeers(people);
+        store.SaveHistory(Enumerable.Range(0, 10000).Select(index => new ChatMessage
+        {
+            Id = index.ToString(), PeerId = people[index % people.Length].Id, Text = $"Sample history {index}"
+        }));
+
+        var timer = System.Diagnostics.Stopwatch.StartNew();
+        await using var model = new MainViewModel(localStore: store);
+        long profileMilliseconds = timer.ElapsedMilliseconds;
+        var window = new MainWindow(model);
+        window.Show();
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        long paintMilliseconds = timer.ElapsedMilliseconds - profileMilliseconds;
+        var roster = (System.Windows.Controls.ListBox)window.FindName("PeopleList");
+        int realized = Enumerable.Range(0, people.Length).Count(index => roster.ItemContainerGenerator.ContainerFromIndex(index) is not null);
+        Console.WriteLine($"Startup fixture: {roster.Items.Count} contacts, {realized} realized rows, profile {profileMilliseconds} ms, window {paintMilliseconds} ms.");
+        Check(roster.Items.Count == people.Length && realized > 0 && realized < people.Length / 2,
+            "The sidebar should retain the whole roster and only construct nearby rows on first paint.");
+        roster.ScrollIntoView(model.Peers[^1]);
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(roster.ItemContainerGenerator.ContainerFromItem(model.Peers[^1]) is not null,
+            "Scrolling should realize saved contacts outside the first viewport.");
+        model.Search = people[^1].Name;
+        Check(roster.Items.Count == 1 && roster.Items[0] == model.Peers[^1], "Search must still find contacts outside the first viewport.");
+        window.Close();
+    }
+
+    private static async Task TestStartupConnectionAsync(string directory, int port)
+    {
+        var store = new LocalStore(directory);
+        var settings = new AppSettings { DisplayName = "Startup test host", Port = port };
+        store.SaveSettings(settings);
+        store.SaveHistory([new ChatMessage { PeerId = "saved", Text = "Existing history" }]);
+        var historyPath = Path.Combine(directory, "history.json");
+        File.SetLastWriteTimeUtc(historyPath, new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+        DateTime historyWrite = File.GetLastWriteTimeUtc(historyPath);
+        await using var model = new MainViewModel(localStore: store);
+        await model.StartAsync(discovery: false, bindAddress: IPAddress.Loopback);
+        var remotes = Enumerable.Range(1, 4).Select(index =>
+            new LanService(new AppSettings { DisplayName = $"Startup peer {index}", Port = 0 })).ToArray();
+        try
+        {
+            await Task.WhenAll(remotes.Select(service => service.StartAsync(discovery: false, bindAddress: IPAddress.Loopback)));
+            await Task.WhenAll(remotes.Select(service => service.ConnectAsync(settings.UserId, IPAddress.Loopback.ToString(), port)));
+            await Until(() => model.OnlineCount == remotes.Length && store.LoadPeers().Count == remotes.Length);
+            Check(File.GetLastWriteTimeUtc(historyPath) == historyWrite && store.LoadHistory().Single().Text == "Existing history",
+                "A burst of reconnects should save contact data without rewriting chat history.");
+            Console.WriteLine("PASS  Startup and batched contact persistence across four local loopback connections; no chat history rewrite.");
+        }
+        finally
+        {
+            foreach (var remote in remotes) await remote.DisposeAsync();
+        }
+    }
+
+    private static async Task TestAdditionalEffectsAsync(string artifacts)
+    {
+        await using var model = new MainViewModel(preview: true);
+        var window = new MainWindow(model);
+        window.Show();
+        var weather = new[] { "Fireflies", "Rain", "Snow" }
+            .Select(name => (WeatherEffect)window.FindName("Conversation" + name)).ToArray();
+        var layer = (ChatEffects)window.FindName("EffectLayer");
+        var composer = (System.Windows.Controls.TextBox)window.FindName("Composer");
+        Check(weather.All(effect => !effect.IsVisible) && !model.Settings.SendPulseEnabled,
+            "New effects should be off by default.");
+
+        var preferences = new SettingsWindow(model) { Owner = window };
+        preferences.Show();
+        preferences.ShowPage("AppearancePage");
+        var ambientGroup = (System.Windows.Controls.Expander)preferences.FindName("AmbientEffectsGroup");
+        var interactionGroup = (System.Windows.Controls.Expander)preferences.FindName("InteractionEffectsGroup");
+        var titleGroup = (System.Windows.Controls.Expander)preferences.FindName("TitleEffectsGroup");
+        var typingBox = (System.Windows.Controls.ComboBox)preferences.FindName("TypingEffectBox");
+        Check(!ambientGroup.IsExpanded && !interactionGroup.IsExpanded && !titleGroup.IsExpanded && !typingBox.IsVisible,
+            "Appearance should show collapsed categories and keep individual controls out of the initial view.");
+        ambientGroup.IsExpanded = true;
+        interactionGroup.IsExpanded = true;
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(typingBox.IsVisible && !titleGroup.IsExpanded, "Expanding one category must not open unrelated controls.");
+        ((System.Windows.Controls.ComboBox)preferences.FindName("ThemeBox")).SelectedValue = ThemeManager.Forest;
+        ((System.Windows.Controls.ComboBox)preferences.FindName("TypingEffectBox")).SelectedValue = "ink";
+        foreach (string name in new[] { "Fireflies", "Rain", "Snow", "SendPulse" })
+            ((System.Windows.Controls.CheckBox)preferences.FindName(name + "Box")).IsChecked = true;
+        foreach (var (name, value) in new[] { ("Firefly", .85), ("Rain", .5), ("Snow", .65), ("InkBloom", .75), ("SendPulse", .4) })
+            ((System.Windows.Controls.Slider)preferences.FindName(name + "IntensityBox")).Value = value;
+        ((System.Windows.Controls.Slider)preferences.FindName("TypingIntensityBox")).Value = .2;
+        ((System.Windows.Controls.Slider)preferences.FindName("ClickIntensityBox")).Value = .9;
+        interactionGroup.IsExpanded = false;
+        ClickNamed(preferences, "Save");
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(weather.All(effect => effect.IsVisible && !effect.IsHitTestVisible && effect.Tint == ThemeAccent()) &&
+            weather.Select(effect => effect.Intensity).SequenceEqual(new[] { .85, .5, .65 }) &&
+            model.Settings is { TypingEffect: "ink", InkBloomIntensity: .75, SendPulseEnabled: true, SendPulseIntensity: .4 },
+            "Appearance should apply independent strengths and the current palette.");
+        Check(model.TypingIntensity == .2 && model.ClickIntensity == .9,
+            "Collapsing interaction effects should preserve separate intensity changes.");
+        window.Activate();
+        if (SystemParameters.ClientAreaAnimation) await Until(() => weather.All(effect => effect.Progress > .005));
+        else Check(weather.All(effect => effect.Progress == 0), "Reduced motion should prevent weather animation.");
+        Capture(window, Path.Combine(artifacts, "appearance-weather-tested.png"));
+        ThemeManager.Apply(ThemeManager.Ocean);
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(weather.All(effect => effect.IsVisible && effect.Tint == ThemeAccent()), "Weather should recolor without being disabled.");
+        window.WindowState = WindowState.Maximized;
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        var dpi = VisualTreeHelper.GetDpi(weather[0]);
+        double area = weather[0].ActualWidth * weather[0].ActualHeight * dpi.DpiScaleX * dpi.DpiScaleY;
+        if (SystemParameters.ClientAreaAnimation && area > 800_000)
+            Check(weather.All(effect => effect.ActiveFrameRate == 18), "Large chat surfaces should cap all ambient frame rates.");
+        var foreground = new Window { Width = 220, Height = 140, ShowInTaskbar = false, Owner = window };
+        foreground.Show();
+        foreground.Activate();
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(!window.IsActive && weather.All(effect => effect.ActiveFrameRate == 0 && effect.Progress == 0),
+            "Ambient rendering should stop while another window has focus.");
+        foreground.Close();
+        window.Activate();
+        window.WindowState = WindowState.Minimized;
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(weather.All(effect => effect.Progress == 0), "Minimizing should stop weather clocks.");
+        window.WindowState = WindowState.Normal;
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+
+        window.Activate();
+        composer.Focus();
+        TypeInComposer(composer, "hello");
+        TypeInComposer(composer, " ");
+        int expected = SystemParameters.ClientAreaAnimation ? 1 : 0;
+        Check(layer.Children.Count == expected && composer.Text == "hello " &&
+            ChatEffects.Resolve("ink", ThemeManager.Ocean, typing: false) == "off", "Ink bloom should only respond to typing.");
+        ClickNamed(window, "Send message");
+        Check(layer.Children.Count == expected * 2 && model.Messages[^1] is { Text: "hello", Delivery: "Preview only" },
+            "A successful offline preview should pulse on send with honest delivery status.");
+        ClickNamed(window, "Send message");
+        Check(layer.Children.Count == expected * 2, "An empty draft must not trigger send feedback.");
+        await model.SavePreferencesAsync(settings => settings.SendPulseEnabled = false);
+        composer.Text = "silent";
+        ClickNamed(window, "Send message");
+        Check(layer.Children.Count == expected * 2 && model.Messages[^1].Text == "silent",
+            "Turning off send pulse should preserve message sending.");
+        await model.SavePreferencesAsync(settings =>
+        {
+            settings.FirefliesEnabled = false;
+            settings.SnowEnabled = false;
+            settings.RainIntensity = 1;
+        });
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Capture(window, Path.Combine(artifacts, "fast-rain-tested.png"));
+        window.Close();
+        ThemeManager.Apply(ThemeManager.Light);
+        Console.WriteLine("PASS  Weather palettes, independent controls, ink bloom, send pulse and reduced motion");
+    }
+
+    private static async Task TestThemeDetailsAsync(string artifacts)
+    {
+        await using var model = new MainViewModel(preview: true);
+        var window = new MainWindow(model);
+        window.Show();
+        var sidebar = (ThemeDecoration)window.FindName("SidebarDecoration");
+        var title = (ThemeDecoration)window.FindName("TitleDecoration");
+        var composer = (ThemeDecoration)window.FindName("ComposerDecoration");
+        var preferences = new SettingsWindow(model) { Owner = window };
+        preferences.Show();
+        preferences.ShowPage("AppearancePage");
+        var themeBox = (System.Windows.Controls.ComboBox)preferences.FindName("ThemeBox");
+        var checkbox = (System.Windows.Controls.CheckBox)preferences.FindName("ThemeDetailsBox");
+        Check(!checkbox.IsVisible && !sidebar.IsVisible, "Standard themes should hide the optional detail control.");
+        themeBox.SelectedValue = ThemeManager.Sakura;
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(checkbox.IsVisible && checkbox.IsChecked == false && !sidebar.IsVisible, "Theme details should be opt-in.");
+        checkbox.IsChecked = true;
+        Capture(preferences, Path.Combine(artifacts, "appearance-groups-tested.png"));
+        var previewGroup = (System.Windows.Controls.Expander)preferences.FindName("ThemePreviewGroup");
+        Check(!previewGroup.IsExpanded, "The theme preview should leave space for Appearance categories by default.");
+        previewGroup.IsExpanded = true;
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(((FrameworkElement)preferences.FindName("ThemePreview")).IsVisible, "The themed preview should be accessible on demand.");
+        ClickNamed(preferences, "Save");
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        foreach (var (theme, design) in new[]
+        {
+            (ThemeManager.Sakura, DecorationDesign.Sakura), (ThemeManager.Steampunk, DecorationDesign.Steampunk),
+            (ThemeManager.Forest, DecorationDesign.Forest), (ThemeManager.Paper, DecorationDesign.Paper)
+        })
+        {
+            ThemeManager.Apply(theme);
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            Check(new[] { sidebar, title, composer }.All(surface => surface.IsVisible && !surface.IsHitTestVisible && surface.Design == design),
+                $"Theme surfaces should follow {theme} without intercepting chat controls.");
+            Capture(window, Path.Combine(artifacts, $"theme-{theme}-details-tested.png"));
+        }
+        await model.SavePreferencesAsync(settings => settings.ThemeDetailsEnabled = false);
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(!sidebar.IsVisible && !title.IsVisible && !composer.IsVisible, "Theme details should switch off independently.");
+        window.Close();
+        ThemeManager.Apply(ThemeManager.Light);
+        Console.WriteLine("PASS  Optional theme details, live palette, and collapsed Appearance groups");
+    }
+
+    private static void TypeInComposer(System.Windows.Controls.TextBox composer, string text)
+    {
+        Check(composer.IsKeyboardFocused, "The test composer must have keyboard focus.");
+        System.Windows.Input.TextCompositionManager.StartComposition(
+            new System.Windows.Input.TextComposition(System.Windows.Input.InputManager.Current, composer, text));
+    }
+
+    private static async Task TestOfflinePagingAsync(string directory)
+    {
+        var store = new LocalStore(directory);
+        store.SaveSettings(new AppSettings
+        {
+            EffectIntensity = .55, PetalIntensity = .4, EngineIntensity = .9, SakuraPetalsEnabled = true, SteampunkEngineEnabled = true,
+            FirefliesEnabled = true, FireflyIntensity = .9, RainEnabled = true, RainIntensity = .5, SnowEnabled = true, SnowIntensity = .8,
+            TypingEffect = "ink", InkBloomIntensity = .35, SendPulseEnabled = true, SendPulseIntensity = .45
+        });
+        store.SavePeers([new Peer { Id = "peer", Name = "Offline contact" }, new Peer { Id = "second", Name = "Other contact" }]);
+        store.SaveHistory(Enumerable.Range(1, 125).Select(i => new ChatMessage { PeerId = "peer", Text = $"Message {i:000}" })
+            .Append(new ChatMessage { PeerId = "second", Text = "Other chat" }));
+        store.SaveTransfers(Enumerable.Range(1, 105).Select(i => new FileTransfer
+        {
+            Id = i.ToString(), PeerId = "peer", Outgoing = i <= 100, Name = $"File {i:000}", State = "Received"
+        }));
+        await using var model = new MainViewModel(localStore: store);
+        Check(model.EffectIntensity == .55 && model.PetalIntensity == .4 && model.EngineIntensity == .9 &&
+            model.SakuraPetalsEnabled && model.SteampunkEngineEnabled,
+            "Appearance intensity and effects should survive restart.");
+        Check(model.TypingIntensity == .55 && model.ClickIntensity == .55,
+            "Older profiles should keep their shared intensity for both new controls.");
+        Check(model.Settings is
+        {
+            FirefliesEnabled: true, FireflyIntensity: .9, RainEnabled: true, RainIntensity: .5, SnowEnabled: true, SnowIntensity: .8,
+            TypingEffect: "ink", InkBloomIntensity: .35, SendPulseEnabled: true, SendPulseIntensity: .45
+        }, "The new effects and their settings should survive restart.");
+        model.SelectedPeer = model.Peers[0];
+        Check(model.Messages.Count == 40 && model.Messages[0].Text == "Message 086" && model.HasOlderMessages && !model.HasNewerMessages,
+            "Opening chat should only populate the latest message page.");
+        model.PageMessages(older: true);
+        Check(model.Messages[0].Text == "Message 046" && model.Messages[^1].Text == "Message 085" && model.HasNewerMessages,
+            "Previous message pages should appear in chronological order.");
+        model.PageMessages(older: true);
+        model.PageMessages(older: true);
+        Check(model.Messages.Count == 5 && !model.HasOlderMessages && model.Messages[0].Text == "Message 001",
+            "History must remain reachable all the way to the first message.");
+        model.PageMessages(older: false);
+        Check(model.Messages.Count == 40 && model.Messages[0].Text == "Message 006", "Moving forward from a partial page should skip no messages.");
+        model.MessageSearch = "Message 002";
+        Check(model.Messages.Single().Text == "Message 002", "Search must find messages outside the loaded page.");
+        model.MessageSearch = "";
+        model.SelectedPeer = model.Peers[1];
+        Check(model.Messages.Single().Text == "Other chat", "Changing chats should reset paging.");
+        model.SelectedPeer = model.Peers[0];
+        Check(model.Messages[0].Text == "Message 086" && model.ConversationFiles.Count == 0,
+            "Reopening a chat should start at its latest page without populating the files panel.");
+        var window = new MainWindow(model);
+        window.Show();
+        ClickNamed(window, "Files in this conversation");
+        model.ConversationFilesSent = true;
+        Check(model.ConversationFiles.Count == 40 && model.HasOlderFiles && model.ConversationSentCount == 100,
+            "The sent files panel should page results while showing the total count.");
+        model.PageConversationFiles(older: true);
+        Check(model.ConversationFiles[0].Name == "File 041", "The next file page should show the next set of results.");
+        model.ConversationFilesSent = false;
+        Check(model.ConversationFiles.Count == 5 && !model.HasOlderFiles && !model.HasNewerFiles,
+            "Switching the file direction should reset paging.");
+        ClickNamed(window, "Files in this conversation");
+        Check(model.ConversationFiles.Count == 0, "Closing the files panel should release its displayed rows.");
+        window.Close();
+        Console.WriteLine("PASS  Offline stored history, message search, and on-demand conversation files");
     }
 
     private static async Task TestIsolatedAccountsAsync(string directory)
@@ -603,6 +1163,10 @@ internal static class Program
         }
         Console.WriteLine("PASS  Three isolated desktop accounts discover each other, exchange chat and retain independent themes");
     }
+
+    [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool IsIconic(IntPtr window);
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongW")] private static extern int GetWindowLong(IntPtr window, int index);
 
     private static void ClickNamed(DependencyObject root, string automationName)
     {

@@ -63,7 +63,10 @@ public partial class App : System.Windows.Application
             }
             if (!captureTray && (capturing || preview || !model.Settings.StartMinimized)) window.Show();
             if (e.Args.Contains("--details")) window.ShowConnectionDetails();
+            if (!preview) await System.Windows.Threading.Dispatcher.Yield(DispatcherPriority.Background);
+            if (quitting) return;
             await model.StartAsync(bindAddress: labAddress);
+            if (quitting) return;
             Window captureWindow = window;
             if (captureTray)
             {
@@ -131,22 +134,28 @@ public partial class App : System.Windows.Application
     }
     internal void ConnectNotifications(MainWindow window, MainViewModel source)
     {
-        source.Notify += (name, text) => {
+        source.PropertyChanged += (_, args) => {
+            if (args.PropertyName == nameof(MainViewModel.ShouldShowNotificationPopup) && !source.ShouldShowNotificationPopup)
+                notification?.Close();
+        };
+        source.Notify += preview => {
             if (quitting) return;
             if (source.ShouldPlaySound) System.Media.SystemSounds.Asterisk.Play();
             if (!source.ShouldAlert) return;
+            window.RequestTaskbarAttention();
+            if (preview is not { } message) return;
             if (notification is null)
             {
                 notification = new MessageNotificationWindow(() => ShowWindow(window));
                 notification.Closed += (_, _) => notification = null;
             }
-            notification.Present(name, text);
+            notification.Present(message.Sender, message.Text);
         };
     }
-    private static Icon MakeIcon()
+    internal static Icon MakeIcon(int size = 32)
     {
         using var stream = GetResourceStream(new Uri("pack://application:,,,/CydLan;component/Assets/cydlan.ico")).Stream;
-        using var icon = new Icon(stream, 32, 32);
+        using var icon = new Icon(stream, size, size);
         return (Icon)icon.Clone();
     }
     // Draws the popup over the main window at its real offset, so the screenshot shows the backdrop too.

@@ -8,7 +8,7 @@ using System.Text;
 namespace CydLan.Core;
 
 /// <summary>A peer endpoint. Every instance listens locally; there is no broker or relay.</summary>
-public sealed class LanService : IAsyncDisposable
+public sealed partial class LanService : IAsyncDisposable
 {
     private readonly AppSettings settings;
     private readonly DiagnosticLog? log;
@@ -368,9 +368,10 @@ public sealed class LanService : IAsyncDisposable
                 if (header[0] != (byte)'E') return;
                 var id = Encoding.ASCII.GetString(header, 1, 32);
                 var peer = await ReadIdentityAsync(stream, deadline.Token);
-                if (!transfers.TryGetValue(peer + ":" + id, out var transfer) || transfer.Outgoing || transfer.State != "Accepted") return;
                 var remote = RemoteIPv4(client);
                 if (!sessions.TryGetValue(peer, out var session) || session.Address != remote) return;
+                if (await TryReceiveFolderFileAsync(session, id, stream)) return;
+                if (!transfers.TryGetValue(peer + ":" + id, out var transfer) || transfer.Outgoing || transfer.State != "Accepted") return;
                 await ReceiveFileAsync(stream, transfer);
             }
         }
@@ -503,6 +504,7 @@ public sealed class LanService : IAsyncDisposable
             bool removed = sessions.TryRemove(new KeyValuePair<string, Session>(session.Id, session));
             log?.Write("connection.closed", null, ("peer", session.Id), ("address", session.Address), ("shutdown", stopping.IsCancellationRequested), ("superseded", !removed));
             if (removed) PeerOffline?.Invoke(session.Id);
+            StopFolderTransfers(session, "Interrupted");
             lock (session.Spares) foreach (var spare in session.Spares) spare.Dispose();
             session.Client.Dispose(); session.Cipher?.Dispose();
             clients.TryRemove(session.Client, out _);
@@ -522,6 +524,7 @@ public sealed class LanService : IAsyncDisposable
                 knownPeers[session.Id] = (session.Address, session.Port);
                 retryDelays.TryRemove(session.Id, out _);
                 session.Version = DisplayVersion(Limit(message.Get("version"), 80));
+                session.SupportsFolders = uint.TryParse(message.Get("usercaps"), out uint capabilities) && (capabilities & 4) != 0;
                 if (message.Get("queryop") == "get") await SendUserDataAsync(session, "result");
                 PeerOnline?.Invoke(new() { Id = session.Id, Name = Limit(message.Get("name"), 100), Address = session.Address,
                     Port = session.Port, Version = session.Version, Status = message.Get("status"), Online = true,
@@ -558,7 +561,10 @@ public sealed class LanService : IAsyncDisposable
                 await SendUserDataAsync(session, "get");
                 break;
             case "chatstate": TypingChanged?.Invoke(session.Id, message.Get("chatstate") == "composing" ? "Typing…" : ""); break;
-            case "file": await HandleFileAsync(session, message); break;
+            case "file":
+                if (message.Get("filetype") == "folder") HandleFolderFile(session, message);
+                else await HandleFileAsync(session, message);
+                break;
             case "groupmessage":
                 // Group chat is not acknowledged by LAN Messenger, so neither side waits for a receipt.
                 var thread = message.Get("thread"); var op = message.Get("groupmsgop");
@@ -567,10 +573,7 @@ public sealed class LanService : IAsyncDisposable
                     GroupMessageReceived?.Invoke(session.Id, thread, op, op == "message" ? Limit(message.Get("message"), 32000) : "");
                 break;
             case "avatar": await HandleAvatarAsync(session, message); break;
-            case "folder":
-                if (message.Get("fileop") == "request") await SendAsync(session.Id, message.Type, new() {
-                    ["fileop"] = "decline", ["fileid"] = message.Get("fileid"), ["filetype"] = message.Get("filetype"), ["mode"] = "receive" });
-                break;
+            case "folder": await HandleFolderAsync(session, message); break;
             case "query":
                 // LAN Messenger's "Get Information" window reads every one of these fields, including status.
                 if (message.Get("queryop") == "get") await SendAsync(session.Id, "query", new() {
@@ -688,18 +691,23 @@ public sealed class LanService : IAsyncDisposable
     }
     private Task SendUserDataAsync(Session session, string operation) => SendAsync(session.Id, "userdata", new() {
         ["userid"] = settings.UserId, ["name"] = settings.DisplayName, ["address"] = LocalAddress,
-        // usercaps 3 = UC_File | UC_GroupMessage. LAN Messenger only lists contacts with UC_GroupMessage when inviting
-        // people to a chat room. Folder transfer (4) is not supported.
-        ["version"] = WireVersion, ["status"] = settings.Status, ["note"] = "", ["usercaps"] = "3", ["queryop"] = operation, ["tcpport"] = ListeningPort.ToString(),
+        // UC_File | UC_GroupMessage | UC_Folder
+        ["version"] = WireVersion, ["status"] = settings.Status, ["note"] = "", ["usercaps"] = "7", ["queryop"] = operation, ["tcpport"] = ListeningPort.ToString(),
         ["firstname"] = settings.FirstName, ["lastname"] = settings.LastName, ["about"] = settings.About });
     private byte[] Encode(string type, string? to, Dictionary<string, string> body, string? id = null) =>
         LegacyProtocol.Encode(type, settings.UserId, to, id ?? Interlocked.Increment(ref sequence).ToString(), body);
-    private async Task SendAsync(string id, string type, Dictionary<string, string> body, string? messageId = null)
+    private Task SendAsync(string id, string type, Dictionary<string, string> body, string? messageId = null)
     {
-        if (!sessions.TryGetValue(id, out var session) || session.Cipher is null) throw new IOException("This person is offline.");
+        if (!sessions.TryGetValue(id, out var session)) throw new IOException("This person is offline.");
+        return SendAsync(session, type, body, messageId);
+    }
+    private async Task SendAsync(Session session, string type, Dictionary<string, string> body, string? messageId = null)
+    {
+        if (session.Cipher is not { } cipher || !sessions.TryGetValue(session.Id, out var current) || current != session)
+            throw new IOException("This person is offline.");
         // Serialize encryption and frame writes together so concurrent sends cannot interleave.
         await session.WriteGate.WaitAsync(stopping.Token);
-        try { await LegacyProtocol.WriteFrameAsync(session.Stream, "MESSAG", session.Cipher.Encrypt(Encode(type, id, body, messageId)), stopping.Token); }
+        try { await LegacyProtocol.WriteFrameAsync(session.Stream, "MESSAG", cipher.Encrypt(Encode(type, session.Id, body, messageId)), stopping.Token); }
         catch (ObjectDisposedException e) { throw new IOException("The peer disconnected.", e); }
         finally { session.WriteGate.Release(); }
     }
@@ -712,14 +720,51 @@ public sealed class LanService : IAsyncDisposable
         if (!info.Exists) throw new FileNotFoundException("File does not exist.", path);
         inlineImage = inlineImage && info.Length <= MaxInlineImageBytes && IsInlineImageName(info.Name);
         var transfer = new FileTransfer { Id = Guid.NewGuid().ToString("N").ToUpperInvariant(), PeerId = peerId, Name = info.Name, Size = info.Length, Outgoing = true, Path = path, Inline = inlineImage };
-        transfers[peerId + ":" + transfer.Id] = transfer;
-        await SendAsync(peerId, "file", FileBody(transfer, "request"));
+        return await OfferTransferAsync(transfer);
+    }
+
+    public async Task<FileTransfer> OfferFolderAsync(string peerId, string path)
+    {
+        if (!sessions.TryGetValue(peerId, out var session)) throw new IOException("This person is offline.");
+        var source = new DirectoryInfo(path);
+        if (session.SupportsFolders)
+        {
+            var entries = await Task.Run(() => ReadFolder(source, stopping.Token), stopping.Token);
+            if (entries.Count > 0) return await OfferNativeFolderAsync(session, source, entries);
+        }
+        var archive = await Task.Run(() => FolderArchive.CreateAsync(source, stopping.Token), stopping.Token);
+        try
+        {
+            var info = new FileInfo(archive.Path);
+            return await OfferTransferAsync(new FileTransfer {
+                Id = Guid.NewGuid().ToString("N").ToUpperInvariant(), PeerId = peerId, Name = info.Name,
+                Size = info.Length, Outgoing = true, Path = source.FullName, Archive = archive
+            });
+        }
+        catch
+        {
+            archive.Dispose();
+            throw;
+        }
+    }
+
+    private async Task<FileTransfer> OfferTransferAsync(FileTransfer transfer)
+    {
+        string key = transfer.PeerId + ":" + transfer.Id;
+        transfers[key] = transfer;
+        try { await SendAsync(transfer.PeerId, "file", FileBody(transfer, "request")); }
+        catch { transfers.TryRemove(key, out _); throw; }
         TransferChanged?.Invoke(transfer);
         return transfer;
     }
     public async Task AcceptFileAsync(FileTransfer transfer, string destination)
     {
         if (transfer.Outgoing || transfer.State != "Waiting for approval") throw new InvalidOperationException("This offer is no longer available.");
+        if (transfer.Folder)
+        {
+            AcceptNativeFolder(transfer, destination);
+            return;
+        }
         transfer.Path = destination; transfer.State = "Accepted";
         var body = FileBody(transfer, "accept"); body["tcpport"] = ListeningPort.ToString();
         try { await SendAsync(transfer.PeerId, "file", body); }
@@ -730,11 +775,14 @@ public sealed class LanService : IAsyncDisposable
     public async Task CancelFileAsync(FileTransfer transfer)
     {
         if (!transfer.Outgoing || transfer.State != "Waiting for approval") throw new InvalidOperationException("Only a pending offer can be cancelled.");
+        if (transfer.Folder) { await AnswerNativeFolderAsync(transfer, "cancel", "Cancelled"); return; }
         await SendAsync(transfer.PeerId, "file", FileBody(transfer, "cancel"));
         transfer.State = "Cancelled"; TransferChanged?.Invoke(transfer);
+        ReleaseFolderArchive(transfer);
     }
     public async Task DeclineFileAsync(FileTransfer transfer)
     {
+        if (transfer.Folder) { await AnswerNativeFolderAsync(transfer, "decline", "Declined"); return; }
         await SendAsync(transfer.PeerId, "file", FileBody(transfer, "decline"));
         transfer.State = "Declined"; TransferChanged?.Invoke(transfer);
     }
@@ -911,6 +959,7 @@ public sealed class LanService : IAsyncDisposable
             {
                 transfer.State = message.Get("fileop") switch { "decline" => "Declined", "cancel" => "Cancelled", _ => "Aborted" };
                 TransferChanged?.Invoke(transfer);
+                ReleaseFolderArchive(transfer);
             }
         }
         await Task.CompletedTask;
@@ -934,67 +983,94 @@ public sealed class LanService : IAsyncDisposable
     }
     private async Task SendFileAsync(Session session, FileTransfer transfer, int port)
     {
-        using var client = new TcpClient { NoDelay = true };
         try
         {
-            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(stopping.Token);
-            deadline.CancelAfter(TimeSpan.FromSeconds(30));
-            await client.ConnectAsync(session.Address, port, deadline.Token);
-            var stream = client.GetStream();
-            await stream.WriteAsync(Encoding.ASCII.GetBytes("FILE" + transfer.Id + settings.UserId), deadline.Token);
-            var start = new byte[5]; await stream.ReadExactlyAsync(start, deadline.Token);
-            if (Encoding.ASCII.GetString(start) != "START") throw new InvalidDataException("Invalid transfer response.");
-            transfer.State = "Transferring";
-            Report(transfer);
-            using var file = File.OpenRead(transfer.Path);
-            if (file.Length != transfer.Size) throw new IOException("The file changed after it was offered.");
-            var buffer = new byte[65536]; long sent = 0; int read;
-            while ((read = await file.ReadAsync(buffer, stopping.Token)) > 0)
-            {
-                deadline.CancelAfter(TimeSpan.FromSeconds(30));
-                await stream.WriteAsync(buffer.AsMemory(0, read), deadline.Token);
-                sent += read; transfer.Progress = transfer.Size == 0 ? 100 : sent * 100d / transfer.Size;
-                Report(transfer);
-            }
-            // Legacy file streams have no application-level completion receipt.
-            client.Client.Shutdown(SocketShutdown.Send);
+            await SendFilePayloadAsync(session, port, transfer.Id, transfer.Archive?.Path ?? transfer.Path, transfer.Size,
+                bytes => { transfer.State = "Transferring"; transfer.Progress = Percent(bytes, transfer.Size); Report(transfer); }, stopping.Token);
             transfer.Progress = 100; transfer.State = "Sent · receipt unavailable"; Report(transfer);
         }
-        catch (Exception e) when (e is IOException or SocketException or OperationCanceledException or UnauthorizedAccessException)
+        catch (Exception e) when (e is IOException or SocketException or OperationCanceledException or UnauthorizedAccessException or InvalidDataException)
         { log?.Write("transfer.send_failed", e, ("peer", transfer.PeerId), ("id", transfer.Id), ("bytes", transfer.Size)); transfer.State = "Failed: " + e.Message; Report(transfer); }
+        finally { ReleaseFolderArchive(transfer); }
     }
     private async Task ReceiveFileAsync(NetworkStream stream, FileTransfer transfer)
     {
-        // Write to a unique sibling and move only after the exact advertised size.
-        var partial = transfer.Path + "." + transfer.Id + ".partial";
         try
         {
-            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(stopping.Token);
-            deadline.CancelAfter(TimeSpan.FromSeconds(30));
-            await using (var file = new FileStream(partial, FileMode.CreateNew, FileAccess.Write, FileShare.None, 65536, true))
-            {
-                await stream.WriteAsync("START"u8.ToArray(), deadline.Token);
-                transfer.State = "Transferring";
-                Report(transfer);
-                var buffer = new byte[65536]; long remaining = transfer.Size;
-                while (remaining > 0)
-                {
-                    deadline.CancelAfter(TimeSpan.FromSeconds(30));
-                    int read = await stream.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, remaining)), deadline.Token);
-                    if (read == 0) throw new EndOfStreamException("The transfer ended early.");
-                    await file.WriteAsync(buffer.AsMemory(0, read), deadline.Token);
-                    remaining -= read; transfer.Progress = (transfer.Size - remaining) * 100d / transfer.Size;
-                    Report(transfer);
-                }
-            }
-            File.Move(partial, transfer.Path, false);
+            await ReceiveFilePayloadAsync(stream, transfer.Id, transfer.Path, transfer.Size,
+                bytes => { transfer.State = "Transferring"; transfer.Progress = Percent(bytes, transfer.Size); Report(transfer); }, stopping.Token);
             transfer.Progress = 100; transfer.State = "Received"; Report(transfer);
         }
         catch (Exception e) when (e is IOException or SocketException or OperationCanceledException or UnauthorizedAccessException)
         {
             log?.Write("transfer.receive_failed", e, ("peer", transfer.PeerId), ("id", transfer.Id), ("bytes", transfer.Size));
-            if (File.Exists(partial)) File.Delete(partial);
             transfer.State = "Failed: " + e.Message; Report(transfer);
+        }
+    }
+
+    private static double Percent(long bytes, long total) => total == 0 ? 100 : bytes * 100d / total;
+
+    private async Task SendFilePayloadAsync(Session session, int port, string id, string path, long size, Action<long> progress, CancellationToken cancellationToken)
+    {
+        using var client = new TcpClient { NoDelay = true };
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(TimeSpan.FromSeconds(30));
+        await client.ConnectAsync(session.Address, port, deadline.Token);
+        var stream = client.GetStream();
+        await stream.WriteAsync(Encoding.ASCII.GetBytes("FILE" + id + settings.UserId), deadline.Token);
+        var start = new byte[5];
+        await stream.ReadExactlyAsync(start, deadline.Token);
+        if (!start.AsSpan().SequenceEqual("START"u8)) throw new InvalidDataException("Invalid transfer response.");
+        using var file = File.OpenRead(path);
+        if (file.Length != size) throw new IOException("The file changed after it was offered.");
+        progress(0);
+        var buffer = new byte[65536];
+        long sent = 0;
+        while (sent < size)
+        {
+            deadline.CancelAfter(TimeSpan.FromSeconds(30));
+            int read = await file.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, size - sent)), deadline.Token);
+            if (read == 0) throw new EndOfStreamException("The file changed during transfer.");
+            await stream.WriteAsync(buffer.AsMemory(0, read), deadline.Token);
+            sent += read;
+            progress(sent);
+        }
+        // Legacy file streams have no application-level completion receipt.
+        client.Client.Shutdown(SocketShutdown.Send);
+    }
+
+    private static async Task ReceiveFilePayloadAsync(NetworkStream stream, string id, string path, long size, Action<long> progress, CancellationToken cancellationToken)
+    {
+        // A received file is visible only after the exact advertised byte count.
+        string partial = path + "." + id + ".partial";
+        bool created = false;
+        try
+        {
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            deadline.CancelAfter(TimeSpan.FromSeconds(30));
+            await using (var file = new FileStream(partial, FileMode.CreateNew, FileAccess.Write, FileShare.None, 65536, true))
+            {
+                created = true;
+                await stream.WriteAsync("START"u8.ToArray(), deadline.Token);
+                progress(0);
+                var buffer = new byte[65536];
+                long received = 0;
+                while (received < size)
+                {
+                    deadline.CancelAfter(TimeSpan.FromSeconds(30));
+                    int read = await stream.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, size - received)), deadline.Token);
+                    if (read == 0) throw new EndOfStreamException("The transfer ended early.");
+                    await file.WriteAsync(buffer.AsMemory(0, read), deadline.Token);
+                    received += read;
+                    progress(received);
+                }
+            }
+            cancellationToken.ThrowIfCancellationRequested();
+            File.Move(partial, path, false);
+        }
+        finally
+        {
+            if (created) try { File.Delete(partial); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
         }
     }
 
@@ -1011,8 +1087,17 @@ public sealed class LanService : IAsyncDisposable
         udp?.Dispose(); listener?.Stop();
         foreach (var client in clients.Keys) client.Dispose();
         foreach (var value in pending.Values) value.TrySetResult(false);
+        foreach (var transfer in transfers.Values) ReleaseFolderArchive(transfer);
+        await Task.WhenAll(nativeFolders.Values.Select(folder => folder.Finished.Task));
         // The gate also protects any handshake that was already processing.
         lock (rsaGate) rsa.Dispose();
+    }
+
+    private void ReleaseFolderArchive(FileTransfer transfer)
+    {
+        if (transfer.Archive is not { } archive) return;
+        archive.Dispose();
+        transfers.TryRemove(transfer.PeerId + ":" + transfer.Id, out _);
     }
 
     private sealed class Session(string id, string address, int port, TcpClient client, bool incoming)
@@ -1026,6 +1111,7 @@ public sealed class LanService : IAsyncDisposable
         public NetworkStream Stream { get; } = client.GetStream();
         public LegacyCipher? Cipher { get; set; }
         public string Version { get; set; } = "";
+        public bool SupportsFolders { get; set; }
         /// <summary>Profile query and picture already sent for this connection.</summary>
         public bool Introduced { get; set; }
         /// <summary>Extra LAN Messenger connections held open for this session; see RunSpareChannelAsync.</summary>

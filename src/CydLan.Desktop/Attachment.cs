@@ -11,13 +11,16 @@ public sealed class Attachment
     public required string Path { get; init; }
     public string Name => System.IO.Path.GetFileName(Path);
     public long Size { get; init; }
+    public bool IsFolder { get; init; }
     /// <summary>Decoded thumbnail when the file is a readable image; null for other files.</summary>
     public ImageSource? Thumbnail { get; init; }
     public bool IsImage => Thumbnail is not null;
-    public string SizeLabel => Size < 1024 * 1024 ? $"{Size / 1024d:0.#} KB" : $"{Size / (1024d * 1024):0.#} MB";
+    public string SizeLabel => IsFolder ? "Folder" : Size < 1024 * 1024 ? $"{Size / 1024d:0.#} KB" : $"{Size / (1024d * 1024):0.#} MB";
 
     public static Attachment From(string path)
     {
+        if (Directory.Exists(path))
+            return new Attachment { Path = System.IO.Path.TrimEndingDirectorySeparator(System.IO.Path.GetFullPath(path)), IsFolder = true };
         var info = new FileInfo(path);
         return new Attachment { Path = info.FullName, Size = info.Length, Thumbnail = LanService.IsInlineImageName(info.Name) ? Images.Load(info.FullName, 160) : null };
     }
@@ -26,7 +29,7 @@ public sealed class Attachment
 public static class Images
 {
     /// <summary>Loads an image without locking the file; returns null when it is missing or not a decodable image.</summary>
-    public static BitmapImage? Load(string path, int decodeWidth)
+    public static BitmapImage? Load(string path, int decodeWidth, int decodeHeight = 0)
     {
         try
         {
@@ -36,12 +39,29 @@ public static class Images
             image.CacheOption = BitmapCacheOption.OnLoad;
             image.CreateOptions = BitmapCreateOptions.IgnoreColorProfile;
             image.DecodePixelWidth = decodeWidth;
+            image.DecodePixelHeight = decodeHeight;
             image.UriSource = new Uri(path);
             image.EndInit();
             image.Freeze();
             return image;
         }
         catch (Exception e) when (e is IOException or NotSupportedException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or System.Runtime.InteropServices.COMException or FileFormatException)
+        { return null; }
+    }
+
+    internal static BitmapImage? LoadChatBackground(string path)
+    {
+        try
+        {
+            using var file = File.OpenRead(path);
+            var decoder = BitmapDecoder.Create(file, BitmapCreateOptions.DelayCreation | BitmapCreateOptions.IgnoreColorProfile, BitmapCacheOption.None);
+            if (decoder.Frames.Count == 0) return null;
+            var frame = decoder.Frames[0];
+            const int maxSide = 1600;
+            if (frame.PixelWidth >= frame.PixelHeight) return Load(path, Math.Min(frame.PixelWidth, maxSide));
+            return Load(path, 0, Math.Min(frame.PixelHeight, maxSide));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException or FileFormatException or System.Runtime.InteropServices.COMException)
         { return null; }
     }
 
