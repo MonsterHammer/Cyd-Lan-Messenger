@@ -158,6 +158,50 @@ public sealed class AppSettings
     public double InkBloomIntensity { get; set; } = .65;
     public bool SendPulseEnabled { get; set; }
     public double SendPulseIntensity { get; set; } = .65;
+    public bool HeaderAuroraEnabled { get; set; }
+    public double HeaderAuroraIntensity { get; set; } = .65;
+    public bool TitleSparklesEnabled { get; set; }
+    public double TitleSparklesIntensity { get; set; } = .65;
+    public bool HeaderPulseEnabled { get; set; }
+    public double HeaderPulseIntensity { get; set; } = .65;
+    public bool RailBeaconEnabled { get; set; }
+    public double RailBeaconIntensity { get; set; } = .65;
+    public bool RailStreamEnabled { get; set; }
+    public double RailStreamIntensity { get; set; } = .65;
+    public bool RailStardustEnabled { get; set; }
+    public double RailStardustIntensity { get; set; } = .65;
+    public bool RailScanEnabled { get; set; }
+    public double RailScanIntensity { get; set; } = .65;
+    public bool SidebarMotesEnabled { get; set; }
+    public double SidebarMotesIntensity { get; set; } = .65;
+    public bool SidebarGlowEnabled { get; set; }
+    public double SidebarGlowIntensity { get; set; } = .65;
+    public bool SidebarPrismEnabled { get; set; }
+    public double SidebarPrismIntensity { get; set; } = .65;
+    public bool SidebarSweepEnabled { get; set; }
+    public double SidebarSweepIntensity { get; set; } = .65;
+    public bool AmbientOnSidebarEnabled { get; set; }
+    public bool StarfieldEnabled { get; set; }
+    public double StarfieldIntensity { get; set; } = .65;
+    public bool BubblesEnabled { get; set; }
+    public double BubblesIntensity { get; set; } = .65;
+    public bool EmbersEnabled { get; set; }
+    public double EmbersIntensity { get; set; } = .65;
+    public bool ButtonGlowEnabled { get; set; }
+    public double ButtonGlowIntensity { get; set; } = .65;
+    public bool ButtonSheenEnabled { get; set; }
+    public double ButtonSheenIntensity { get; set; } = .65;
+    public bool ButtonBounceEnabled { get; set; }
+    public double ButtonBounceIntensity { get; set; } = .65;
+    public bool ButtonRingEnabled { get; set; }
+    public double ButtonRingIntensity { get; set; } = .65;
+    public string ChromeTexture { get; set; } = "off";
+    public double ChromeTextureIntensity { get; set; } = .65;
+    public string TargetAura { get; set; } = "off";
+    public double TargetAuraIntensity { get; set; } = .70;
+    public bool AuraSelectedModuleEnabled { get; set; } = true;
+    public bool AuraSelectedPersonEnabled { get; set; } = true;
+    public bool AuraHighlightButtonsEnabled { get; set; } = true;
     public int Port { get; set; } = 50000;
     public string Multicast { get; set; } = "239.255.100.100";
 

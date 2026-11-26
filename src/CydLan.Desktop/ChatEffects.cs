@@ -13,14 +13,18 @@ public sealed class ChatEffects : Canvas
     private static readonly Geometry Steam = Geometry.Parse("M7,26 C2,21 12,18 7,13 C3,9 11,6 8,3 M15,25 C10,20 20,17 15,12 C11,8 19,5 16,2 M23,26 C18,21 28,18 23,13 C19,9 27,6 24,3");
     private static readonly Geometry Ripple = Geometry.Parse("M27,15 A12,12 0 1 1 3,15 A12,12 0 1 1 27,15 Z M21,15 A6,6 0 1 1 9,15 A6,6 0 1 1 21,15 Z");
     private static readonly Geometry InkBloom = Geometry.Parse("M14,3 C18,2 19,8 23,9 C29,9 30,15 25,18 C22,20 24,25 19,26 C14,29 13,23 9,24 C4,25 1,19 5,16 C7,14 3,10 6,7 C8,3 11,6 14,3 Z M26,5 A1.5,1.5 0 1 0 29,5 A1.5,1.5 0 1 0 26,5 Z");
+    private static readonly Geometry Burst = Geometry.Parse("M14,2 V8 M14,20 V26 M2,14 H8 M20,14 H26 M6,6 L10,10 M18,18 L22,22 M22,6 L18,10 M10,18 L6,22");
+    private static readonly Geometry Petals = Geometry.Parse("M14,4 C11,7 11,11 14,13 C17,11 17,7 14,4 Z M6,14 C9,12 12,14 12,17 C9,19 6,17 6,14 Z M22,14 C19,12 16,14 16,17 C19,19 22,17 22,14 Z");
 
     internal static string Normalize(string? effect, bool typing = false) =>
-        effect is "theme" or "sparkles" or "steam" or "ripple" || (typing && effect == "ink") ? effect : "off";
+        effect is "theme" or "sparkles" or "steam" or "ripple" or "burst" or "petals" || (typing && effect == "ink") ? effect : "off";
 
     internal static string Resolve(string? effect, string theme, bool typing) => Normalize(effect, typing) switch
     {
         "theme" when theme == ThemeManager.Steampunk => "steam",
-        "theme" when theme is ThemeManager.Anime or ThemeManager.Aurora or ThemeManager.Arcade => "sparkles",
+        "theme" when theme is ThemeManager.Sakura => "petals",
+        "theme" when theme is ThemeManager.Cyberpunk or ThemeManager.Arcade => "burst",
+        "theme" when theme is ThemeManager.Anime or ThemeManager.Aurora or ThemeManager.Midnight => "sparkles",
         "theme" => typing ? "sparkles" : "ripple",
         var selected => selected
     };
@@ -29,9 +33,17 @@ public sealed class ChatEffects : Canvas
     {
         string selected = Resolve(effect, theme, typing);
         if (selected == "off" || !SystemParameters.ClientAreaAnimation || !IsVisible) return;
-        bool ink = selected == "ink";
-        var shape = selected switch { "ink" => InkBloom, "steam" => Steam, "sparkles" => Sparkles, _ => Ripple };
-        AnimateMark(position, shape, ink, intensity, lift: typing || selected == "steam", milliseconds: typing ? 620 : 430);
+        bool filled = selected is "ink" or "petals";
+        var shape = selected switch
+        {
+            "ink" => InkBloom,
+            "steam" => Steam,
+            "sparkles" => Sparkles,
+            "burst" => Burst,
+            "petals" => Petals,
+            _ => Ripple
+        };
+        AnimateMark(position, shape, filled, intensity, lift: typing || selected is "steam" or "petals", milliseconds: typing ? 620 : 430);
     }
 
     internal void PlaySendPulse(Point position, double intensity)

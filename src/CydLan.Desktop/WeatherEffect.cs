@@ -1,13 +1,14 @@
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using Brush = System.Windows.Media.Brush;
 using Color = System.Windows.Media.Color;
 using Pen = System.Windows.Media.Pen;
 using Point = System.Windows.Point;
 
 namespace CydLan.Desktop;
 
-public enum WeatherEffectKind { Fireflies, Rain, Snow }
+public enum WeatherEffectKind { Fireflies, Rain, Snow, Starfield, Bubbles, Embers }
 
 public sealed class WeatherEffect : AmbientEffect
 {
@@ -17,13 +18,15 @@ public sealed class WeatherEffect : AmbientEffect
 
     private static readonly Geometry Flake = Geometry.Parse(
         "M0,-5 V5 M-4.3,-2.5 L4.3,2.5 M-4.3,2.5 L4.3,-2.5 M-1.6,-3.8 L0,-2.5 L1.6,-3.8 M-1.6,3.8 L0,2.5 L1.6,3.8");
+    private static readonly Geometry StarGlyph = Geometry.Parse("M0,-4 Q0,0 4,0 Q0,0 0,4 Q0,0 -4,0 Q0,0 0,-4 Z");
     private static readonly Lazy<RainTrack[]> RainTracks = new(BuildRainTracks);
     private BitmapSource[]? fireflySprites;
     private Pen[]? streakPens;
+    private Brush[]? tintFills;
     public WeatherEffectKind Kind { get => (WeatherEffectKind)GetValue(KindProperty); set => SetValue(KindProperty, value); }
 
     protected override int FrameRate => Kind == WeatherEffectKind.Rain ? 30 : base.FrameRate;
-    protected override void OnTintChanged() { fireflySprites = null; streakPens = null; }
+    protected override void OnTintChanged() { fireflySprites = null; streakPens = null; tintFills = null; }
 
     protected override void OnRender(DrawingContext dc)
     {
@@ -65,8 +68,62 @@ public sealed class WeatherEffect : AmbientEffect
                     dc.DrawGeometry(null, StreakPen(Fade(phase) * (.27 + .58 * intensity)), Flake);
                     dc.Pop();
                     break;
+                case WeatherEffectKind.Starfield:
+                    double twinkle = .2 + .8 * Math.Pow(.5 + .5 * Math.Sin((Progress * 4 + offset) * Math.Tau), 2);
+                    double sx = Fraction(lane + Progress * (.35 + (i % 3) * .2)) * (ActualWidth - 20) + 10;
+                    double sy = 10 + (ActualHeight - 20) * offset;
+                    var starM = Matrix.Identity;
+                    starM.Scale(size * (.75 + .35 * twinkle), size * (.75 + .35 * twinkle));
+                    starM.Translate(sx, sy);
+                    dc.PushTransform(new MatrixTransform(starM));
+                    dc.DrawGeometry(TintFill(twinkle * (.35 + .60 * intensity)), null, StarGlyph);
+                    dc.Pop();
+                    break;
+                case WeatherEffectKind.Bubbles:
+                    double riseY = (1 - phase) * (ActualHeight + 28) - 14;
+                    double bx = x + 9 * Math.Sin(wave);
+                    double br = 4.5 + 5.5 * size;
+                    double alpha = Fade(phase) * (.28 + .55 * intensity);
+                    dc.DrawEllipse(TintFill(alpha * .22), StreakPen(alpha), new Point(bx, riseY), br, br);
+                    dc.DrawEllipse(TintFill(alpha * .85), null, new Point(bx - br * .3, riseY - br * .3), br * .22, br * .22);
+                    break;
+                case WeatherEffectKind.Embers:
+                    double emberY = (1 - phase) * (ActualHeight + 24) - 12;
+                    double ex = x + 15 * Math.Sin(wave * 1.5);
+                    fireflySprites ??= BuildFireflySprites();
+                    double er = 7 * size;
+                    double emberFade = Fade(phase) * (.40 + .55 * intensity);
+                    dc.DrawImage(fireflySprites[EffectPalette.OpacityIndex(emberFade)], new Rect(ex - er, emberY - er, er * 2, er * 2));
+                    break;
             }
         }
+        if (Kind == WeatherEffectKind.Starfield)
+        {
+            double shoot = (Progress * 4) % 1;
+            if (shoot < .28)
+            {
+                double t = shoot / .28;
+                double sx = ActualWidth * (.15 + .65 * t);
+                double sy = ActualHeight * (.12 + .35 * t);
+                dc.DrawLine(StreakPen((1 - t) * (.45 + .50 * intensity)), new Point(sx - 28, sy - 14), new Point(sx, sy));
+            }
+        }
+    }
+
+    private Brush TintFill(double opacity)
+    {
+        if (tintFills is null)
+        {
+            tintFills = new Brush[EffectPalette.OpacityLevels];
+            var bright = EffectPalette.Blend(Tint, Colors.White, .38);
+            for (int i = 0; i < tintFills.Length; i++)
+            {
+                var b = new SolidColorBrush(EffectPalette.WithOpacity(bright, i));
+                b.Freeze();
+                tintFills[i] = b;
+            }
+        }
+        return tintFills[EffectPalette.OpacityIndex(opacity)];
     }
 
     private void DrawRain(DrawingContext dc, double intensity)

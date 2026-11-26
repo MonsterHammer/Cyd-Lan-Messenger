@@ -25,11 +25,15 @@
       <Setter Property="BorderThickness" Value="0"/><Setter Property="Padding" Value="14,8"/>
       <Setter Property="Cursor" Value="Hand"/><Setter Property="HorizontalContentAlignment" Value="Center"/>
       <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
+      <Setter Property="local:ButtonEffects.Enabled" Value="True"/>
       <Setter Property="Template"><Setter.Value>
         <ControlTemplate TargetType="Button">
           <Grid x:Name="Root">
             <Border Background="{TemplateBinding Background}" CornerRadius="{DynamicResource ControlCorner}"/>
             <Border x:Name="Shade" Background="{DynamicResource Ink}" CornerRadius="{DynamicResource ControlCorner}" Opacity="0"/>
+            <Border x:Name="SheenOverlay" CornerRadius="{DynamicResource ControlCorner}" IsHitTestVisible="False" Opacity="0"/>
+            <Border x:Name="AccentRing" CornerRadius="{DynamicResource ControlCorner}" BorderThickness="1.5" BorderBrush="{DynamicResource Accent}" IsHitTestVisible="False" Opacity="0"/>
+            <local:TargetAura x:Name="ButtonAura" Margin="-6,-9,-6,-4" EdgeInset="6,9,6,4" Visibility="Collapsed"/>
             <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center"/>
           </Grid>
           <ControlTemplate.Triggers>
@@ -42,6 +46,7 @@
     </Style>
     <Style x:Key="Primary" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
       <Setter Property="Background" Value="{DynamicResource Accent}"/><Setter Property="Foreground" Value="{DynamicResource AccentInk}"/><Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="local:ButtonEffects.IsHighlight" Value="True"/>
     </Style>
     <Style x:Key="Secondary" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
       <Setter Property="Background" Value="{DynamicResource Surface}"/>
@@ -53,6 +58,7 @@
     <!-- Send: just the arrow in the accent colour; dims when there is nothing to send. -->
     <Style x:Key="SendIcon" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
       <Setter Property="Width" Value="34"/><Setter Property="Height" Value="34"/><Setter Property="Padding" Value="0"/><Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+      <Setter Property="local:ButtonEffects.IsHighlight" Value="True"/>
     </Style>
     <!-- A tab in a side panel: label with an accent underline when selected. -->
     <Style x:Key="Tab" TargetType="RadioButton">
@@ -172,10 +178,16 @@
       <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
       <Setter Property="Foreground" Value="{DynamicResource Ink}"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/>
       <Setter Property="Padding" Value="0"/><Setter Property="Margin" Value="8,1"/>
+      <Setter Property="local:TargetAura.TrackSelection" Value="True"/>
       <Setter Property="Template"><Setter.Value>
         <ControlTemplate TargetType="ListBoxItem">
           <Grid>
-            <Border x:Name="Row" Background="Transparent" CornerRadius="{DynamicResource ControlCorner}"><ContentPresenter/></Border>
+            <Border x:Name="Row" Background="Transparent" CornerRadius="{DynamicResource ControlCorner}" ClipToBounds="True">
+              <Grid>
+                <local:TargetAura x:Name="RowAura" Visibility="Collapsed"/>
+                <ContentPresenter/>
+              </Grid>
+            </Border>
             <!-- Selected rows get a soft tint plus a short accent marker instead of a heavy fill. -->
             <Border x:Name="Marker" Width="3" Height="18" CornerRadius="{DynamicResource MarkerCorner}" Background="{DynamicResource Accent}" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="-1,0,0,0" Visibility="Collapsed"/>
           </Grid>

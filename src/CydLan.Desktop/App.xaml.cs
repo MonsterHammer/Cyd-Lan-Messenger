@@ -35,7 +35,8 @@ public partial class App : System.Windows.Application
         string dataDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), labAddress is null ? "CydLan" : "CydLan-Lab");
         if (!capturing)
         {
-            mutex = new Mutex(true, labAddress is null ? "Local\\CydLan.Desktop" : "Local\\CydLan.Desktop.Lab", out var first);
+            string mutexName = preview ? "Local\\CydLan.Desktop.Preview" : labAddress is null ? "Local\\CydLan.Desktop" : "Local\\CydLan.Desktop.Lab";
+            mutex = new Mutex(true, mutexName, out var first);
             if (!first) { System.Windows.MessageBox.Show("CydLan is already running.", "CydLan"); Shutdown(); return; }
         }
         try
@@ -56,11 +57,13 @@ public partial class App : System.Windows.Application
             if (e.Args.Contains("--transfers")) model.TransfersOpen = true;
             if (e.Args.Contains("--groups")) { model.GroupsOpen = true; model.SelectedGroup = model.Groups.FirstOrDefault(); }
             MainWindow = window;
-            if (!capturing)
+            if (!capturing && !preview)
             {
                 CreateTray(window);
                 ConnectNotifications(window, model);
             }
+            if (preview && !capturing)
+                window.Closed += async (_, _) => await QuitAsync();
             if (!captureTray && (capturing || preview || !model.Settings.StartMinimized)) window.Show();
             if (e.Args.Contains("--details")) window.ShowConnectionDetails();
             if (!preview) await System.Windows.Threading.Dispatcher.Yield(DispatcherPriority.Background);

@@ -719,6 +719,57 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     public double ClickIntensity => Math.Clamp(Settings.ClickIntensity ?? EffectIntensity, .1, 1);
     public double EngineIntensity => Math.Clamp(Settings.EngineIntensity, .1, 1);
     public double PetalIntensity => Math.Clamp(Settings.PetalIntensity, .1, 1);
+    public bool HeaderAuroraEnabled => Settings.HeaderAuroraEnabled;
+    public double HeaderAuroraIntensity => Math.Clamp(Settings.HeaderAuroraIntensity, .1, 1);
+    public bool TitleSparklesEnabled => Settings.TitleSparklesEnabled;
+    public double TitleSparklesIntensity => Math.Clamp(Settings.TitleSparklesIntensity, .1, 1);
+    public bool HeaderPulseEnabled => Settings.HeaderPulseEnabled;
+    public double HeaderPulseIntensity => Math.Clamp(Settings.HeaderPulseIntensity, .1, 1);
+    public bool RailBeaconEnabled => Settings.RailBeaconEnabled;
+    public double RailBeaconIntensity => Math.Clamp(Settings.RailBeaconIntensity, .1, 1);
+    public bool RailStreamEnabled => Settings.RailStreamEnabled;
+    public double RailStreamIntensity => Math.Clamp(Settings.RailStreamIntensity, .1, 1);
+    public bool RailStardustEnabled => Settings.RailStardustEnabled;
+    public double RailStardustIntensity => Math.Clamp(Settings.RailStardustIntensity, .1, 1);
+    public bool RailScanEnabled => Settings.RailScanEnabled;
+    public double RailScanIntensity => Math.Clamp(Settings.RailScanIntensity, .1, 1);
+    public bool SidebarMotesEnabled => Settings.SidebarMotesEnabled;
+    public double SidebarMotesIntensity => Math.Clamp(Settings.SidebarMotesIntensity, .1, 1);
+    public bool SidebarGlowEnabled => Settings.SidebarGlowEnabled;
+    public double SidebarGlowIntensity => Math.Clamp(Settings.SidebarGlowIntensity, .1, 1);
+    public bool SidebarPrismEnabled => Settings.SidebarPrismEnabled;
+    public double SidebarPrismIntensity => Math.Clamp(Settings.SidebarPrismIntensity, .1, 1);
+    public bool SidebarSweepEnabled => Settings.SidebarSweepEnabled;
+    public double SidebarSweepIntensity => Math.Clamp(Settings.SidebarSweepIntensity, .1, 1);
+    public double StarfieldIntensity => Math.Clamp(Settings.StarfieldIntensity, .1, 1);
+    public double BubblesIntensity => Math.Clamp(Settings.BubblesIntensity, .1, 1);
+    public double EmbersIntensity => Math.Clamp(Settings.EmbersIntensity, .1, 1);
+    public double ButtonGlowIntensity => Math.Clamp(Settings.ButtonGlowIntensity, .1, 1);
+    public double ButtonSheenIntensity => Math.Clamp(Settings.ButtonSheenIntensity, .1, 1);
+    public double ButtonBounceIntensity => Math.Clamp(Settings.ButtonBounceIntensity, .1, 1);
+    public double ButtonRingIntensity => Math.Clamp(Settings.ButtonRingIntensity, .1, 1);
+    private string? previewChromeTexture;
+    private double? previewChromeTextureIntensity;
+    public string ChromeTexture => CydLan.Desktop.ChromeTexture.Normalize(previewChromeTexture ?? Settings.ChromeTexture);
+    public bool ChromeTextureEnabled => ChromeTexture != CydLan.Desktop.ChromeTexture.Off;
+    public double ChromeTextureIntensity => Math.Clamp(previewChromeTextureIntensity ?? Settings.ChromeTextureIntensity, .1, 1);
+    public bool AmbientOnSidebarEnabled => Settings.AmbientOnSidebarEnabled;
+    public bool SidebarPetalsVisible => SakuraPetalsEnabled && Settings.AmbientOnSidebarEnabled;
+    public bool SidebarFirefliesVisible => Settings.FirefliesEnabled && Settings.AmbientOnSidebarEnabled;
+    public bool SidebarRainVisible => Settings.RainEnabled && Settings.AmbientOnSidebarEnabled;
+    public bool SidebarSnowVisible => Settings.SnowEnabled && Settings.AmbientOnSidebarEnabled;
+    public bool SidebarStarfieldVisible => Settings.StarfieldEnabled && Settings.AmbientOnSidebarEnabled;
+    public bool SidebarBubblesVisible => Settings.BubblesEnabled && Settings.AmbientOnSidebarEnabled;
+    public bool SidebarEmbersVisible => Settings.EmbersEnabled && Settings.AmbientOnSidebarEnabled;
+
+    public void PreviewChromeTexture(string? texture, double? intensity)
+    {
+        previewChromeTexture = texture;
+        previewChromeTextureIntensity = intensity;
+        Changed(nameof(ChromeTexture));
+        Changed(nameof(ChromeTextureEnabled));
+        Changed(nameof(ChromeTextureIntensity));
+    }
 
     public void ApplySettings()
     {
@@ -734,7 +785,57 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         Changed(nameof(EffectIntensity));
         Changed(nameof(EngineIntensity));
         Changed(nameof(PetalIntensity));
+        Changed(nameof(HeaderAuroraEnabled));
+        Changed(nameof(HeaderAuroraIntensity));
+        Changed(nameof(TitleSparklesEnabled));
+        Changed(nameof(TitleSparklesIntensity));
+        Changed(nameof(HeaderPulseEnabled));
+        Changed(nameof(HeaderPulseIntensity));
+        Changed(nameof(RailBeaconEnabled));
+        Changed(nameof(RailBeaconIntensity));
+        Changed(nameof(RailStreamEnabled));
+        Changed(nameof(RailStreamIntensity));
+        Changed(nameof(RailStardustEnabled));
+        Changed(nameof(RailStardustIntensity));
+        Changed(nameof(RailScanEnabled));
+        Changed(nameof(RailScanIntensity));
+        Changed(nameof(SidebarMotesEnabled));
+        Changed(nameof(SidebarMotesIntensity));
+        Changed(nameof(SidebarGlowEnabled));
+        Changed(nameof(SidebarGlowIntensity));
+        Changed(nameof(SidebarPrismEnabled));
+        Changed(nameof(SidebarPrismIntensity));
+        Changed(nameof(SidebarSweepEnabled));
+        Changed(nameof(SidebarSweepIntensity));
+        Changed(nameof(StarfieldIntensity));
+        Changed(nameof(BubblesIntensity));
+        Changed(nameof(EmbersIntensity));
+        Changed(nameof(ButtonGlowIntensity));
+        Changed(nameof(ButtonSheenIntensity));
+        Changed(nameof(ButtonBounceIntensity));
+        Changed(nameof(ButtonRingIntensity));
+        previewChromeTexture = null;
+        previewChromeTextureIntensity = null;
+        Changed(nameof(ChromeTexture));
+        Changed(nameof(ChromeTextureEnabled));
+        Changed(nameof(ChromeTextureIntensity));
+        Changed(nameof(AmbientOnSidebarEnabled));
+        Changed(nameof(SidebarPetalsVisible));
+        Changed(nameof(SidebarFirefliesVisible));
+        Changed(nameof(SidebarRainVisible));
+        Changed(nameof(SidebarSnowVisible));
+        Changed(nameof(SidebarStarfieldVisible));
+        Changed(nameof(SidebarBubblesVisible));
+        Changed(nameof(SidebarEmbersVisible));
         Changed(nameof(Settings));
+        ButtonEffects.Configure(
+            Settings.ButtonGlowEnabled, ButtonGlowIntensity,
+            Settings.ButtonSheenEnabled, ButtonSheenIntensity,
+            Settings.ButtonBounceEnabled, ButtonBounceIntensity,
+            Settings.ButtonRingEnabled, ButtonRingIntensity);
+        TargetAura.Configure(
+            Settings.TargetAura, Settings.TargetAuraIntensity,
+            Settings.AuraSelectedModuleEnabled, Settings.AuraSelectedPersonEnabled, Settings.AuraHighlightButtonsEnabled);
         if (lan is not null) lan.AutoAcceptDirectory = Settings.AutoAcceptFiles ? ReceivedFilesFolder : null;
     }
     /// <summary>Applies a batch of preference changes, saves them and tells contacts about profile changes.</summary>

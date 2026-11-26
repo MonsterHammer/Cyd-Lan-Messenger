@@ -97,7 +97,9 @@ internal static class Program
             var popupOption = (System.Windows.Controls.CheckBox)prefs.FindName("NotificationPreviewsBox");
             Check(popupOption is { IsVisible: true, IsEnabled: true, IsChecked: false }, "Popup previews should be an unchecked option by default.");
             prefs.ShowPage("AppearancePage");
-            var themeBox = (System.Windows.Controls.ComboBox)prefs.FindName("ThemeBox");
+            var themeBox = (System.Windows.Controls.ListBox)prefs.FindName("ThemeBox");
+            Check(ThemeManager.Catalog.Count == 21 && themeBox.Items.Count == 21,
+                $"Expected 21 theme sample boxes (20 themes + Match Windows), found {ThemeManager.Catalog.Count}/{themeBox.Items.Count}.");
             var chatButton = (System.Windows.Controls.Button)themed.FindName("ChatNav");
             var chatGlyph = (Glyph)chatButton.Content;
             var standardGlyph = chatGlyph.Data;
@@ -113,8 +115,10 @@ internal static class Program
                 ("dark", "#FFECECEC"), ("ocean", "#FFE9F5FF"), ("lavender", "#FF282039"),
                 ("ember", "#FFFFF0E3"), ("forest", "#FFECF7EE"), ("sand", "#FF30261E"),
                 ("anime", "#FF302039"), ("sakura", "#FF39262F"), ("steampunk", "#FFF5E3C7"), ("aurora", "#FFE8F9F5"),
-                ("paper", "#FF232A28"), ("arcade", "#FFF4F1FF"),
-                ("pixel", "#FFF0F7D9"), ("light", "#FF1D2326")
+                ("paper", "#FF232A28"), ("arcade", "#FFF4F1FF"), ("pixel", "#FFF0F7D9"),
+                ("cyberpunk", "#FFEDF6FF"), ("midnight", "#FFF3F5FC"), ("sunset", "#FFFFF2ED"),
+                ("mint", "#FF172B24"), ("matcha", "#FF242B1E"), ("frost", "#FF192736"),
+                ("light", "#FF1D2326")
             })
             {
                 themeBox.SelectedValue = mode;
@@ -124,14 +128,15 @@ internal static class Program
                     $"Incorrect button shape in {mode}: {buttonChrome.CornerRadius}, app resource {themed.FindResource("ControlCorner")}.");
                 bool customIcons = mode is not ("light" or "dark");
                 Check((!ReferenceEquals(chatGlyph.Data, standardGlyph)) == customIcons, $"Incorrect chat geometry in {mode}.");
-                bool fullIconSet = mode is "pixel" or "anime" or "sakura" or "steampunk" or "aurora" or "paper" or "arcade";
+                bool fullIconSet = mode is "pixel" or "anime" or "sakura" or "steampunk" or "aurora" or "paper" or "arcade" or
+                    "cyberpunk" or "midnight" or "sunset" or "mint" or "matcha" or "frost";
                 foreach (string name in primaryIconNames.Concat(detailIconNames))
                 {
                     bool expected = fullIconSet || (customIcons && primaryIconNames.Contains(name));
                     Check((!ReferenceEquals(themed.FindResource("Icon" + name), standardIcons[name])) == expected,
                         $"Incorrect Icon{name} when switching to {mode}.");
                 }
-                if (mode is "forest" or "sakura" or "steampunk")
+                if (mode is "forest" or "sakura" or "steampunk" or "cyberpunk" or "midnight" or "frost")
                     Capture(themed, Path.Combine(appearanceArtifacts, $"theme-{mode}-icons-tested.png"));
                 foreach (Window w in new Window[] { themed, prefs })
                 {
@@ -151,7 +156,8 @@ internal static class Program
             var effects = (ChatEffects)themed.FindName("EffectLayer");
             Check(!effects.IsHitTestVisible && ChatEffects.Resolve("theme", "anime", true) == "sparkles" &&
                 ChatEffects.Resolve("theme", "steampunk", false) == "steam" &&
-                ChatEffects.Resolve("ripple", "steampunk", true) == "ripple",
+                ChatEffects.Resolve("ripple", "steampunk", true) == "ripple" &&
+                ChatEffects.Normalize("burst") == "burst" && ChatEffects.Normalize("petals") == "petals",
                 "Themes should style opted-in effects without overriding a selected effect.");
             string previousDraft = preview.Draft;
             composer.Text = "hello";
@@ -179,17 +185,19 @@ internal static class Program
 
             var enginePrefs = new SettingsWindow(preview) { Owner = themed };
             enginePrefs.Show();
-            ((System.Windows.Controls.ComboBox)enginePrefs.FindName("ThemeBox")).SelectedValue = ThemeManager.Steampunk;
+            ((System.Windows.Controls.Primitives.Selector)enginePrefs.FindName("ThemeBox")).SelectedValue = ThemeManager.Steampunk;
             enginePrefs.ShowPage("AppearancePage");
-            ((System.Windows.Controls.Expander)enginePrefs.FindName("TitleEffectsGroup")).IsExpanded = true;
+            enginePrefs.ShowAppearanceTab("Headers");
             await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
             var engineToggle = (System.Windows.Controls.CheckBox)enginePrefs.FindName("SteampunkEngineBox");
             var enginePreview = (SteampunkEngine)enginePrefs.FindName("EnginePreview");
             var engine = (SteampunkEngine)themed.FindName("TitleEngine");
-            Check(engineToggle.IsVisible && engineToggle.IsChecked == false && !enginePreview.IsVisible && !engine.IsVisible,
-                $"The Steampunk engine must be opt-in. Toggle visible={engineToggle.IsVisible}; checked={engineToggle.IsChecked}; preview visible={enginePreview.IsVisible}; engine visible={engine.IsVisible}.");
+            Check(engineToggle.IsVisible && engineToggle.IsChecked == false && enginePreview.IsVisible && !engine.IsVisible,
+                $"The Steampunk engine preview card must show by default while MainWindow stays off. Toggle visible={engineToggle.IsVisible}; checked={engineToggle.IsChecked}; preview visible={enginePreview.IsVisible}; engine visible={engine.IsVisible}.");
             engineToggle.IsChecked = true;
-            Check(enginePreview.IsVisible && !engine.IsVisible, "The toggle should preview the engine before saving.");
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            Check(enginePreview.IsVisible && ((FrameworkElement)enginePrefs.FindName("EngineIntensityBox")).IsVisible && !engine.IsVisible,
+                "Enabling the card should reveal its intensity slider before saving.");
             ClickNamed(enginePrefs, "Save");
             await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
             Check(engine.IsVisible && !engine.IsHitTestVisible && preview.Settings.SteampunkEngineEnabled,
@@ -212,27 +220,31 @@ internal static class Program
 
             var sakuraPrefs = new SettingsWindow(preview) { Owner = themed };
             sakuraPrefs.Show();
-            ((System.Windows.Controls.ComboBox)sakuraPrefs.FindName("ThemeBox")).SelectedValue = ThemeManager.Sakura;
+            ((System.Windows.Controls.Primitives.Selector)sakuraPrefs.FindName("ThemeBox")).SelectedValue = ThemeManager.Sakura;
             sakuraPrefs.ShowPage("AppearancePage");
-            ((System.Windows.Controls.Expander)sakuraPrefs.FindName("AmbientEffectsGroup")).IsExpanded = true;
+            sakuraPrefs.ShowAppearanceTab("Ambient");
             await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
             var petalsToggle = (System.Windows.Controls.CheckBox)sakuraPrefs.FindName("SakuraPetalsBox");
             var petalsPreview = (SakuraPetals)sakuraPrefs.FindName("PetalsPreview");
             var petals = (SakuraPetals)themed.FindName("ConversationPetals");
             var intensity = (System.Windows.Controls.Slider)sakuraPrefs.FindName("PetalIntensityBox");
-            Check(petalsToggle.IsVisible && petalsToggle.IsChecked == false && !petalsPreview.IsVisible && !petals.IsVisible,
-                "Sakura petals must be opt-in.");
+            Check(petalsToggle.IsVisible && petalsToggle.IsChecked == false && petalsPreview.IsVisible && !petals.IsVisible,
+                "Sakura petals preview must show by default while MainWindow stays opt-in.");
             petalsToggle.IsChecked = true;
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
             intensity.Value = .35;
-            Check(petalsPreview.IsVisible && !petals.IsVisible && petalsPreview.Intensity == .35,
-                "The toggle and intensity should preview the petals before saving.");
+            Check(petalsPreview.IsVisible && intensity.IsVisible && !petals.IsVisible && petalsPreview.Intensity == .35,
+                "The card toggle and intensity slider should preview the petals before saving.");
             ClickNamed(sakuraPrefs, "Save");
             await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
             Check(petals.IsVisible && !petals.IsHitTestVisible && preview.Settings.SakuraPetalsEnabled && !engine.IsVisible &&
                 petals.Intensity == .35 && petals.Tint == ThemeAccent(),
                 "Petals should appear behind chat without intercepting input or enabling the engine.");
             if (SystemParameters.ClientAreaAnimation)
+            {
+                themed.Activate();
                 await Until(() => petals.Progress > .005);
+            }
             else
                 Check(petals.Progress == 0, "Reduced motion should leave petals still.");
             Capture(themed, Path.Combine(appearanceArtifacts, "sakura-tested.png"));
@@ -256,6 +268,9 @@ internal static class Program
             Console.WriteLine("PASS  Optional Sakura theme petals, preview, motion and visibility");
             await TestAdditionalEffectsAsync(appearanceArtifacts);
             await TestThemeDetailsAsync(appearanceArtifacts);
+            await TestHeaderAndSidebarEffectsAsync(appearanceArtifacts);
+            await TestChromeTexturesAsync(appearanceArtifacts);
+            await TestTargetAuraAsync(appearanceArtifacts);
 
             var recentWindow = new MainWindow(preview);
             recentWindow.Show();
@@ -762,8 +777,7 @@ internal static class Program
                 await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
                 Capture(preferences, Path.Combine(artifacts, "live-preferences-tested.png"));
                 preferences.ShowPage("AppearancePage");
-                ((System.Windows.Controls.Expander)preferences.FindName("BackgroundGroup")).IsExpanded = true;
-                ((System.Windows.Controls.Expander)preferences.FindName("FontsGroup")).IsExpanded = true;
+                preferences.ShowAppearanceTab("Customize");
                 await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
                 var previewImage = (System.Windows.Controls.Image)preferences.FindName("BackgroundPreview");
                 var opacityControl = (System.Windows.Controls.Slider)preferences.FindName("BackgroundOpacityBox");
@@ -913,17 +927,13 @@ internal static class Program
         var preferences = new SettingsWindow(model) { Owner = window };
         preferences.Show();
         preferences.ShowPage("AppearancePage");
-        var ambientGroup = (System.Windows.Controls.Expander)preferences.FindName("AmbientEffectsGroup");
-        var interactionGroup = (System.Windows.Controls.Expander)preferences.FindName("InteractionEffectsGroup");
-        var titleGroup = (System.Windows.Controls.Expander)preferences.FindName("TitleEffectsGroup");
-        var typingBox = (System.Windows.Controls.ComboBox)preferences.FindName("TypingEffectBox");
-        Check(!ambientGroup.IsExpanded && !interactionGroup.IsExpanded && !titleGroup.IsExpanded && !typingBox.IsVisible,
-            "Appearance should show collapsed categories and keep individual controls out of the initial view.");
-        ambientGroup.IsExpanded = true;
-        interactionGroup.IsExpanded = true;
+        preferences.ShowAppearanceTab("Ambient");
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
-        Check(typingBox.IsVisible && !titleGroup.IsExpanded, "Expanding one category must not open unrelated controls.");
-        ((System.Windows.Controls.ComboBox)preferences.FindName("ThemeBox")).SelectedValue = ThemeManager.Forest;
+        var typingBox = (System.Windows.Controls.ComboBox)preferences.FindName("TypingEffectBox");
+        Check(typingBox.IsVisible && ((FrameworkElement)preferences.FindName("StarfieldPreview")).IsVisible &&
+            !((FrameworkElement)preferences.FindName("RainIntensityBox")).IsVisible,
+            "Ambient cards and interaction pickers should be visible directly without hiding previews behind checkboxes.");
+        ((System.Windows.Controls.Primitives.Selector)preferences.FindName("ThemeBox")).SelectedValue = ThemeManager.Forest;
         ((System.Windows.Controls.ComboBox)preferences.FindName("TypingEffectBox")).SelectedValue = "ink";
         foreach (string name in new[] { "Fireflies", "Rain", "Snow", "SendPulse" })
             ((System.Windows.Controls.CheckBox)preferences.FindName(name + "Box")).IsChecked = true;
@@ -931,7 +941,6 @@ internal static class Program
             ((System.Windows.Controls.Slider)preferences.FindName(name + "IntensityBox")).Value = value;
         ((System.Windows.Controls.Slider)preferences.FindName("TypingIntensityBox")).Value = .2;
         ((System.Windows.Controls.Slider)preferences.FindName("ClickIntensityBox")).Value = .9;
-        interactionGroup.IsExpanded = false;
         ClickNamed(preferences, "Save");
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
         Check(weather.All(effect => effect.IsVisible && !effect.IsHitTestVisible && effect.Tint == ThemeAccent()) &&
@@ -1003,44 +1012,372 @@ internal static class Program
         var window = new MainWindow(model);
         window.Show();
         var sidebar = (ThemeDecoration)window.FindName("SidebarDecoration");
+        var rail = (ThemeDecoration)window.FindName("RailDecoration");
         var title = (ThemeDecoration)window.FindName("TitleDecoration");
+        var header = (ThemeDecoration)window.FindName("HeaderDecoration");
         var composer = (ThemeDecoration)window.FindName("ComposerDecoration");
         var preferences = new SettingsWindow(model) { Owner = window };
         preferences.Show();
         preferences.ShowPage("AppearancePage");
-        var themeBox = (System.Windows.Controls.ComboBox)preferences.FindName("ThemeBox");
+        var scroller = (System.Windows.Controls.ScrollViewer)preferences.FindName("PreferencesScroller");
+        var themeBox = (System.Windows.Controls.ListBox)preferences.FindName("ThemeBox");
         var checkbox = (System.Windows.Controls.CheckBox)preferences.FindName("ThemeDetailsBox");
-        Check(!checkbox.IsVisible && !sidebar.IsVisible, "Standard themes should hide the optional detail control.");
+        Check(themeBox.IsVisible && themeBox.Items.Count == 21, "The visual theme sample boxes should be shown directly in Appearance.");
+        preferences.UpdateLayout();
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        var firstCard = (FrameworkElement)themeBox.ItemContainerGenerator.ContainerFromIndex(0);
+        firstCard.RaiseEvent(new System.Windows.Input.MouseWheelEventArgs(System.Windows.Input.Mouse.PrimaryDevice, 0, -240)
+            { RoutedEvent = UIElement.MouseWheelEvent });
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(scroller.VerticalOffset > 0, "Mouse wheel over a theme card must scroll the Appearance page.");
+        scroller.ScrollToTop();
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+
+        Check(!checkbox.IsVisible && !sidebar.IsVisible && !header.IsVisible && !rail.IsVisible, "Standard themes should hide the optional detail control.");
         themeBox.SelectedValue = ThemeManager.Sakura;
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
-        Check(checkbox.IsVisible && checkbox.IsChecked == false && !sidebar.IsVisible, "Theme details should be opt-in.");
+        Check(checkbox.IsVisible && checkbox.IsChecked == false && !sidebar.IsVisible && !header.IsVisible, "Theme details should be opt-in.");
         checkbox.IsChecked = true;
         Capture(preferences, Path.Combine(artifacts, "appearance-groups-tested.png"));
-        var previewGroup = (System.Windows.Controls.Expander)preferences.FindName("ThemePreviewGroup");
-        Check(!previewGroup.IsExpanded, "The theme preview should leave space for Appearance categories by default.");
-        previewGroup.IsExpanded = true;
+
+        ((System.Windows.Controls.RadioButton)preferences.FindName("ThemeFilterDark")).IsChecked = true;
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
-        Check(((FrameworkElement)preferences.FindName("ThemePreview")).IsVisible, "The themed preview should be accessible on demand.");
+        Check(themeBox.Items.Count == 11, $"Expected 11 dark themes, got {themeBox.Items.Count}.");
+        ((System.Windows.Controls.RadioButton)preferences.FindName("ThemeFilterLight")).IsChecked = true;
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(themeBox.Items.Count == 9 && (string?)themeBox.SelectedValue == ThemeManager.Sakura,
+            $"Expected 9 light themes keeping Sakura selected, got {themeBox.Items.Count} / {themeBox.SelectedValue}.");
+        Capture(preferences, Path.Combine(artifacts, "appearance-theme-light-filter-tested.png"));
+
+        foreach (var (tab, file) in new[]
+        {
+            ("Textures", "appearance-textures-tab-tested.png"),
+            ("Ambient", "appearance-ambient-tab-tested.png"),
+            ("Headers", "appearance-headers-tab-tested.png"),
+            ("Panels", "appearance-panels-tab-tested.png"),
+            ("Aura", "appearance-aura-tab-tested.png")
+        })
+        {
+            preferences.ShowAppearanceTab(tab);
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            Capture(preferences, Path.Combine(artifacts, file));
+        }
+
+        preferences.ShowAppearanceTab("Customize");
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(((FrameworkElement)preferences.FindName("FontBox")).IsVisible && ((FrameworkElement)preferences.FindName("RemoveBackgroundButton")).IsVisible,
+            "Fonts & bg tab should display font and background controls.");
+        Capture(preferences, Path.Combine(artifacts, "appearance-customize-tab-tested.png"));
+
+        preferences.ShowAppearanceTab("Themes");
+        ((System.Windows.Controls.RadioButton)preferences.FindName("ThemeFilterAll")).IsChecked = true;
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        var themeBoxTail = (FrameworkElement?)themeBox.ItemContainerGenerator.ContainerFromIndex(themeBox.Items.Count - 1);
+        themeBoxTail?.BringIntoView();
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Capture(preferences, Path.Combine(artifacts, "appearance-theme-boxes-bottom-tested.png"));
         ClickNamed(preferences, "Save");
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
         foreach (var (theme, design) in new[]
         {
             (ThemeManager.Sakura, DecorationDesign.Sakura), (ThemeManager.Steampunk, DecorationDesign.Steampunk),
-            (ThemeManager.Forest, DecorationDesign.Forest), (ThemeManager.Paper, DecorationDesign.Paper)
+            (ThemeManager.Forest, DecorationDesign.Forest), (ThemeManager.Paper, DecorationDesign.Paper),
+            (ThemeManager.Anime, DecorationDesign.Anime), (ThemeManager.Aurora, DecorationDesign.Aurora),
+            (ThemeManager.Arcade, DecorationDesign.Arcade), (ThemeManager.Pixel, DecorationDesign.Pixel),
+            (ThemeManager.Ocean, DecorationDesign.Ocean), (ThemeManager.Lavender, DecorationDesign.Lavender),
+            (ThemeManager.Ember, DecorationDesign.Ember), (ThemeManager.Sand, DecorationDesign.Sand),
+            (ThemeManager.Cyberpunk, DecorationDesign.Cyberpunk), (ThemeManager.Midnight, DecorationDesign.Midnight),
+            (ThemeManager.Sunset, DecorationDesign.Sunset), (ThemeManager.Mint, DecorationDesign.Mint),
+            (ThemeManager.Matcha, DecorationDesign.Matcha), (ThemeManager.Frost, DecorationDesign.Frost)
         })
         {
             ThemeManager.Apply(theme);
             await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
-            Check(new[] { sidebar, title, composer }.All(surface => surface.IsVisible && !surface.IsHitTestVisible && surface.Design == design),
+            Check(new[] { sidebar, rail, title, header, composer }.All(surface => surface.IsVisible && !surface.IsHitTestVisible && surface.Design == design),
                 $"Theme surfaces should follow {theme} without intercepting chat controls.");
-            Capture(window, Path.Combine(artifacts, $"theme-{theme}-details-tested.png"));
+            if (theme is ThemeManager.Sakura or ThemeManager.Steampunk or ThemeManager.Forest or ThemeManager.Paper or
+                ThemeManager.Anime or ThemeManager.Aurora or ThemeManager.Arcade or ThemeManager.Ocean or
+                ThemeManager.Cyberpunk or ThemeManager.Midnight or ThemeManager.Sunset or ThemeManager.Mint or
+                ThemeManager.Matcha or ThemeManager.Frost)
+                Capture(window, Path.Combine(artifacts, $"theme-{theme}-details-tested.png"));
         }
         await model.SavePreferencesAsync(settings => settings.ThemeDetailsEnabled = false);
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
-        Check(!sidebar.IsVisible && !title.IsVisible && !composer.IsVisible, "Theme details should switch off independently.");
+        Check(!sidebar.IsVisible && !rail.IsVisible && !title.IsVisible && !header.IsVisible && !composer.IsVisible, "Theme details should switch off independently.");
         window.Close();
         ThemeManager.Apply(ThemeManager.Light);
         Console.WriteLine("PASS  Optional theme details, live palette, and collapsed Appearance groups");
+    }
+
+    private static async Task TestHeaderAndSidebarEffectsAsync(string artifacts)
+    {
+        await using var model = new MainViewModel(preview: true);
+        var window = new MainWindow(model);
+        window.Show();
+        var headerAurora = (HeaderEffect)window.FindName("ConversationHeaderEffect");
+        var headerPulse = (HeaderEffect)window.FindName("ConversationHeaderPulse");
+        var titleSparkles = (HeaderEffect)window.FindName("TitleBarSparkles");
+        var railBeacon = (RailEffect)window.FindName("RailBeaconEffect");
+        var railStream = (RailEffect)window.FindName("RailStreamEffect");
+        var railStardust = (RailEffect)window.FindName("RailStardustEffect");
+        var railScan = (RailEffect)window.FindName("RailScanEffect");
+        var sidebarMotes = (SidebarEffect)window.FindName("SidebarMotesEffect");
+        var sidebarGlow = (SidebarEffect)window.FindName("SidebarEdgeGlowEffect");
+        var sidebarPrism = (SidebarEffect)window.FindName("SidebarPrismEffect");
+        var sidebarSweep = (SidebarEffect)window.FindName("SidebarSweepEffect");
+        var sidebarRain = (WeatherEffect)window.FindName("SidebarRain");
+        var sidebarStarfield = (WeatherEffect)window.FindName("SidebarStarfield");
+        var sidebarBubbles = (WeatherEffect)window.FindName("SidebarBubbles");
+        var sidebarEmbers = (WeatherEffect)window.FindName("SidebarEmbers");
+        var contentStarfield = (WeatherEffect)window.FindName("ConversationStarfield");
+        var contentBubbles = (WeatherEffect)window.FindName("ConversationBubbles");
+        var contentEmbers = (WeatherEffect)window.FindName("ConversationEmbers");
+        var ambientEffects = new AmbientEffect[]
+        {
+            headerAurora, headerPulse, titleSparkles,
+            railBeacon, railStream, railStardust, railScan,
+            sidebarMotes, sidebarGlow, sidebarPrism, sidebarSweep,
+            sidebarRain, sidebarStarfield, sidebarBubbles, sidebarEmbers,
+            contentStarfield, contentBubbles, contentEmbers
+        };
+        Check(ambientEffects.All(effect => !effect.IsVisible) &&
+            !ButtonEffects.GlowEnabled && !ButtonEffects.SheenEnabled && !ButtonEffects.BounceEnabled && !ButtonEffects.RingEnabled,
+            "All header, rail, side panel, ambient, and highlight button effects must be opt-in.");
+
+        var preferences = new SettingsWindow(model) { Owner = window };
+        preferences.Show();
+        preferences.ShowPage("AppearancePage");
+        ((System.Windows.Controls.ListBox)preferences.FindName("ThemeBox")).SelectedValue = ThemeManager.Aurora;
+        ((System.Windows.Controls.CheckBox)preferences.FindName("ThemeDetailsBox")).IsChecked = true;
+
+        var defaultPreviews = new (string Tab, string[] Previews)[]
+        {
+            ("Headers", ["EnginePreview", "HeaderAuroraPreview", "TitleSparklesPreview", "HeaderPulsePreview"]),
+            ("Panels", ["RailBeaconPreview", "RailStreamPreview", "RailStardustPreview", "RailScanPreview", "SidebarMotesPreview", "SidebarGlowPreview", "SidebarPrismPreview", "SidebarSweepPreview"]),
+            ("Ambient", ["PetalsPreview", "StarfieldPreview", "BubblesPreview", "EmbersPreview"]),
+            ("Aura", ["ButtonPreviewPrimary", "ButtonPreviewNav", "ButtonPreviewSend"])
+        };
+        foreach (var (tab, previews) in defaultPreviews)
+        {
+            preferences.ShowAppearanceTab(tab);
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            Check(previews.All(name => ((FrameworkElement)preferences.FindName(name)).IsVisible),
+                $"All effect previews in the {tab} tab must be visible by default without checking a box.");
+        }
+
+        foreach (string name in new[]
+        {
+            "HeaderAurora", "HeaderPulse", "TitleSparkles",
+            "RailBeacon", "RailStream", "RailStardust", "RailScan",
+            "SidebarMotes", "SidebarGlow", "SidebarPrism", "SidebarSweep",
+            "Rain", "Starfield", "Bubbles", "Embers", "AmbientOnSidebar",
+            "ButtonGlow", "ButtonSheen", "ButtonBounce", "ButtonRing"
+        })
+            ((System.Windows.Controls.CheckBox)preferences.FindName(name + "Box")).IsChecked = true;
+        foreach (var (name, value) in new[]
+        {
+            ("HeaderAurora", .8), ("HeaderPulse", .7), ("TitleSparkles", .55),
+            ("RailBeacon", .75), ("RailStream", .7), ("RailStardust", .65), ("RailScan", .6),
+            ("SidebarMotes", .75), ("SidebarGlow", .65), ("SidebarPrism", .7), ("SidebarSweep", .65),
+            ("Starfield", .8), ("Bubbles", .7), ("Embers", .75),
+            ("ButtonGlow", .85), ("ButtonSheen", .8), ("ButtonBounce", .7), ("ButtonRing", .85)
+        })
+            ((System.Windows.Controls.Slider)preferences.FindName(name + "IntensityBox")).Value = value;
+        preferences.ShowAppearanceTab("Panels");
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Capture(preferences, Path.Combine(artifacts, "appearance-header-sidebar-prefs-tested.png"));
+        preferences.ShowAppearanceTab("Aura");
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        ((FrameworkElement)preferences.FindName("ButtonPreviewPrimary")).BringIntoView();
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Capture(preferences, Path.Combine(artifacts, "appearance-rail-buttons-prefs-tested.png"));
+        ClickNamed(preferences, "Save");
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+
+        Check(ambientEffects.All(effect => effect.IsVisible && !effect.IsHitTestVisible && effect.Tint == ThemeAccent()) &&
+            headerAurora.Intensity == .8 && headerPulse.Intensity == .7 && titleSparkles.Intensity == .55 &&
+            railBeacon.Intensity == .75 && railStream.Intensity == .7 && railStardust.Intensity == .65 && railScan.Intensity == .6 &&
+            sidebarMotes.Intensity == .75 && sidebarGlow.Intensity == .65 && sidebarPrism.Intensity == .7 && sidebarSweep.Intensity == .65 &&
+            contentStarfield.Intensity == .8 && contentBubbles.Intensity == .7 && contentEmbers.Intensity == .75 &&
+            ButtonEffects.GlowEnabled && ButtonEffects.SheenEnabled && ButtonEffects.BounceEnabled && ButtonEffects.RingEnabled,
+            "All 5 UI zone effects should activate with independent intensities and the active theme colour.");
+        window.Activate();
+        if (SystemParameters.ClientAreaAnimation) await Until(() => ambientEffects.All(effect => effect.Progress > .005));
+        else Check(ambientEffects.All(effect => effect.Progress == 0), "Reduced motion should stop header, rail, sidebar, and ambient animations.");
+        Capture(window, Path.Combine(artifacts, "header-sidebar-aurora-tested.png"));
+        ThemeManager.Apply(ThemeManager.Cyberpunk);
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(ambientEffects.All(effect => effect.Tint == ThemeAccent()), "All zone effects should recolor live on theme switches.");
+        Capture(window, Path.Combine(artifacts, "effects-all-cyberpunk-tested.png"));
+        ThemeManager.Apply(ThemeManager.Anime);
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(ambientEffects.All(effect => effect.Tint == ThemeAccent()), "Effects should recolor cleanly for light specialty themes.");
+        Capture(window, Path.Combine(artifacts, "header-sidebar-anime-tested.png"));
+        window.WindowState = WindowState.Minimized;
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(ambientEffects.All(effect => effect.ActiveFrameRate == 0 && effect.Progress == 0),
+            "Minimizing should stop all ambient effect clocks.");
+        window.Close();
+        ThemeManager.Apply(ThemeManager.Light);
+        Console.WriteLine("PASS  Header, rail, side panel, content & highlight button effects and live previews");
+    }
+
+    private static async Task TestChromeTexturesAsync(string artifacts)
+    {
+        Check(ChromeTexture.Catalog.Count == 7, $"Expected 6 background textures + None, found {ChromeTexture.Catalog.Count}.");
+        await using var model = new MainViewModel(preview: true);
+        var window = new MainWindow(model);
+        window.Show();
+        var textureLayer = (ChromeTexture)window.FindName("ChromeTextureLayer");
+        Check(!textureLayer.IsVisible && !textureLayer.IsHitTestVisible, "Uniform chrome textures must be opt-in and non-interactive.");
+
+        var preferences = new SettingsWindow(model) { Owner = window };
+        preferences.Show();
+        preferences.ShowPage("AppearancePage");
+        preferences.ShowAppearanceTab("Textures");
+        var textureBox = (System.Windows.Controls.ListBox)preferences.FindName("ChromeTextureBox");
+        var intensityBox = (System.Windows.Controls.Slider)preferences.FindName("ChromeTextureIntensityBox");
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(textureBox.IsVisible && textureBox.Items.Count == 7 && (string)textureBox.SelectedValue == ChromeTexture.Off,
+            "All 6 textures + None should appear directly on the Textures tab.");
+
+        ((System.Windows.Controls.ListBox)preferences.FindName("ThemeBox")).SelectedValue = ThemeManager.Cyberpunk;
+        textureBox.SelectedValue = ChromeTexture.Silk;
+        intensityBox.Value = .85;
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(textureLayer.IsVisible && textureLayer.Kind == ChromeTextureKind.Silk && textureLayer.Intensity == .85,
+            "Selecting a chrome texture should live-preview across the unified shell.");
+        Capture(preferences, Path.Combine(artifacts, "appearance-texture-prefs-tested.png"));
+        preferences.Close();
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(!textureLayer.IsVisible && model.ChromeTexture == ChromeTexture.Off, "Cancel must revert live chrome texture previews.");
+
+        var confirmPrefs = new SettingsWindow(model) { Owner = window };
+        confirmPrefs.Show();
+        confirmPrefs.ShowPage("AppearancePage");
+        confirmPrefs.ShowAppearanceTab("Textures");
+        ((System.Windows.Controls.ListBox)confirmPrefs.FindName("ChromeTextureBox")).SelectedValue = ChromeTexture.Hex;
+        ((System.Windows.Controls.Slider)confirmPrefs.FindName("ChromeTextureIntensityBox")).Value = .75;
+        ClickNamed(confirmPrefs, "Save");
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(model.Settings.ChromeTexture == ChromeTexture.Hex && model.Settings.ChromeTextureIntensity == .75 && textureLayer.IsVisible,
+            "Saved chrome texture should stay active after Preferences closes.");
+
+        foreach (var (theme, texture, expectedKind) in new[]
+        {
+            (ThemeManager.Cyberpunk, ChromeTexture.Hex, ChromeTextureKind.Hex),
+            (ThemeManager.Midnight, ChromeTexture.Silk, ChromeTextureKind.Silk),
+            (ThemeManager.Aurora, ChromeTexture.Topo, ChromeTextureKind.Topo),
+            (ThemeManager.Frost, ChromeTexture.Grid, ChromeTextureKind.Grid),
+            (ThemeManager.Matcha, ChromeTexture.Woven, ChromeTextureKind.Woven),
+            (ThemeManager.Dark, ChromeTexture.Grain, ChromeTextureKind.Grain)
+        })
+        {
+            await model.SavePreferencesAsync(s => { s.Theme = theme; s.ChromeTexture = texture; s.ChromeTextureIntensity = .78; });
+            ThemeManager.Apply(theme);
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            Check(textureLayer.IsVisible && textureLayer.Kind == expectedKind, $"Chrome texture {texture} should render cleanly in {theme}.");
+            Capture(window, Path.Combine(artifacts, $"chrome-texture-{theme}-{texture}-tested.png"));
+        }
+
+        window.Close();
+        ThemeManager.Apply(ThemeManager.Light);
+        Console.WriteLine("PASS  Uniform chrome shell with 6 live theme-adaptive background textures");
+    }
+
+    private static async Task TestTargetAuraAsync(string artifacts)
+    {
+        Check(TargetAura.Catalog.Count == 6, $"Expected 5 target aura styles + None, found {TargetAura.Catalog.Count}.");
+        await using var model = new MainViewModel(preview: true);
+        model.Draft = "Looking great!";
+        var window = new MainWindow(model);
+        window.Show();
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+
+        var chatNav = (System.Windows.Controls.Button)window.FindName("ChatNav");
+        var sendBtn = (System.Windows.Controls.Button)window.FindName("SendButton");
+        var peopleList = (System.Windows.Controls.ListBox)window.FindName("PeopleList");
+        var selectedRow = (System.Windows.Controls.ListBoxItem)peopleList.ItemContainerGenerator.ContainerFromIndex(peopleList.SelectedIndex);
+        var moduleAura = (TargetAura)chatNav.Template.FindName("ButtonAura", chatNav);
+        var sendAura = (TargetAura)sendBtn.Template.FindName("ButtonAura", sendBtn);
+        var rowAura = (TargetAura)selectedRow.Template.FindName("RowAura", selectedRow);
+
+        Check(!moduleAura.IsVisible && !sendAura.IsVisible && !rowAura.IsVisible && TargetAura.ActiveKind == TargetAuraKind.Off,
+            "Target fire/smoke/aura effects must be opt-in by default.");
+
+        var preferences = new SettingsWindow(model) { Owner = window };
+        preferences.Show();
+        preferences.ShowPage("AppearancePage");
+        preferences.ShowAppearanceTab("Aura");
+        var auraBox = (System.Windows.Controls.ListBox)preferences.FindName("TargetAuraBox");
+        var moduleBox = (System.Windows.Controls.CheckBox)preferences.FindName("AuraModuleBox");
+        var personBox = (System.Windows.Controls.CheckBox)preferences.FindName("AuraPersonBox");
+        var buttonsBox = (System.Windows.Controls.CheckBox)preferences.FindName("AuraButtonsBox");
+        var intensityBox = (System.Windows.Controls.Slider)preferences.FindName("TargetAuraIntensityBox");
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(auraBox.IsVisible && auraBox.Items.Count == 6 && (string)auraBox.SelectedValue == TargetAura.Off,
+            "All 5 aura styles + None should appear directly on the Aura tab.");
+
+        ((System.Windows.Controls.ListBox)preferences.FindName("ThemeBox")).SelectedValue = ThemeManager.Cyberpunk;
+        ((System.Windows.Controls.ListBox)preferences.FindName("ChromeTextureBox")).SelectedValue = ChromeTexture.Hex;
+        auraBox.SelectedValue = TargetAura.Fire;
+        intensityBox.Value = .85;
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+
+        Check(moduleAura.IsVisible && sendAura.IsVisible && rowAura.IsVisible &&
+            moduleAura.Kind == TargetAuraKind.Fire && rowAura.Kind == TargetAuraKind.Fire && sendAura.Kind == TargetAuraKind.Fire,
+            "Selecting Fire should light up selected module, selected person row, and enabled highlight buttons live.");
+        Check(moduleBox.IsChecked == true && personBox.IsChecked == true && buttonsBox.IsChecked == true,
+            "All three target toggles should default on once an aura style is chosen.");
+
+        moduleBox.IsChecked = false;
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(!moduleAura.IsVisible && rowAura.IsVisible && sendAura.IsVisible, "Target checkboxes should isolate module, person, and button auras.");
+        moduleBox.IsChecked = true;
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Capture(preferences, Path.Combine(artifacts, "appearance-aura-prefs-tested.png"));
+
+        preferences.Close();
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(!moduleAura.IsVisible && !sendAura.IsVisible && !rowAura.IsVisible && TargetAura.ActiveKind == TargetAuraKind.Off,
+            "Cancel must restore opt-in aura state on all targets.");
+
+        var savePrefs = new SettingsWindow(model) { Owner = window };
+        savePrefs.Show();
+        savePrefs.ShowPage("AppearancePage");
+        savePrefs.ShowAppearanceTab("Aura");
+        ((System.Windows.Controls.ListBox)savePrefs.FindName("TargetAuraBox")).SelectedValue = TargetAura.Fire;
+        ((System.Windows.Controls.Slider)savePrefs.FindName("TargetAuraIntensityBox")).Value = .85;
+        ClickNamed(savePrefs, "Save");
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(model.Settings.TargetAura == TargetAura.Fire && moduleAura.IsVisible && sendAura.IsVisible && rowAura.IsVisible,
+            "Saving TargetAura should persist across module, person, and highlight buttons.");
+
+        window.Activate();
+        foreach (var (theme, texture, style, kind) in new[]
+        {
+            (ThemeManager.Cyberpunk, ChromeTexture.Hex, TargetAura.Fire, TargetAuraKind.Fire),
+            (ThemeManager.Midnight, ChromeTexture.Silk, TargetAura.Aura, TargetAuraKind.Aura),
+            (ThemeManager.Matcha, ChromeTexture.Woven, TargetAura.Smoke, TargetAuraKind.Smoke),
+            (ThemeManager.Frost, ChromeTexture.Grid, TargetAura.Arcane, TargetAuraKind.Arcane)
+        })
+        {
+            await model.SavePreferencesAsync(s => { s.Theme = theme; s.ChromeTexture = texture; s.TargetAura = style; s.TargetAuraIntensity = .85; });
+            ThemeManager.Apply(theme);
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            if (SystemParameters.ClientAreaAnimation) await Until(() => moduleAura.Progress > .005 && rowAura.Progress > .005);
+            Check(moduleAura.Kind == kind && rowAura.Kind == kind && sendAura.Kind == kind,
+                $"Aura {style} should update live across all three targets in {theme}.");
+            Capture(window, Path.Combine(artifacts, $"target-aura-{theme}-{style}-tested.png"));
+        }
+
+        window.WindowState = WindowState.Minimized;
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(moduleAura.ActiveFrameRate == 0 && rowAura.ActiveFrameRate == 0 && sendAura.ActiveFrameRate == 0,
+            "Minimizing must pause all target aura clocks.");
+        window.Close();
+        ThemeManager.Apply(ThemeManager.Light);
+        Console.WriteLine("PASS  Target fire, smoke, embers & aura on selected module, person row, and highlight buttons");
     }
 
     private static void TypeInComposer(System.Windows.Controls.TextBox composer, string text)
@@ -1057,7 +1394,16 @@ internal static class Program
         {
             EffectIntensity = .55, PetalIntensity = .4, EngineIntensity = .9, SakuraPetalsEnabled = true, SteampunkEngineEnabled = true,
             FirefliesEnabled = true, FireflyIntensity = .9, RainEnabled = true, RainIntensity = .5, SnowEnabled = true, SnowIntensity = .8,
-            TypingEffect = "ink", InkBloomIntensity = .35, SendPulseEnabled = true, SendPulseIntensity = .45
+            StarfieldEnabled = true, StarfieldIntensity = .7, BubblesEnabled = true, BubblesIntensity = .6, EmbersEnabled = true, EmbersIntensity = .75,
+            TypingEffect = "ink", InkBloomIntensity = .35, SendPulseEnabled = true, SendPulseIntensity = .45,
+            HeaderAuroraEnabled = true, HeaderAuroraIntensity = .8, HeaderPulseEnabled = true, HeaderPulseIntensity = .7, TitleSparklesEnabled = true, TitleSparklesIntensity = .4,
+            RailBeaconEnabled = true, RailBeaconIntensity = .75, RailStreamEnabled = true, RailStreamIntensity = .65, RailStardustEnabled = true, RailStardustIntensity = .55, RailScanEnabled = true, RailScanIntensity = .85,
+            SidebarMotesEnabled = true, SidebarMotesIntensity = .7, SidebarGlowEnabled = true, SidebarGlowIntensity = .5,
+            SidebarPrismEnabled = true, SidebarPrismIntensity = .6, SidebarSweepEnabled = true, SidebarSweepIntensity = .7,
+            AmbientOnSidebarEnabled = true,
+            ChromeTexture = ChromeTexture.Silk, ChromeTextureIntensity = .8,
+            TargetAura = TargetAura.Fire, TargetAuraIntensity = .85, AuraSelectedModuleEnabled = true, AuraSelectedPersonEnabled = false, AuraHighlightButtonsEnabled = true,
+            ButtonGlowEnabled = true, ButtonGlowIntensity = .8, ButtonSheenEnabled = true, ButtonSheenIntensity = .65, ButtonBounceEnabled = true, ButtonBounceIntensity = .7, ButtonRingEnabled = true, ButtonRingIntensity = .9
         });
         store.SavePeers([new Peer { Id = "peer", Name = "Offline contact" }, new Peer { Id = "second", Name = "Other contact" }]);
         store.SaveHistory(Enumerable.Range(1, 125).Select(i => new ChatMessage { PeerId = "peer", Text = $"Message {i:000}" })
@@ -1075,7 +1421,16 @@ internal static class Program
         Check(model.Settings is
         {
             FirefliesEnabled: true, FireflyIntensity: .9, RainEnabled: true, RainIntensity: .5, SnowEnabled: true, SnowIntensity: .8,
-            TypingEffect: "ink", InkBloomIntensity: .35, SendPulseEnabled: true, SendPulseIntensity: .45
+            StarfieldEnabled: true, StarfieldIntensity: .7, BubblesEnabled: true, BubblesIntensity: .6, EmbersEnabled: true, EmbersIntensity: .75,
+            TypingEffect: "ink", InkBloomIntensity: .35, SendPulseEnabled: true, SendPulseIntensity: .45,
+            HeaderAuroraEnabled: true, HeaderAuroraIntensity: .8, HeaderPulseEnabled: true, HeaderPulseIntensity: .7, TitleSparklesEnabled: true, TitleSparklesIntensity: .4,
+            RailBeaconEnabled: true, RailBeaconIntensity: .75, RailStreamEnabled: true, RailStreamIntensity: .65, RailStardustEnabled: true, RailStardustIntensity: .55, RailScanEnabled: true, RailScanIntensity: .85,
+            SidebarMotesEnabled: true, SidebarMotesIntensity: .7, SidebarGlowEnabled: true, SidebarGlowIntensity: .5,
+            SidebarPrismEnabled: true, SidebarPrismIntensity: .6, SidebarSweepEnabled: true, SidebarSweepIntensity: .7,
+            AmbientOnSidebarEnabled: true,
+            ChromeTexture: "silk", ChromeTextureIntensity: .8,
+            TargetAura: "fire", TargetAuraIntensity: .85, AuraSelectedModuleEnabled: true, AuraSelectedPersonEnabled: false, AuraHighlightButtonsEnabled: true,
+            ButtonGlowEnabled: true, ButtonGlowIntensity: .8, ButtonSheenEnabled: true, ButtonSheenIntensity: .65, ButtonBounceEnabled: true, ButtonBounceIntensity: .7, ButtonRingEnabled: true, ButtonRingIntensity: .9
         }, "The new effects and their settings should survive restart.");
         model.SelectedPeer = model.Peers[0];
         Check(model.Messages.Count == 40 && model.Messages[0].Text == "Message 086" && model.HasOlderMessages && !model.HasNewerMessages,

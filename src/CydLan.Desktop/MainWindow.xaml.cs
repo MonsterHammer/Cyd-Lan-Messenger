@@ -36,7 +36,7 @@ public partial class MainWindow : Window
         Composer.PreviewTextInput += (_, _) => model.Replying = true;
         PreviewMouseLeftButtonDown += (_, args) =>
             EffectLayer.Play(args.GetPosition(EffectLayer), model.Settings.ClickEffect, model.Settings.Theme, typing: false, model.ClickIntensity);
-        Closing += (_, args) => { if (System.Windows.Application.Current is App { IsQuitting: true }) return; args.Cancel = true; Hide(); };
+        Closing += (_, args) => { if (System.Windows.Application.Current is App a && (a.IsQuitting || model.Preview)) return; args.Cancel = true; Hide(); };
         typingTimer.Tick += async (_, _) => { typingTimer.Stop(); await StopTypingAsync(); };
         SizeChanged += (_, _) => UpdateCompactLayout();
         SourceInitialized += (_, _) =>
@@ -104,7 +104,11 @@ public partial class MainWindow : Window
         MaximizeButton.ToolTip = maximized ? "Restore" : "Maximize";
         System.Windows.Automation.AutomationProperties.SetName(MaximizeButton, maximized ? "Restore" : "Maximize");
     }
-    private void Close_Click(object sender, RoutedEventArgs e) => Hide();
+    private async void Close_Click(object sender, RoutedEventArgs e)
+    {
+        if (model.Preview && System.Windows.Application.Current is App app) await app.QuitAsync();
+        else Hide();
+    }
     private void Chat_Click(object sender, RoutedEventArgs e) { model.TransfersOpen = false; model.Broadcasting = false; model.GroupsOpen = false; }
     private void PeopleTab_Click(object sender, RoutedEventArgs e) => model.ShowRecentChats = false;
     private void RecentTab_Click(object sender, RoutedEventArgs e) => model.ShowRecentChats = true;

@@ -1,0 +1,25 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="/CydLan;component/Themes/Dark.xaml"/>
+    </ResourceDictionary.MergedDictionaries>
+    <SolidColorBrush x:Key="Canvas" Color="#0D0E1A"/>
+    <SolidColorBrush x:Key="Rail" Color="#15162B"/>
+    <SolidColorBrush x:Key="Sidebar" Color="#111223"/>
+    <SolidColorBrush x:Key="Surface" Color="#1C1E38"/>
+    <SolidColorBrush x:Key="Hover" Color="#262A4D"/>
+    <SolidColorBrush x:Key="Input" Color="#14162A"/>
+    <SolidColorBrush x:Key="Ink" Color="#EDF6FF"/>
+    <SolidColorBrush x:Key="Muted" Color="#A5B4D4"/>
+    <SolidColorBrush x:Key="Faint" Color="#7E8FB5"/>
+    <SolidColorBrush x:Key="Accent" Color="#33F0FF"/>
+    <SolidColorBrush x:Key="AccentSoft" Color="#163B4D"/>
+    <SolidColorBrush x:Key="AccentInk" Color="#081720"/>
+    <SolidColorBrush x:Key="Line" Color="#2F365E"/>
+    <SolidColorBrush x:Key="Avatar" Color="#242B4F"/>
+    <SolidColorBrush x:Key="Online" Color="#59FFA8"/>
+    <SolidColorBrush x:Key="Away" Color="#FFD15C"/>
+    <SolidColorBrush x:Key="Danger" Color="#FF579A"/>
+    <SolidColorBrush x:Key="NavSelected" Color="#1D4258"/>
+    <SolidColorBrush x:Key="RowHover" Color="#1E213D"/>
+    <SolidColorBrush x:Key="RowSelected" Color="#1A344B"/>
+</ResourceDictionary>
