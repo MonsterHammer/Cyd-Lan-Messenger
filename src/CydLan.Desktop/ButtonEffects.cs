@@ -11,7 +11,7 @@ using Point = System.Windows.Point;
 
 namespace CydLan.Desktop;
 
-/// <summary>Applies opt-in glow, sheen sweep, hover bounce, and accent ring effects to buttons.</summary>
+/// <summary>Applies opt-in glow, sheen sweep, hover bounce, accent ring, pulse halo, hover lift, and spark border effects to buttons.</summary>
 public static class ButtonEffects
 {
     public static readonly DependencyProperty EnabledProperty = DependencyProperty.RegisterAttached(
@@ -33,6 +33,12 @@ public static class ButtonEffects
     public static double BounceIntensity { get; private set; } = .65;
     public static bool RingEnabled { get; private set; }
     public static double RingIntensity { get; private set; } = .65;
+    public static bool PulseEnabled { get; private set; }
+    public static double PulseIntensity { get; private set; } = .65;
+    public static bool LiftEnabled { get; private set; }
+    public static double LiftIntensity { get; private set; } = .65;
+    public static bool SparkEnabled { get; private set; }
+    public static double SparkIntensity { get; private set; } = .65;
 
     private static event Action? StateChanged;
     private static readonly Dictionary<Button, Action> Subscriptions = [];
@@ -41,7 +47,18 @@ public static class ButtonEffects
         bool glow, double glowIntensity,
         bool sheen, double sheenIntensity,
         bool bounce, double bounceIntensity,
-        bool ring, double ringIntensity)
+        bool ring, double ringIntensity) =>
+        Configure(glow, glowIntensity, sheen, sheenIntensity, bounce, bounceIntensity, ring, ringIntensity,
+            pulse: false, pulseIntensity: .65, lift: false, liftIntensity: .65, spark: false, sparkIntensity: .65);
+
+    public static void Configure(
+        bool glow, double glowIntensity,
+        bool sheen, double sheenIntensity,
+        bool bounce, double bounceIntensity,
+        bool ring, double ringIntensity,
+        bool pulse, double pulseIntensity,
+        bool lift, double liftIntensity,
+        bool spark, double sparkIntensity)
     {
         GlowEnabled = glow;
         GlowIntensity = Math.Clamp(glowIntensity, .1, 1);
@@ -51,6 +68,12 @@ public static class ButtonEffects
         BounceIntensity = Math.Clamp(bounceIntensity, .1, 1);
         RingEnabled = ring;
         RingIntensity = Math.Clamp(ringIntensity, .1, 1);
+        PulseEnabled = pulse;
+        PulseIntensity = Math.Clamp(pulseIntensity, .1, 1);
+        LiftEnabled = lift;
+        LiftIntensity = Math.Clamp(liftIntensity, .1, 1);
+        SparkEnabled = spark;
+        SparkIntensity = Math.Clamp(sparkIntensity, .1, 1);
         StateChanged?.Invoke();
     }
 
@@ -68,6 +91,7 @@ public static class ButtonEffects
             button.PreviewMouseLeftButtonDown += Button_PressEvent;
             button.PreviewMouseLeftButtonUp += Button_StateEvent;
             button.IsEnabledChanged += Button_IsEnabledChanged;
+            button.IsVisibleChanged += Button_IsVisibleChanged;
             if (button.IsLoaded) Subscribe(button);
         }
         else
@@ -79,6 +103,7 @@ public static class ButtonEffects
             button.PreviewMouseLeftButtonDown -= Button_PressEvent;
             button.PreviewMouseLeftButtonUp -= Button_StateEvent;
             button.IsEnabledChanged -= Button_IsEnabledChanged;
+            button.IsVisibleChanged -= Button_IsVisibleChanged;
             Unsubscribe(button);
         }
     }
@@ -93,6 +118,7 @@ public static class ButtonEffects
     private static void Button_StateEvent(object sender, System.Windows.Input.MouseEventArgs e) { if (sender is Button b) UpdateVisuals(b, pressed: false); }
     private static void Button_PressEvent(object sender, MouseButtonEventArgs e) { if (sender is Button b) UpdateVisuals(b, pressed: true); }
     private static void Button_IsEnabledChanged(object sender, DependencyPropertyChangedEventArgs e) { if (sender is Button b) UpdateVisuals(b, pressed: false); }
+    private static void Button_IsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e) { if (sender is Button b && b.IsLoaded) UpdateVisuals(b, pressed: false); }
 
     private static void Subscribe(Button button)
     {
@@ -113,14 +139,22 @@ public static class ButtonEffects
             StateChanged -= handler;
             TargetAura.StateChanged -= handler;
         }
-        if (button.Effect is DropShadowEffect) button.Effect = null;
-        if (button.RenderTransform is ScaleTransform) button.RenderTransform = Transform.Identity;
+        if (button.Effect is DropShadowEffect existingGlow)
+        {
+            existingGlow.BeginAnimation(DropShadowEffect.OpacityProperty, null);
+            existingGlow.BeginAnimation(DropShadowEffect.BlurRadiusProperty, null);
+            button.Effect = null;
+        }
+        if (button.RenderTransform is ScaleTransform or TransformGroup) button.RenderTransform = Transform.Identity;
         if (button.Template?.FindName("ButtonAura", button) is TargetAura aura)
             aura.Visibility = Visibility.Collapsed;
         if (button.Template?.FindName("AccentRing", button) is Border ring)
         {
             ring.BeginAnimation(UIElement.OpacityProperty, null);
             ring.Opacity = 0;
+            if (ring.Tag is RotateTransform rot) rot.BeginAnimation(RotateTransform.AngleProperty, null);
+            ring.Tag = null;
+            ring.SetResourceReference(Border.BorderBrushProperty, "Accent");
         }
         if (button.Template?.FindName("SheenOverlay", button) is Border sheen)
         {
@@ -136,9 +170,9 @@ public static class ButtonEffects
         bool hovered = button.IsMouseOver;
         bool active = button.IsEnabled && (highlight || hovered);
 
-        UpdateGlow(button, active, hovered);
-        UpdateBounce(button, hovered, pressed);
-        UpdateRing(button, active, hovered);
+        UpdateGlowAndPulse(button, active, hovered);
+        UpdateMotion(button, hovered, pressed);
+        UpdateRingAndSpark(button, active, hovered);
         UpdateSheen(button, active, hovered);
         UpdateAura(button, highlight);
     }
@@ -155,66 +189,181 @@ public static class ButtonEffects
         aura.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    private static void UpdateGlow(Button button, bool active, bool hovered)
+    private static void UpdateGlowAndPulse(Button button, bool active, bool hovered)
     {
-        if (!GlowEnabled || !active)
+        bool wantGlow = GlowEnabled && active && button.IsVisible;
+        bool wantPulse = PulseEnabled && active && button.IsVisible;
+        if (!wantGlow && !wantPulse)
         {
-            if (button.Effect is DropShadowEffect) button.Effect = null;
+            if (button.Effect is DropShadowEffect existing)
+            {
+                existing.BeginAnimation(DropShadowEffect.OpacityProperty, null);
+                existing.BeginAnimation(DropShadowEffect.BlurRadiusProperty, null);
+                button.Effect = null;
+            }
             return;
         }
         Color accent = Application.Current?.Resources["EffectColor"] is Color c ? c : Color.FromRgb(90, 170, 210);
-        button.Effect = new DropShadowEffect
+        double baseStrength = wantGlow ? GlowIntensity : PulseIntensity;
+        double blur = 10 + 10 * baseStrength;
+        double opacity = (.35 + .55 * baseStrength) * (hovered ? 1.0 : .78);
+
+        if (button.Effect is not DropShadowEffect effect || effect.IsFrozen)
         {
-            Color = accent,
-            ShadowDepth = 0,
-            BlurRadius = 10 + 10 * GlowIntensity,
-            Opacity = (.35 + .55 * GlowIntensity) * (hovered ? 1.0 : .78)
-        };
+            effect = new DropShadowEffect { Color = accent, ShadowDepth = 0, BlurRadius = blur, Opacity = opacity };
+            button.Effect = effect;
+        }
+        else
+        {
+            effect.Color = accent;
+        }
+
+        if (wantPulse && SystemParameters.ClientAreaAnimation)
+        {
+            double loOp = Math.Max(.14, opacity * .38);
+            double hiOp = Math.Min(1.0, opacity * (1.05 + .22 * PulseIntensity));
+            var opAnim = new DoubleAnimation(loOp, hiOp, TimeSpan.FromMilliseconds(950))
+            {
+                AutoReverse = true,
+                RepeatBehavior = RepeatBehavior.Forever,
+                EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
+            };
+            Timeline.SetDesiredFrameRate(opAnim, 24);
+            effect.BeginAnimation(DropShadowEffect.OpacityProperty, opAnim);
+
+            double hiBlur = blur + 6 + 6 * PulseIntensity;
+            var blurAnim = new DoubleAnimation(blur * .78, hiBlur, TimeSpan.FromMilliseconds(950))
+            {
+                AutoReverse = true,
+                RepeatBehavior = RepeatBehavior.Forever,
+                EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
+            };
+            Timeline.SetDesiredFrameRate(blurAnim, 24);
+            effect.BeginAnimation(DropShadowEffect.BlurRadiusProperty, blurAnim);
+        }
+        else
+        {
+            effect.BeginAnimation(DropShadowEffect.OpacityProperty, null);
+            effect.BeginAnimation(DropShadowEffect.BlurRadiusProperty, null);
+            effect.BlurRadius = blur;
+            effect.Opacity = opacity;
+        }
     }
 
-    private static void UpdateBounce(Button button, bool hovered, bool pressed)
+    private static void UpdateMotion(Button button, bool hovered, bool pressed)
     {
-        if (!BounceEnabled || !button.IsEnabled || !SystemParameters.ClientAreaAnimation)
+        bool wantBounce = BounceEnabled && button.IsEnabled && SystemParameters.ClientAreaAnimation;
+        bool wantLift = LiftEnabled && button.IsEnabled && SystemParameters.ClientAreaAnimation;
+        if (!wantBounce && !wantLift)
         {
-            if (button.RenderTransform is ScaleTransform) button.RenderTransform = Transform.Identity;
+            if (button.RenderTransform is ScaleTransform or TransformGroup) button.RenderTransform = Transform.Identity;
             return;
         }
-        if (button.RenderTransform is not ScaleTransform scale)
+        ScaleTransform scale;
+        TranslateTransform lift;
+        if (button.RenderTransform is TransformGroup { Children.Count: 2 } group &&
+            group.Children[0] is ScaleTransform s && group.Children[1] is TranslateTransform t)
+        {
+            scale = s;
+            lift = t;
+        }
+        else
         {
             button.RenderTransformOrigin = new Point(.5, .5);
             scale = new ScaleTransform(1, 1);
-            button.RenderTransform = scale;
+            lift = new TranslateTransform(0, 0);
+            var created = new TransformGroup();
+            created.Children.Add(scale);
+            created.Children.Add(lift);
+            button.RenderTransform = created;
         }
-        double target = pressed ? .95 : hovered ? 1 + .08 * BounceIntensity : 1;
-        var anim = new DoubleAnimation(target, TimeSpan.FromMilliseconds(pressed ? 70 : 140))
-        {
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-        };
-        scale.BeginAnimation(ScaleTransform.ScaleXProperty, anim);
-        scale.BeginAnimation(ScaleTransform.ScaleYProperty, anim);
+
+        double targetScale = wantBounce ? (pressed ? .95 : hovered ? 1 + .08 * BounceIntensity : 1) : 1;
+        double targetY = wantLift ? (pressed ? .8 : hovered ? -(1.4 + 2.6 * LiftIntensity) : 0) : 0;
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var duration = TimeSpan.FromMilliseconds(pressed ? 70 : 140);
+        scale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(targetScale, duration) { EasingFunction = ease });
+        scale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(targetScale, duration) { EasingFunction = ease });
+        lift.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(targetY, duration) { EasingFunction = ease });
     }
 
-    private static void UpdateRing(Button button, bool active, bool hovered)
+    private static void UpdateRingAndSpark(Button button, bool active, bool hovered)
     {
         if (button.Template?.FindName("AccentRing", button) is not Border ring) return;
-        double target = RingEnabled && active ? (.50 + .50 * RingIntensity) * (hovered ? 1.0 : .82) : 0;
+        bool wantRing = RingEnabled && active;
+        bool wantSpark = SparkEnabled && active && button.IsVisible;
+
+        if (!wantRing && !wantSpark)
+        {
+            if (ring.Tag is RotateTransform idleRot) idleRot.BeginAnimation(RotateTransform.AngleProperty, null);
+            if (!SystemParameters.ClientAreaAnimation)
+            {
+                ring.BeginAnimation(UIElement.OpacityProperty, null);
+                ring.Opacity = 0;
+            }
+            else
+            {
+                ring.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, TimeSpan.FromMilliseconds(140)));
+            }
+            return;
+        }
+
+        if (wantSpark)
+        {
+            Color accent = Application.Current?.Resources["EffectColor"] is Color c ? c : Color.FromRgb(90, 170, 210);
+            Color hi = EffectPalette.Blend(accent, Colors.White, .78);
+            var rot = ring.Tag as RotateTransform ?? new RotateTransform(0, .5, .5);
+            ring.Tag = rot;
+            var brush = new LinearGradientBrush
+            {
+                StartPoint = new Point(0, 0),
+                EndPoint = new Point(1, 1),
+                RelativeTransform = rot,
+                GradientStops =
+                [
+                    new GradientStop(Color.FromArgb(wantRing ? (byte)160 : (byte)45, accent.R, accent.G, accent.B), 0),
+                    new GradientStop(hi, .48),
+                    new GradientStop(Color.FromArgb(wantRing ? (byte)160 : (byte)45, accent.R, accent.G, accent.B), 1)
+                ]
+            };
+            ring.BorderBrush = brush;
+            if (SystemParameters.ClientAreaAnimation)
+            {
+                var spin = new DoubleAnimation(0, 360, TimeSpan.FromMilliseconds(2200 - 900 * SparkIntensity))
+                {
+                    RepeatBehavior = RepeatBehavior.Forever
+                };
+                Timeline.SetDesiredFrameRate(spin, 24);
+                rot.BeginAnimation(RotateTransform.AngleProperty, spin);
+            }
+        }
+        else
+        {
+            if (ring.Tag is RotateTransform oldRot) oldRot.BeginAnimation(RotateTransform.AngleProperty, null);
+            ring.Tag = null;
+            ring.SetResourceReference(Border.BorderBrushProperty, "Accent");
+        }
+
+        double strength = Math.Max(wantRing ? RingIntensity : 0, wantSpark ? SparkIntensity : 0);
+        double target = (.52 + .48 * strength) * (hovered ? 1.0 : .85);
         if (!SystemParameters.ClientAreaAnimation)
         {
             ring.BeginAnimation(UIElement.OpacityProperty, null);
             ring.Opacity = target;
             return;
         }
-        ring.BeginAnimation(UIElement.OpacityProperty,
-            new DoubleAnimation(target, TimeSpan.FromMilliseconds(140)));
+        ring.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(target, TimeSpan.FromMilliseconds(140)));
     }
 
     private static void UpdateSheen(Button button, bool active, bool hovered)
     {
         if (button.Template?.FindName("SheenOverlay", button) is not Border sheen) return;
-        if (!SheenEnabled || !active || !SystemParameters.ClientAreaAnimation)
+        if (!SheenEnabled || !active || !button.IsVisible || !SystemParameters.ClientAreaAnimation)
         {
             sheen.BeginAnimation(UIElement.OpacityProperty, null);
             sheen.Opacity = 0;
+            if (sheen.Tag is TranslateTransform idleShift)
+                idleShift.BeginAnimation(TranslateTransform.XProperty, null);
             return;
         }
         var shift = sheen.Tag as TranslateTransform;

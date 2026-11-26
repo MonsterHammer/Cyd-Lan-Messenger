@@ -2,14 +2,19 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Brush = System.Windows.Media.Brush;
-using Brushes = System.Windows.Media.Brushes;
 using Color = System.Windows.Media.Color;
 using Pen = System.Windows.Media.Pen;
 using Point = System.Windows.Point;
 
 namespace CydLan.Desktop;
 
-public enum ChromeTextureKind { Off, Grain, Woven, Topo, Grid, Silk, Hex }
+public enum ChromeTextureKind
+{
+    Off,
+    Grain, Woven, Topo, Grid, Silk, Hex,
+    Brushed, Marble, Carbon, Circuit, Waves, ArtDeco, Terrazzo, Mesh,
+    Bubbles, Gothic, Lightning, Web, Starburst, Botanical, Cipher, Watercolor
+}
 
 public sealed record ChromeTextureSwatch(string Value, string Name, ChromeTextureKind Kind);
 
@@ -23,16 +28,48 @@ public sealed class ChromeTexture : FrameworkElement
     public const string Grid = "grid";
     public const string Silk = "silk";
     public const string Hex = "hex";
+    public const string Brushed = "brushed";
+    public const string Marble = "marble";
+    public const string Carbon = "carbon";
+    public const string Circuit = "circuit";
+    public const string Waves = "waves";
+    public const string ArtDeco = "artdeco";
+    public const string Terrazzo = "terrazzo";
+    public const string Mesh = "mesh";
+    public const string Bubbles = "bubbles";
+    public const string Gothic = "gothic";
+    public const string Lightning = "lightning";
+    public const string Web = "web";
+    public const string Starburst = "starburst";
+    public const string Botanical = "botanical";
+    public const string Cipher = "cipher";
+    public const string Watercolor = "watercolor";
 
     public static IReadOnlyList<ChromeTextureSwatch> Catalog { get; } =
     [
-        new ChromeTextureSwatch(Off, "None", ChromeTextureKind.Off),
-        new ChromeTextureSwatch(Grain, "Frosted grain", ChromeTextureKind.Grain),
-        new ChromeTextureSwatch(Woven, "Woven linen", ChromeTextureKind.Woven),
-        new ChromeTextureSwatch(Topo, "Topographic", ChromeTextureKind.Topo),
-        new ChromeTextureSwatch(Grid, "Drafting grid", ChromeTextureKind.Grid),
-        new ChromeTextureSwatch(Silk, "Flowing silk", ChromeTextureKind.Silk),
-        new ChromeTextureSwatch(Hex, "Honeycomb", ChromeTextureKind.Hex)
+        new(Off, "None", ChromeTextureKind.Off),
+        new(Grain, "Frosted grain", ChromeTextureKind.Grain),
+        new(Brushed, "Brushed metal", ChromeTextureKind.Brushed),
+        new(Marble, "Marble veins", ChromeTextureKind.Marble),
+        new(Silk, "Flowing silk", ChromeTextureKind.Silk),
+        new(Topo, "Topographic", ChromeTextureKind.Topo),
+        new(Watercolor, "Watercolor", ChromeTextureKind.Watercolor),
+        new(Terrazzo, "Terrazzo", ChromeTextureKind.Terrazzo),
+        new(Circuit, "Circuit traces", ChromeTextureKind.Circuit),
+        new(Bubbles, "Reef bubbles", ChromeTextureKind.Bubbles),
+        new(Gothic, "Gothic filigree", ChromeTextureKind.Gothic),
+        new(Lightning, "Lightning veins", ChromeTextureKind.Lightning),
+        new(Web, "Cobweb silk", ChromeTextureKind.Web),
+        new(Starburst, "Starburst", ChromeTextureKind.Starburst),
+        new(Botanical, "Botanical", ChromeTextureKind.Botanical),
+        new(Cipher, "Cipher streams", ChromeTextureKind.Cipher),
+        new(Woven, "Woven linen", ChromeTextureKind.Woven),
+        new(Grid, "Drafting grid", ChromeTextureKind.Grid),
+        new(Hex, "Honeycomb", ChromeTextureKind.Hex),
+        new(Carbon, "Carbon fiber", ChromeTextureKind.Carbon),
+        new(Waves, "Seigaiha waves", ChromeTextureKind.Waves),
+        new(ArtDeco, "Art Deco", ChromeTextureKind.ArtDeco),
+        new(Mesh, "Starlight mesh", ChromeTextureKind.Mesh)
     ];
 
     public static readonly DependencyProperty TextureProperty = DependencyProperty.Register(
@@ -85,7 +122,9 @@ public sealed class ChromeTexture : FrameworkElement
         SetResourceReference(LineColorProperty, "ChromeLineColor");
     }
 
-    public static string Normalize(string? value) => value is Grain or Woven or Topo or Grid or Silk or Hex ? value : Off;
+    public static string Normalize(string? value) => value is Grain or Woven or Topo or Grid or Silk or Hex
+        or Brushed or Marble or Carbon or Circuit or Waves or ArtDeco or Terrazzo or Mesh
+        or Bubbles or Gothic or Lightning or Web or Starburst or Botanical or Cipher or Watercolor ? value : Off;
 
     public static ChromeTextureKind KindFor(string? value) => Normalize(value) switch
     {
@@ -95,13 +134,33 @@ public sealed class ChromeTexture : FrameworkElement
         Grid => ChromeTextureKind.Grid,
         Silk => ChromeTextureKind.Silk,
         Hex => ChromeTextureKind.Hex,
+        Brushed => ChromeTextureKind.Brushed,
+        Marble => ChromeTextureKind.Marble,
+        Carbon => ChromeTextureKind.Carbon,
+        Circuit => ChromeTextureKind.Circuit,
+        Waves => ChromeTextureKind.Waves,
+        ArtDeco => ChromeTextureKind.ArtDeco,
+        Terrazzo => ChromeTextureKind.Terrazzo,
+        Mesh => ChromeTextureKind.Mesh,
+        Bubbles => ChromeTextureKind.Bubbles,
+        Gothic => ChromeTextureKind.Gothic,
+        Lightning => ChromeTextureKind.Lightning,
+        Web => ChromeTextureKind.Web,
+        Starburst => ChromeTextureKind.Starburst,
+        Botanical => ChromeTextureKind.Botanical,
+        Cipher => ChromeTextureKind.Cipher,
+        Watercolor => ChromeTextureKind.Watercolor,
         _ => ChromeTextureKind.Off
     };
 
+    /// <summary>Only intentionally geometric weaves/grids repeat as tiles; organic and thematic textures render as full-canvas non-repeating compositions.</summary>
+    private static bool IsRepeatingPattern(ChromeTextureKind kind) => kind is
+        ChromeTextureKind.Woven or ChromeTextureKind.Grid or ChromeTextureKind.Hex or
+        ChromeTextureKind.Carbon or ChromeTextureKind.Waves or ChromeTextureKind.ArtDeco or ChromeTextureKind.Mesh;
+
     private static void OnTextureStringChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
-        var control = (ChromeTexture)d;
-        control.Kind = KindFor(e.NewValue as string);
+        ((ChromeTexture)d).Kind = KindFor(e.NewValue as string);
     }
 
     private static void InvalidateTexture(DependencyObject d, DependencyPropertyChangedEventArgs e)
@@ -135,7 +194,7 @@ public sealed class ChromeTexture : FrameworkElement
 
     private void EnsureCache(ChromeTextureKind kind, double width, double height, double intensity)
     {
-        bool sizeMatters = kind is ChromeTextureKind.Topo or ChromeTextureKind.Silk;
+        bool sizeMatters = !IsRepeatingPattern(kind);
         bool sameSize = !sizeMatters || (Math.Abs(width - cachedWidth) < .5 && Math.Abs(height - cachedHeight) < .5);
         bool sameKey = sameSize && cachedKind == kind && Math.Abs(cachedIntensity - intensity) < .001 &&
             cachedTint == Tint && cachedSurface == SurfaceColor && (cachedTile is not null || cachedVector is not null);
@@ -160,9 +219,55 @@ public sealed class ChromeTexture : FrameworkElement
 
         switch (kind)
         {
+            // Organic / randomized full-canvas non-repeating textures
             case ChromeTextureKind.Grain:
                 cachedTile = BuildGrainBrush(hi, lo, accent, isLight, intensity);
+                cachedVector = BuildGrainCloudsDrawing(width, height, hi, lo, accent, isLight, intensity, compact);
                 break;
+            case ChromeTextureKind.Brushed:
+                cachedVector = BuildBrushedDrawing(width, height, hi, lo, accent, isLight, intensity, compact);
+                break;
+            case ChromeTextureKind.Topo:
+                cachedVector = BuildTopoDrawing(width, height, hi, lo, accent, isLight, intensity);
+                break;
+            case ChromeTextureKind.Silk:
+                cachedVector = BuildSilkDrawing(width, height, hi, lo, accent, isLight, intensity);
+                break;
+            case ChromeTextureKind.Marble:
+                cachedVector = BuildMarbleDrawing(width, height, hi, lo, accent, isLight, intensity);
+                break;
+            case ChromeTextureKind.Circuit:
+                cachedVector = BuildCircuitDrawing(width, height, hi, lo, accent, isLight, intensity, compact);
+                break;
+            case ChromeTextureKind.Terrazzo:
+                cachedVector = BuildTerrazzoDrawing(width, height, hi, lo, accent, isLight, intensity, compact);
+                break;
+            case ChromeTextureKind.Bubbles:
+                cachedVector = BuildBubblesDrawing(width, height, hi, lo, accent, isLight, intensity, compact);
+                break;
+            case ChromeTextureKind.Gothic:
+                cachedVector = BuildGothicDrawing(width, height, hi, lo, accent, isLight, intensity, compact);
+                break;
+            case ChromeTextureKind.Lightning:
+                cachedVector = BuildLightningDrawing(width, height, hi, lo, accent, isLight, intensity, compact);
+                break;
+            case ChromeTextureKind.Web:
+                cachedVector = BuildWebDrawing(width, height, hi, lo, accent, isLight, intensity, compact);
+                break;
+            case ChromeTextureKind.Starburst:
+                cachedVector = BuildStarburstDrawing(width, height, hi, lo, accent, isLight, intensity, compact);
+                break;
+            case ChromeTextureKind.Botanical:
+                cachedVector = BuildBotanicalDrawing(width, height, hi, lo, accent, isLight, intensity, compact);
+                break;
+            case ChromeTextureKind.Cipher:
+                cachedVector = BuildCipherDrawing(width, height, hi, lo, accent, isLight, intensity, compact);
+                break;
+            case ChromeTextureKind.Watercolor:
+                cachedVector = BuildWatercolorDrawing(width, height, hi, lo, accent, isLight, intensity, compact);
+                break;
+
+            // Intentionally geometric repeating textures
             case ChromeTextureKind.Woven:
                 cachedTile = BuildWovenBrush(hi, lo, accent, isLight, intensity, compact);
                 break;
@@ -172,27 +277,30 @@ public sealed class ChromeTexture : FrameworkElement
             case ChromeTextureKind.Hex:
                 cachedTile = BuildHexBrush(hi, lo, accent, isLight, intensity, compact);
                 break;
-            case ChromeTextureKind.Topo:
-                cachedVector = BuildTopoDrawing(width, height, hi, lo, accent, isLight, intensity);
+            case ChromeTextureKind.Carbon:
+                cachedTile = BuildCarbonBrush(hi, lo, accent, isLight, intensity, compact);
                 break;
-            case ChromeTextureKind.Silk:
-                cachedVector = BuildSilkDrawing(width, height, hi, lo, accent, isLight, intensity);
+            case ChromeTextureKind.Waves:
+                cachedTile = BuildWavesBrush(hi, lo, accent, isLight, intensity, compact);
+                break;
+            case ChromeTextureKind.ArtDeco:
+                cachedTile = BuildArtDecoBrush(hi, lo, accent, isLight, intensity, compact);
+                break;
+            case ChromeTextureKind.Mesh:
+                cachedTile = BuildMeshBrush(hi, lo, accent, isLight, intensity, compact);
                 break;
         }
+        cachedVector?.Freeze();
     }
 
     private static Brush BuildAmbientWash(Color hi, Color lo, Color accent, bool isLight, double intensity, ChromeTextureKind kind)
     {
-        byte topAlpha = (byte)Math.Round((isLight ? 44 : 18) * intensity);
-        byte midAlpha = (byte)Math.Round((isLight ? 14 : 16) * intensity);
-        byte edgeAlpha = (byte)Math.Round((isLight ? 18 : 34) * intensity);
-        if (kind == ChromeTextureKind.Silk) topAlpha = (byte)(topAlpha / 2);
+        byte topAlpha = (byte)Math.Round((isLight ? 40 : 16) * intensity);
+        byte midAlpha = (byte)Math.Round((isLight ? 12 : 14) * intensity);
+        byte edgeAlpha = (byte)Math.Round((isLight ? 16 : 32) * intensity);
+        if (kind is ChromeTextureKind.Silk or ChromeTextureKind.Watercolor) topAlpha = (byte)(topAlpha / 2);
 
-        var wash = new LinearGradientBrush
-        {
-            StartPoint = new Point(0, 0),
-            EndPoint = new Point(1, 1)
-        };
+        var wash = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 1) };
         wash.GradientStops.Add(new GradientStop(WithAlpha(hi, topAlpha), 0));
         wash.GradientStops.Add(new GradientStop(WithAlpha(accent, midAlpha), .42));
         wash.GradientStops.Add(new GradientStop(WithAlpha(lo, edgeAlpha), 1));
@@ -200,33 +308,35 @@ public sealed class ChromeTexture : FrameworkElement
         return wash;
     }
 
+    // ---------------- Randomized, Non-Repeating Full-Canvas Textures ----------------
+
     private static Brush BuildGrainBrush(Color hi, Color lo, Color accent, bool isLight, double intensity)
     {
-        const int size = 128;
+        const int size = 192;
         byte[] pixels = new byte[size * size * 4];
-        double strength = .42 + .58 * intensity;
+        double strength = .40 + .56 * intensity;
 
         for (int y = 0; y < size; y++)
         {
             for (int x = 0; x < size; x++)
             {
-                double coarse = SmoothTileNoise(x * 8.0 / size, y * 8.0 / size, 8);
-                double medium = SmoothTileNoise(x * 32.0 / size, y * 32.0 / size, 32);
+                double coarse = SmoothTileNoise(x * 6.0 / size, y * 6.0 / size, 6);
+                double medium = SmoothTileNoise(x * 24.0 / size, y * 24.0 / size, 24);
                 double fine = Hash2D(x, y) * 2.0 - 1.0;
-                double micro = (Hash2D((x + 17) & (size - 1), (y + 31) & (size - 1))
-                    + Hash2D((x + size - 11) & (size - 1), (y + 7) & (size - 1)) - 1.0) * .5;
-                double value = (fine * .56 + micro * .22 + (medium - .5) * .36 + (coarse - .5) * .28) * strength;
+                double micro = (Hash2D((x + 29) % size, (y + 47) % size)
+                    + Hash2D((x + size - 13) % size, (y + 19) % size) - 1.0) * .5;
+                double value = (fine * .58 + micro * .22 + (medium - .5) * .32 + (coarse - .5) * .22) * strength;
 
                 int idx = (y * size + x) * 4;
                 if (value >= 0)
                 {
-                    Color c = x % 3 == 0 ? EffectPalette.Blend(hi, accent, .28) : hi;
-                    byte a = (byte)Math.Clamp(value * (isLight ? 48 : 30), 0, 84);
+                    Color c = (x + y) % 3 == 0 ? EffectPalette.Blend(hi, accent, .26) : hi;
+                    byte a = (byte)Math.Clamp(value * (isLight ? 44 : 28), 0, 80);
                     WritePremul(pixels, idx, c, a);
                 }
                 else
                 {
-                    byte a = (byte)Math.Clamp(-value * (isLight ? 22 : 42), 0, 84);
+                    byte a = (byte)Math.Clamp(-value * (isLight ? 20 : 40), 0, 80);
                     WritePremul(pixels, idx, lo, a);
                 }
             }
@@ -245,110 +355,582 @@ public sealed class ChromeTexture : FrameworkElement
         return brush;
     }
 
-    private static Brush BuildWovenBrush(Color hi, Color lo, Color accent, bool isLight, double intensity, bool compact)
+    private static DrawingGroup BuildGrainCloudsDrawing(double width, double height, Color hi, Color lo, Color accent, bool isLight, double intensity, bool compact)
     {
-        double cell = compact ? 10 : 12;
-        double half = cell * .5;
-        double thread = compact ? 1.5 : 1.9;
-
         var group = new DrawingGroup();
-        var warpPen = FrozenPen(WithAlpha(hi, (byte)Math.Round((isLight ? 58 : 24) * intensity)), thread);
-        var weftPen = FrozenPen(WithAlpha(accent, (byte)Math.Round((isLight ? 24 : 22) * intensity)), thread * .85);
-        var shadowPen = FrozenPen(WithAlpha(lo, (byte)Math.Round((isLight ? 16 : 30) * intensity)), thread * .8);
-        var groovePen = FrozenPen(WithAlpha(lo, (byte)Math.Round((isLight ? 11 : 20) * intensity)), .65);
-
-        using (var dc = group.Open())
+        using var dc = group.Open();
+        var rng = new Random(1907);
+        int blooms = compact ? 3 : 6;
+        for (int i = 0; i < blooms; i++)
         {
-            // Alternating over-under linen weave without heavy dot blocks
-            dc.DrawLine(shadowPen, new Point(0, half * .5), new Point(half, half * .5));
-            dc.DrawLine(warpPen, new Point(half, half * .5), new Point(cell, half * .5));
-            dc.DrawLine(warpPen, new Point(0, half * 1.5), new Point(half, half * 1.5));
-            dc.DrawLine(weftPen, new Point(half, half * 1.5), new Point(cell, half * 1.5));
-
-            dc.DrawLine(warpPen, new Point(half * .5, 0), new Point(half * .5, half));
-            dc.DrawLine(weftPen, new Point(half * 1.5, half), new Point(half * 1.5, cell));
-            dc.DrawLine(shadowPen, new Point(half * 1.5, 0), new Point(half * 1.5, half));
-            dc.DrawLine(shadowPen, new Point(half * .5, half), new Point(half * .5, cell));
-
-            dc.DrawLine(groovePen, new Point(0, half), new Point(cell, half));
-            dc.DrawLine(groovePen, new Point(half, 0), new Point(half, cell));
+            double cx = rng.NextDouble();
+            double cy = rng.NextDouble();
+            var radial = new RadialGradientBrush
+            {
+                Center = new Point(cx, cy),
+                GradientOrigin = new Point(cx, cy),
+                RadiusX = .26 + rng.NextDouble() * .34,
+                RadiusY = .24 + rng.NextDouble() * .34
+            };
+            Color col = i % 3 == 0 ? accent : i % 2 == 0 ? hi : lo;
+            byte a = (byte)Math.Round((i % 3 == 0 ? (isLight ? 20 : 18) : (isLight ? 28 : 20)) * intensity);
+            radial.GradientStops.Add(new GradientStop(WithAlpha(col, a), 0));
+            radial.GradientStops.Add(new GradientStop(WithAlpha(col, 0), 1));
+            radial.Freeze();
+            dc.DrawRectangle(radial, null, new Rect(0, 0, width, height));
         }
-
-        return TiledDrawingBrush(group, cell, cell);
+        return group;
     }
 
-    private static Brush BuildGridBrush(Color hi, Color lo, Color accent, bool isLight, double intensity, bool compact)
+    private static DrawingGroup BuildBrushedDrawing(double width, double height, Color hi, Color lo, Color accent, bool isLight, double intensity, bool compact)
     {
-        double sub = compact ? 14 : 20;
-        double major = sub * 4;
-
         var group = new DrawingGroup();
-        var subPen = FrozenPen(WithAlpha(isLight ? lo : hi, (byte)Math.Round((isLight ? 18 : 16) * intensity)), .65);
-        var majorPen = FrozenPen(WithAlpha(accent, (byte)Math.Round((isLight ? 36 : 38) * intensity)), .95);
-        var crossPen = FrozenPen(WithAlpha(hi, (byte)Math.Round((isLight ? 84 : 58) * intensity)), 1.2);
-        var dotBrush = FrozenBrush(WithAlpha(accent, (byte)Math.Round((isLight ? 54 : 52) * intensity)));
+        using var dc = group.Open();
 
-        using (var dc = group.Open())
+        // Asymmetric anodized metallic sheen bands across full canvas
+        var sheen = new LinearGradientBrush { StartPoint = new Point(0, .15), EndPoint = new Point(1, .85) };
+        sheen.GradientStops.Add(new GradientStop(WithAlpha(lo, (byte)Math.Round((isLight ? 14 : 32) * intensity)), 0));
+        sheen.GradientStops.Add(new GradientStop(WithAlpha(hi, (byte)Math.Round((isLight ? 64 : 32) * intensity)), .28));
+        sheen.GradientStops.Add(new GradientStop(WithAlpha(accent, (byte)Math.Round((isLight ? 20 : 22) * intensity)), .56));
+        sheen.GradientStops.Add(new GradientStop(WithAlpha(hi, (byte)Math.Round((isLight ? 46 : 24) * intensity)), .78));
+        sheen.GradientStops.Add(new GradientStop(WithAlpha(lo, (byte)Math.Round((isLight ? 18 : 38) * intensity)), 1));
+        sheen.Freeze();
+        dc.DrawRectangle(sheen, null, new Rect(0, 0, width, height));
+
+        // Non-repeating randomized micro-brushed horizontal filaments of varying length & tone
+        var rng = new Random(3319);
+        var hiPen = FrozenPen(WithAlpha(hi, (byte)Math.Round((isLight ? 62 : 28) * intensity)), .75);
+        var loPen = FrozenPen(WithAlpha(lo, (byte)Math.Round((isLight ? 16 : 36) * intensity)), .75);
+        var accPen = FrozenPen(WithAlpha(accent, (byte)Math.Round((isLight ? 24 : 26) * intensity)), .7);
+        int lines = compact ? 36 : Math.Clamp((int)(height * .48), 90, 260);
+        for (int i = 0; i < lines; i++)
         {
-            for (int i = 1; i < 4; i++)
-            {
-                double p = sub * i + .5;
-                dc.DrawLine(subPen, new Point(p, 0), new Point(p, major));
-                dc.DrawLine(subPen, new Point(0, p), new Point(major, p));
-            }
-
-            dc.DrawLine(majorPen, new Point(.5, 0), new Point(.5, major));
-            dc.DrawLine(majorPen, new Point(0, .5), new Point(major, .5));
-
-            // Precision corner crosshairs + minor quadrant center dot
-            double arm = compact ? 3.5 : 5;
-            dc.DrawLine(crossPen, new Point(.5, 0), new Point(.5, arm));
-            dc.DrawLine(crossPen, new Point(.5, major - arm), new Point(.5, major));
-            dc.DrawLine(crossPen, new Point(0, .5), new Point(arm, .5));
-            dc.DrawLine(crossPen, new Point(major - arm, .5), new Point(major, .5));
-            dc.DrawEllipse(dotBrush, null, new Point(major * .5 + .5, major * .5 + .5), 1.0, 1.0);
+            double y = rng.NextDouble() * height;
+            double x0 = (rng.NextDouble() - .15) * width;
+            double len = width * (.18 + rng.NextDouble() * .68);
+            var pen = i % 7 == 0 ? accPen : (i % 2 == 0 ? hiPen : loPen);
+            dc.DrawLine(pen, new Point(Math.Max(0, x0), y), new Point(Math.Min(width, x0 + len), y));
         }
-
-        return TiledDrawingBrush(group, major, major);
+        return group;
     }
 
-    private static Brush BuildHexBrush(Color hi, Color lo, Color accent, bool isLight, double intensity, bool compact)
+    private static DrawingGroup BuildCircuitDrawing(double width, double height, Color hi, Color lo, Color accent, bool isLight, double intensity, bool compact)
     {
-        double r = compact ? 10 : 15;
-        double w = Math.Sqrt(3) * r;
-        double stepY = 3 * r;
-
         var group = new DrawingGroup();
-        var bevelLight = FrozenPen(WithAlpha(hi, (byte)Math.Round((isLight ? 78 : 34) * intensity)), 1.05);
-        var bevelShadow = FrozenPen(WithAlpha(lo, (byte)Math.Round((isLight ? 28 : 54) * intensity)), 1.15);
-        var ridge = FrozenPen(WithAlpha(accent, (byte)Math.Round((isLight ? 30 : 32) * intensity)), .85);
-        var cellFill = FrozenBrush(WithAlpha(hi, (byte)Math.Round((isLight ? 20 : 12) * intensity)));
-        var altFill = FrozenBrush(WithAlpha(lo, (byte)Math.Round((isLight ? 10 : 18) * intensity)));
+        using var dc = group.Open();
+        var rng = new Random(5827);
 
-        using (var dc = group.Open())
+        var tracePen = FrozenPen(WithAlpha(accent, (byte)Math.Round((isLight ? 42 : 48) * intensity)), compact ? .9 : 1.1);
+        var subPen = FrozenPen(WithAlpha(isLight ? lo : hi, (byte)Math.Round((isLight ? 20 : 24) * intensity)), .85);
+        var padFill = FrozenBrush(WithAlpha(hi, (byte)Math.Round((isLight ? 84 : 48) * intensity)));
+        var padStroke = FrozenPen(WithAlpha(accent, (byte)Math.Round((isLight ? 60 : 66) * intensity)), 1.05);
+        var chipFill = FrozenBrush(WithAlpha(accent, (byte)Math.Round((isLight ? 16 : 18) * intensity)));
+
+        int traces = compact ? 7 : Math.Clamp((int)((width + height) / 48), 18, 42);
+        double step = compact ? 10 : 18;
+        for (int i = 0; i < traces; i++)
         {
-            Point[] centers =
-            [
-                new(0, 0), new(w, 0),
-                new(w * .5, 1.5 * r), new(-w * .5, 1.5 * r), new(w * 1.5, 1.5 * r),
-                new(0, 3 * r), new(w, 3 * r)
-            ];
-            for (int cIdx = 0; cIdx < centers.Length; cIdx++)
+            bool horizontal = rng.Next(3) != 0;
+            double x = Math.Round(rng.NextDouble() * width / step) * step;
+            double y = Math.Round(rng.NextDouble() * height / step) * step;
+            var geom = new StreamGeometry();
+            Point endPt;
+            using (var ctx = geom.Open())
             {
-                var c = centers[cIdx];
-                Point[] pts = HexPoints(c.X, c.Y, r - .7);
-                var poly = BuildHexPolygon(pts);
-                dc.DrawGeometry(cIdx % 2 == 0 ? cellFill : altFill, ridge, poly);
+                ctx.BeginFigure(new Point(x, y), isFilled: false, isClosed: false);
+                int segs = 2 + rng.Next(4);
+                for (int s = 0; s < segs; s++)
+                {
+                    double len = (1 + rng.Next(compact ? 3 : 6)) * step;
+                    int dir = rng.Next(2) == 0 ? 1 : -1;
+                    if (s % 2 == 1)
+                    {
+                        double diag = (1 + rng.Next(2)) * step;
+                        x += dir * diag;
+                        y += (rng.Next(2) == 0 ? 1 : -1) * diag;
+                    }
+                    else if (horizontal) x += dir * len;
+                    else y += dir * len;
+                    x = Math.Clamp(x, 4, width - 4);
+                    y = Math.Clamp(y, 4, height - 4);
+                    ctx.LineTo(new Point(x, y), isStroked: true, isSmoothJoin: false);
+                }
+                endPt = new Point(x, y);
+            }
+            geom.Freeze();
+            dc.DrawGeometry(null, i % 3 == 0 ? tracePen : subPen, geom);
+            double r = compact ? 1.8 : 2.5;
+            dc.DrawEllipse(padFill, padStroke, endPt, r, r);
+        }
 
-                // Top-left facet catchlight & lower-right shadow bevel
-                dc.DrawLine(bevelLight, pts[4], pts[5]);
-                dc.DrawLine(bevelLight, pts[5], pts[0]);
-                dc.DrawLine(bevelShadow, pts[1], pts[2]);
-                dc.DrawLine(bevelShadow, pts[2], pts[3]);
+        // Occasional non-repeating IC chip outlines
+        int chips = compact ? 1 : 4;
+        for (int c = 0; c < chips; c++)
+        {
+            double cw = compact ? 14 : 22 + rng.Next(18);
+            double ch = compact ? 10 : 14 + rng.Next(12);
+            double cx = 12 + rng.NextDouble() * Math.Max(8, width - cw - 24);
+            double cy = 12 + rng.NextDouble() * Math.Max(8, height - ch - 24);
+            dc.DrawRoundedRectangle(chipFill, subPen, new Rect(cx, cy, cw, ch), 2, 2);
+        }
+        return group;
+    }
+
+    private static DrawingGroup BuildTerrazzoDrawing(double width, double height, Color hi, Color lo, Color accent, bool isLight, double intensity, bool compact)
+    {
+        var group = new DrawingGroup();
+        using var dc = group.Open();
+        var rng = new Random(4019);
+        var fills = new[]
+        {
+            FrozenBrush(WithAlpha(accent, (byte)Math.Round((isLight ? 48 : 44) * intensity))),
+            FrozenBrush(WithAlpha(hi, (byte)Math.Round((isLight ? 88 : 38) * intensity))),
+            FrozenBrush(WithAlpha(lo, (byte)Math.Round((isLight ? 24 : 54) * intensity))),
+            FrozenBrush(WithAlpha(EffectPalette.Blend(accent, hi, .5), (byte)Math.Round((isLight ? 44 : 36) * intensity))),
+            FrozenBrush(WithAlpha(ShiftColor(accent), (byte)Math.Round((isLight ? 36 : 34) * intensity)))
+        };
+
+        int count = compact ? 22 : Math.Clamp((int)(width * height / 3400), 65, 220);
+        for (int i = 0; i < count; i++)
+        {
+            double cx = rng.NextDouble() * width;
+            double cy = rng.NextDouble() * height;
+            double rx = (compact ? 2.2 : 3.2) + rng.NextDouble() * (compact ? 4.2 : 9.5);
+            double ry = rx * (.42 + rng.NextDouble() * .48);
+            double rot = rng.NextDouble() * Math.Tau;
+            var chip = new StreamGeometry();
+            using (var ctx = chip.Open())
+            {
+                int sides = 4 + rng.Next(4);
+                for (int s = 0; s < sides; s++)
+                {
+                    double a = rot + s * Math.Tau / sides + (rng.NextDouble() - .5) * .35;
+                    var pt = new Point(cx + Math.Cos(a) * rx, cy + Math.Sin(a) * ry);
+                    if (s == 0) ctx.BeginFigure(pt, isFilled: true, isClosed: true);
+                    else ctx.LineTo(pt, isStroked: false, isSmoothJoin: false);
+                }
+            }
+            chip.Freeze();
+            dc.DrawGeometry(fills[rng.Next(fills.Length)], null, chip);
+        }
+        return group;
+    }
+
+    private static DrawingGroup BuildBubblesDrawing(double width, double height, Color hi, Color lo, Color accent, bool isLight, double intensity, bool compact)
+    {
+        var group = new DrawingGroup();
+        using var dc = group.Open();
+        var rng = new Random(7711);
+
+        var rimPen = FrozenPen(WithAlpha(accent, (byte)Math.Round((isLight ? 52 : 54) * intensity)), compact ? .9 : 1.15);
+        var hiPen = FrozenPen(WithAlpha(hi, (byte)Math.Round((isLight ? 92 : 48) * intensity)), .95);
+        var fillSoft = FrozenBrush(WithAlpha(accent, (byte)Math.Round((isLight ? 18 : 16) * intensity)));
+        var glint = FrozenBrush(WithAlpha(hi, (byte)Math.Round((isLight ? 120 : 72) * intensity)));
+
+        int count = compact ? 14 : Math.Clamp((int)(width * height / 6200), 34, 110);
+        for (int i = 0; i < count; i++)
+        {
+            double cx = rng.NextDouble() * width;
+            double cy = rng.NextDouble() * height;
+            double r = (compact ? 2.4 : 4.0) + Math.Pow(rng.NextDouble(), 1.8) * (compact ? 7.5 : 22.0);
+            dc.DrawEllipse(i % 3 == 0 ? fillSoft : null, i % 2 == 0 ? rimPen : hiPen, new Point(cx, cy), r, r);
+            if (r >= 4.5)
+            {
+                dc.DrawEllipse(glint, null, new Point(cx - r * .32, cy - r * .32), Math.Max(1.0, r * .20), Math.Max(.8, r * .14));
+                if (i % 4 == 0)
+                    dc.DrawEllipse(null, hiPen, new Point(cx, cy), r * .72, r * .72);
+            }
+        }
+        return group;
+    }
+
+    private static DrawingGroup BuildGothicDrawing(double width, double height, Color hi, Color lo, Color accent, bool isLight, double intensity, bool compact)
+    {
+        var group = new DrawingGroup();
+        using var dc = group.Open();
+        var rng = new Random(6613);
+
+        var archPen = FrozenPen(WithAlpha(accent, (byte)Math.Round((isLight ? 46 : 56) * intensity)), 1.2);
+        var tracePen = FrozenPen(WithAlpha(isLight ? lo : hi, (byte)Math.Round((isLight ? 24 : 30) * intensity)), .85);
+        var hiPen = FrozenPen(WithAlpha(hi, (byte)Math.Round((isLight ? 72 : 34) * intensity)), .75);
+        var accentFill = FrozenBrush(WithAlpha(accent, (byte)Math.Round((isLight ? 18 : 22) * intensity)));
+
+        // Non-repeating pointed gothic lancet arches at varied heights & positions
+        int arches = compact ? 3 : 8;
+        for (int i = 0; i < arches; i++)
+        {
+            double aw = compact ? 22 + rng.Next(14) : 64 + rng.Next(96);
+            double ah = compact ? 28 + rng.Next(16) : 110 + rng.Next(180);
+            double x = rng.NextDouble() * width;
+            double baseY = height * (.45 + rng.NextDouble() * .65);
+            var lancet = new StreamGeometry();
+            using (var ctx = lancet.Open())
+            {
+                ctx.BeginFigure(new Point(x - aw * .5, baseY), isFilled: false, isClosed: false);
+                ctx.LineTo(new Point(x - aw * .5, baseY - ah * .55), isStroked: true, isSmoothJoin: true);
+                ctx.QuadraticBezierTo(new Point(x - aw * .45, baseY - ah * .88), new Point(x, baseY - ah), isStroked: true, isSmoothJoin: true);
+                ctx.QuadraticBezierTo(new Point(x + aw * .45, baseY - ah * .88), new Point(x + aw * .5, baseY - ah * .55), isStroked: true, isSmoothJoin: true);
+                ctx.LineTo(new Point(x + aw * .5, baseY), isStroked: true, isSmoothJoin: true);
+            }
+            lancet.Freeze();
+            dc.DrawGeometry(null, i % 2 == 0 ? archPen : tracePen, lancet);
+
+            // Rose-window medallion inside the arch apex
+            double mr = aw * .20;
+            var mc = new Point(x, baseY - ah * .68);
+            dc.DrawEllipse(accentFill, hiPen, mc, mr, mr);
+            for (int spoke = 0; spoke < 6; spoke++)
+            {
+                double a = spoke * Math.PI / 3.0;
+                dc.DrawLine(tracePen, mc, new Point(mc.X + Math.Cos(a) * mr, mc.Y + Math.Sin(a) * mr));
+            }
+        }
+        return group;
+    }
+
+    private static DrawingGroup BuildLightningDrawing(double width, double height, Color hi, Color lo, Color accent, bool isLight, double intensity, bool compact)
+    {
+        var group = new DrawingGroup();
+        using var dc = group.Open();
+        var rng = new Random(9181);
+
+        var glowPen = FrozenPen(WithAlpha(accent, (byte)Math.Round((isLight ? 28 : 34) * intensity)), compact ? 2.6 : 4.2);
+        var boltPen = FrozenPen(WithAlpha(accent, (byte)Math.Round((isLight ? 58 : 70) * intensity)), compact ? 1.1 : 1.45);
+        var corePen = FrozenPen(WithAlpha(hi, (byte)Math.Round((isLight ? 92 : 64) * intensity)), .75);
+
+        void DrawBranch(Point start, double angle, double length, int depth)
+        {
+            var geom = new StreamGeometry();
+            Point cur = start;
+            var forks = new List<(Point P, double Ang, double Len)>();
+            int segs = compact ? 5 : 9;
+            using (var ctx = geom.Open())
+            {
+                ctx.BeginFigure(cur, isFilled: false, isClosed: false);
+                for (int s = 1; s <= segs; s++)
+                {
+                    double stepLen = length / segs;
+                    double jitter = (rng.NextDouble() - .5) * .95;
+                    angle += jitter * .55;
+                    cur = new Point(cur.X + Math.Cos(angle) * stepLen, cur.Y + Math.Sin(angle) * stepLen);
+                    ctx.LineTo(cur, isStroked: true, isSmoothJoin: false);
+                    if (depth > 0 && rng.NextDouble() < .32)
+                        forks.Add((cur, angle + (rng.Next(2) == 0 ? 1 : -1) * (.42 + rng.NextDouble() * .48), length * (.38 + rng.NextDouble() * .25)));
+                }
+            }
+            geom.Freeze();
+            if (depth > 0) dc.DrawGeometry(null, glowPen, geom);
+            dc.DrawGeometry(null, depth > 0 ? boltPen : corePen, geom);
+            if (depth > 0) dc.DrawGeometry(null, corePen, geom);
+
+            foreach (var f in forks)
+                DrawBranch(f.P, f.Ang, f.Len, depth - 1);
+        }
+
+        int bolts = compact ? 2 : 5;
+        for (int b = 0; b < bolts; b++)
+        {
+            bool fromTop = b % 2 == 0;
+            var origin = fromTop
+                ? new Point(width * (.12 + rng.NextDouble() * .76), 0)
+                : new Point(0, height * (.12 + rng.NextDouble() * .76));
+            double ang = fromTop ? Math.PI * .35 + rng.NextDouble() * .35 : -.25 + rng.NextDouble() * .55;
+            double len = Math.Max(width, height) * (compact ? .65 : .42 + rng.NextDouble() * .32);
+            DrawBranch(origin, ang, len, depth: compact ? 1 : 2);
+        }
+        return group;
+    }
+
+    private static DrawingGroup BuildWebDrawing(double width, double height, Color hi, Color lo, Color accent, bool isLight, double intensity, bool compact)
+    {
+        var group = new DrawingGroup();
+        using var dc = group.Open();
+        var rng = new Random(8423);
+
+        var spokePen = FrozenPen(WithAlpha(accent, (byte)Math.Round((isLight ? 44 : 52) * intensity)), .95);
+        var silkPen = FrozenPen(WithAlpha(hi, (byte)Math.Round((isLight ? 74 : 38) * intensity)), .8);
+        var dewFill = FrozenBrush(WithAlpha(hi, (byte)Math.Round((isLight ? 95 : 68) * intensity)));
+
+        void DrawCornerWeb(Point anchor, double startAngle, double sweepAngle, double maxRadius, int spokes, int rings)
+        {
+            var angles = new double[spokes];
+            for (int s = 0; s < spokes; s++)
+            {
+                double frac = s / (double)Math.Max(1, spokes - 1);
+                angles[s] = startAngle + frac * sweepAngle + (rng.NextDouble() - .5) * .06;
+                double len = maxRadius * (.86 + rng.NextDouble() * .24);
+                dc.DrawLine(spokePen, anchor, new Point(anchor.X + Math.Cos(angles[s]) * len, anchor.Y + Math.Sin(angles[s]) * len));
+            }
+
+            for (int r = 1; r <= rings; r++)
+            {
+                double rad = maxRadius * Math.Pow(r / (double)rings, 1.12);
+                var strand = new StreamGeometry();
+                using (var ctx = strand.Open())
+                {
+                    for (int s = 0; s < spokes - 1; s++)
+                    {
+                        var p0 = new Point(anchor.X + Math.Cos(angles[s]) * rad, anchor.Y + Math.Sin(angles[s]) * rad);
+                        var p1 = new Point(anchor.X + Math.Cos(angles[s + 1]) * rad, anchor.Y + Math.Sin(angles[s + 1]) * rad);
+                        double midA = (angles[s] + angles[s + 1]) * .5;
+                        double sag = rad * (.84 + rng.NextDouble() * .06);
+                        var ctrl = new Point(anchor.X + Math.Cos(midA) * sag, anchor.Y + Math.Sin(midA) * sag);
+                        if (s == 0) ctx.BeginFigure(p0, isFilled: false, isClosed: false);
+                        ctx.QuadraticBezierTo(ctrl, p1, isStroked: true, isSmoothJoin: true);
+                        if (!compact && rng.NextDouble() < .18)
+                            dc.DrawEllipse(dewFill, null, ctrl, 1.2, 1.2);
+                    }
+                }
+                strand.Freeze();
+                dc.DrawGeometry(null, r % 2 == 0 ? silkPen : spokePen, strand);
             }
         }
 
-        return TiledDrawingBrush(group, w, stepY);
+        double r1 = Math.Min(width, height) * (compact ? .88 : .44);
+        DrawCornerWeb(new Point(0, 0), .02, Math.PI * .48, r1, compact ? 6 : 9, compact ? 4 : 8);
+        DrawCornerWeb(new Point(width, height), Math.PI * 1.02, Math.PI * .48, r1 * .82, compact ? 5 : 8, compact ? 3 : 7);
+        if (!compact)
+            DrawCornerWeb(new Point(width, 0), Math.PI * .52, Math.PI * .46, r1 * .58, 7, 5);
+        return group;
+    }
+
+    private static DrawingGroup BuildStarburstDrawing(double width, double height, Color hi, Color lo, Color accent, bool isLight, double intensity, bool compact)
+    {
+        var group = new DrawingGroup();
+        using var dc = group.Open();
+        var rng = new Random(5521);
+
+        var starFill = FrozenBrush(WithAlpha(accent, (byte)Math.Round((isLight ? 52 : 56) * intensity)));
+        var hiFill = FrozenBrush(WithAlpha(hi, (byte)Math.Round((isLight ? 105 : 64) * intensity)));
+        var altFill = FrozenBrush(WithAlpha(ShiftColor(accent), (byte)Math.Round((isLight ? 44 : 48) * intensity)));
+        var strokePen = FrozenPen(WithAlpha(accent, (byte)Math.Round((isLight ? 38 : 42) * intensity)), .85);
+
+        var starGeom = Geometry.Parse("M0,-6 Q0,0 6,0 Q0,0 0,6 Q0,0 -6,0 Q0,0 0,-6 Z");
+        starGeom.Freeze();
+        var diamondGeom = Geometry.Parse("M0,-4.5 L3,0 L0,4.5 L-3,0 Z");
+        diamondGeom.Freeze();
+
+        int count = compact ? 16 : Math.Clamp((int)(width * height / 5200), 42, 140);
+        for (int i = 0; i < count; i++)
+        {
+            double x = rng.NextDouble() * width;
+            double y = rng.NextDouble() * height;
+            double sc = (compact ? .45 : .60) + Math.Pow(rng.NextDouble(), 1.6) * (compact ? 1.1 : 1.9);
+            var brush = i % 3 == 0 ? starFill : i % 3 == 1 ? hiFill : altFill;
+
+            if (i % 4 == 3)
+            {
+                double r = 1.1 + sc * 1.1;
+                dc.DrawEllipse(brush, null, new Point(x, y), r, r);
+            }
+            else
+            {
+                var m = Matrix.Identity;
+                m.Scale(sc, sc);
+                m.Rotate(rng.NextDouble() * 45);
+                m.Translate(x, y);
+                dc.PushTransform(new MatrixTransform(m));
+                dc.DrawGeometry(brush, i % 5 == 0 ? strokePen : null, i % 2 == 0 ? starGeom : diamondGeom);
+                dc.Pop();
+            }
+        }
+        return group;
+    }
+
+    private static DrawingGroup BuildBotanicalDrawing(double width, double height, Color hi, Color lo, Color accent, bool isLight, double intensity, bool compact)
+    {
+        var group = new DrawingGroup();
+        using var dc = group.Open();
+        var rng = new Random(2917);
+
+        var stemPen = FrozenPen(WithAlpha(accent, (byte)Math.Round((isLight ? 46 : 52) * intensity)), 1.15);
+        var veinPen = FrozenPen(WithAlpha(hi, (byte)Math.Round((isLight ? 72 : 34) * intensity)), .75);
+        var leafFill = FrozenBrush(WithAlpha(accent, (byte)Math.Round((isLight ? 24 : 26) * intensity)));
+        var altLeaf = FrozenBrush(WithAlpha(isLight ? lo : hi, (byte)Math.Round((isLight ? 14 : 16) * intensity)));
+
+        var leafGeom = Geometry.Parse("M0,0 C5,-6 14,-6 19,0 C14,6 5,6 0,0 Z");
+        leafGeom.Freeze();
+
+        int fronds = compact ? 3 : 8;
+        for (int f = 0; f < fronds; f++)
+        {
+            double x0 = rng.NextDouble() * width;
+            double y0 = f % 2 == 0 ? height + 6 : rng.NextDouble() * height;
+            double angle = f % 2 == 0 ? -Math.PI * (.30 + rng.NextDouble() * .40) : (rng.NextDouble() - .5) * Math.PI;
+            double len = (compact ? 38 : 115) + rng.NextDouble() * (compact ? 26 : 130);
+            double bend = (rng.NextDouble() - .5) * .65;
+
+            var stem = new StreamGeometry();
+            var anchors = new List<(Point P, double Tan)>();
+            const int segs = 12;
+            using (var ctx = stem.Open())
+            {
+                double cx = x0, cy = y0, a = angle;
+                ctx.BeginFigure(new Point(cx, cy), isFilled: false, isClosed: false);
+                for (int s = 1; s <= segs; s++)
+                {
+                    a += bend / segs;
+                    cx += Math.Cos(a) * (len / segs);
+                    cy += Math.Sin(a) * (len / segs);
+                    var pt = new Point(cx, cy);
+                    ctx.LineTo(pt, isStroked: true, isSmoothJoin: true);
+                    if (s >= 2 && s <= segs - 1 && s % 2 == 0)
+                        anchors.Add((pt, a));
+                }
+            }
+            stem.Freeze();
+            dc.DrawGeometry(null, stemPen, stem);
+
+            for (int k = 0; k < anchors.Count; k++)
+            {
+                var (pt, tan) = anchors[k];
+                double scale = (compact ? .55 : .85) * (1.15 - k * .11);
+                foreach (int side in new[] { -1, 1 })
+                {
+                    var m = Matrix.Identity;
+                    m.Scale(scale, scale);
+                    m.Rotate((tan + side * .62) * 180 / Math.PI);
+                    m.Translate(pt.X, pt.Y);
+                    dc.PushTransform(new MatrixTransform(m));
+                    dc.DrawGeometry((k + f) % 2 == 0 ? leafFill : altLeaf, veinPen, leafGeom);
+                    dc.Pop();
+                }
+            }
+        }
+        return group;
+    }
+
+    private static DrawingGroup BuildCipherDrawing(double width, double height, Color hi, Color lo, Color accent, bool isLight, double intensity, bool compact)
+    {
+        var group = new DrawingGroup();
+        using var dc = group.Open();
+        var rng = new Random(1337);
+
+        double colStep = compact ? 10 : 18;
+        int cols = Math.Max(4, (int)(width / colStep));
+        var headBrush = FrozenBrush(WithAlpha(hi, (byte)Math.Round((isLight ? 95 : 88) * intensity)));
+        var bodyBrush = FrozenBrush(WithAlpha(accent, (byte)Math.Round((isLight ? 44 : 52) * intensity)));
+        var tailBrush = FrozenBrush(WithAlpha(accent, (byte)Math.Round((isLight ? 20 : 24) * intensity)));
+
+        for (int c = 0; c < cols; c++)
+        {
+            if (rng.NextDouble() < .26) continue;
+            double x = c * colStep + (rng.NextDouble() - .5) * 3;
+            double startY = rng.NextDouble() * height * .8;
+            int rows = (compact ? 4 : 6) + rng.Next(compact ? 5 : 16);
+            double cellH = compact ? 5.5 : 9.0;
+            for (int r = 0; r < rows; r++)
+            {
+                double y = startY + r * cellH;
+                if (y > height) break;
+                double frac = r / (double)Math.Max(1, rows - 1);
+                var brush = r == rows - 1 ? headBrush : frac > .55 ? bodyBrush : tailBrush;
+                double w = (compact ? 2.4 : 4.2) + (rng.Next(3) * (compact ? .8 : 1.4));
+                double h = compact ? 2.2 : 3.4;
+                dc.DrawRoundedRectangle(brush, null, new Rect(x, y, w, h), 1, 1);
+                if (rng.NextDouble() < .35)
+                    dc.DrawRectangle(tailBrush, null, new Rect(x + w + 1.5, y + .6, compact ? 1.4 : 2.0, h * .65));
+            }
+        }
+        return group;
+    }
+
+    private static DrawingGroup BuildWatercolorDrawing(double width, double height, Color hi, Color lo, Color accent, bool isLight, double intensity, bool compact)
+    {
+        var group = new DrawingGroup();
+        using var dc = group.Open();
+        var rng = new Random(7331);
+        Color alt = ShiftColor(accent);
+
+        int washes = compact ? 5 : 11;
+        for (int i = 0; i < washes; i++)
+        {
+            double cx = rng.NextDouble();
+            double cy = rng.NextDouble();
+            double rx = .18 + rng.NextDouble() * .34;
+            double ry = .18 + rng.NextDouble() * .34;
+            Color col = i % 3 == 0 ? accent : i % 3 == 1 ? alt : hi;
+            byte innerA = (byte)Math.Round((isLight ? 36 : 24) * intensity);
+            byte edgeA = (byte)Math.Round((isLight ? 48 : 30) * intensity);
+
+            // Wet-edge watercolor bloom (slightly darker pigment pooling near the outer ring)
+            var bloom = new RadialGradientBrush
+            {
+                Center = new Point(cx, cy),
+                GradientOrigin = new Point(cx + (rng.NextDouble() - .5) * .08, cy + (rng.NextDouble() - .5) * .08),
+                RadiusX = rx,
+                RadiusY = ry
+            };
+            bloom.GradientStops.Add(new GradientStop(WithAlpha(col, innerA), 0));
+            bloom.GradientStops.Add(new GradientStop(WithAlpha(col, (byte)(innerA * .75)), .58));
+            bloom.GradientStops.Add(new GradientStop(WithAlpha(col, edgeA), .84));
+            bloom.GradientStops.Add(new GradientStop(WithAlpha(col, 0), 1));
+            bloom.Freeze();
+            dc.DrawRectangle(bloom, null, new Rect(0, 0, width, height));
+        }
+
+        // Delicate pigment splatters
+        var speck = FrozenBrush(WithAlpha(accent, (byte)Math.Round((isLight ? 42 : 40) * intensity)));
+        int dots = compact ? 10 : 38;
+        for (int d = 0; d < dots; d++)
+        {
+            double r = .7 + rng.NextDouble() * (compact ? 1.5 : 2.6);
+            dc.DrawEllipse(speck, null, new Point(rng.NextDouble() * width, rng.NextDouble() * height), r, r * (.75 + rng.NextDouble() * .5));
+        }
+        return group;
+    }
+
+    private static DrawingGroup BuildMarbleDrawing(double width, double height, Color hi, Color lo, Color accent, bool isLight, double intensity)
+    {
+        var group = new DrawingGroup();
+        using var dc = group.Open();
+
+        for (int c = 0; c < 4; c++)
+        {
+            var cloud = new RadialGradientBrush
+            {
+                Center = new Point(.18 + c * .22, .22 + (c % 2) * .54),
+                GradientOrigin = new Point(.18 + c * .22, .22 + (c % 2) * .54),
+                RadiusX = .55,
+                RadiusY = .45
+            };
+            Color col = c % 2 == 0 ? hi : accent;
+            cloud.GradientStops.Add(new GradientStop(WithAlpha(col, (byte)Math.Round((isLight ? 40 : 22) * intensity)), 0));
+            cloud.GradientStops.Add(new GradientStop(WithAlpha(col, 0), 1));
+            cloud.Freeze();
+            dc.DrawRectangle(cloud, null, new Rect(0, 0, width, height));
+        }
+
+        var mainVein = FrozenPen(WithAlpha(accent, (byte)Math.Round((isLight ? 44 : 52) * intensity)), 1.45);
+        var shadowVein = FrozenPen(WithAlpha(lo, (byte)Math.Round((isLight ? 24 : 42) * intensity)), 2.2);
+        var fineVein = FrozenPen(WithAlpha(hi, (byte)Math.Round((isLight ? 86 : 42) * intensity)), .85);
+
+        int veins = height < 90 ? 4 : 7;
+        for (int i = 0; i < veins; i++)
+        {
+            double startY = height * ((i + .3) / veins) - height * .18;
+            double slope = .32 + (i % 3) * .12;
+            var path = new StreamGeometry();
+            using (var ctx = path.Open())
+            {
+                const int segs = 42;
+                for (int s = 0; s <= segs; s++)
+                {
+                    double t = s / (double)segs;
+                    double x = t * width;
+                    double warp = Math.Sin(t * Math.Tau * 1.7 + i * 1.4) * height * .09
+                        + Math.Cos(t * Math.Tau * 3.9 - i * .9) * height * .035
+                        + Math.Sin(t * Math.Tau * 7.3 + i * 2.1) * height * .014;
+                    var p = new Point(x, startY + t * height * slope + warp);
+                    if (s == 0) ctx.BeginFigure(p, isFilled: false, isClosed: false);
+                    else ctx.LineTo(p, isStroked: true, isSmoothJoin: true);
+                }
+            }
+            path.Freeze();
+            dc.DrawGeometry(null, shadowVein, path);
+            dc.DrawGeometry(null, i % 2 == 0 ? mainVein : fineVein, path);
+        }
+        return group;
     }
 
     private static DrawingGroup BuildTopoDrawing(double width, double height, Color hi, Color lo, Color accent, bool isLight, double intensity)
@@ -383,7 +965,6 @@ public sealed class ChromeTexture : FrameworkElement
             }
         }
 
-        // Flowing transverse contour strata bridging peaks smoothly across the header & side panel
         int waves = height < 90 ? 4 : 6;
         for (int i = 0; i < waves; i++)
         {
@@ -431,11 +1012,7 @@ public sealed class ChromeTexture : FrameworkElement
 
         foreach (var r in ribbons)
         {
-            var fill = new LinearGradientBrush
-            {
-                StartPoint = new Point(0, 0),
-                EndPoint = new Point(.25, 1)
-            };
+            var fill = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(.25, 1) };
             Color foldColor = r.warm ? accent : hi;
             fill.GradientStops.Add(new GradientStop(WithAlpha(foldColor, (byte)Math.Round((isLight ? 66 : 30) * intensity)), 0));
             fill.GradientStops.Add(new GradientStop(WithAlpha(accent, (byte)Math.Round((isLight ? 24 : 22) * intensity)), .48));
@@ -480,6 +1057,233 @@ public sealed class ChromeTexture : FrameworkElement
 
         return group;
     }
+
+    // ---------------- Intentionally Geometric Repeating Textures ----------------
+
+    private static Brush BuildWovenBrush(Color hi, Color lo, Color accent, bool isLight, double intensity, bool compact)
+    {
+        double cell = compact ? 10 : 12;
+        double half = cell * .5;
+        double thread = compact ? 1.5 : 1.9;
+
+        var group = new DrawingGroup();
+        var warpPen = FrozenPen(WithAlpha(hi, (byte)Math.Round((isLight ? 58 : 24) * intensity)), thread);
+        var weftPen = FrozenPen(WithAlpha(accent, (byte)Math.Round((isLight ? 24 : 22) * intensity)), thread * .85);
+        var shadowPen = FrozenPen(WithAlpha(lo, (byte)Math.Round((isLight ? 16 : 30) * intensity)), thread * .8);
+        var groovePen = FrozenPen(WithAlpha(lo, (byte)Math.Round((isLight ? 11 : 20) * intensity)), .65);
+
+        using (var dc = group.Open())
+        {
+            dc.DrawLine(shadowPen, new Point(0, half * .5), new Point(half, half * .5));
+            dc.DrawLine(warpPen, new Point(half, half * .5), new Point(cell, half * .5));
+            dc.DrawLine(warpPen, new Point(0, half * 1.5), new Point(half, half * 1.5));
+            dc.DrawLine(weftPen, new Point(half, half * 1.5), new Point(cell, half * 1.5));
+
+            dc.DrawLine(warpPen, new Point(half * .5, 0), new Point(half * .5, half));
+            dc.DrawLine(weftPen, new Point(half * 1.5, half), new Point(half * 1.5, cell));
+            dc.DrawLine(shadowPen, new Point(half * 1.5, 0), new Point(half * 1.5, half));
+            dc.DrawLine(shadowPen, new Point(half * .5, half), new Point(half * .5, cell));
+
+            dc.DrawLine(groovePen, new Point(0, half), new Point(cell, half));
+            dc.DrawLine(groovePen, new Point(half, 0), new Point(half, cell));
+        }
+
+        return TiledDrawingBrush(group, cell, cell);
+    }
+
+    private static Brush BuildGridBrush(Color hi, Color lo, Color accent, bool isLight, double intensity, bool compact)
+    {
+        double sub = compact ? 14 : 20;
+        double major = sub * 4;
+
+        var group = new DrawingGroup();
+        var subPen = FrozenPen(WithAlpha(isLight ? lo : hi, (byte)Math.Round((isLight ? 18 : 16) * intensity)), .65);
+        var majorPen = FrozenPen(WithAlpha(accent, (byte)Math.Round((isLight ? 36 : 38) * intensity)), .95);
+        var crossPen = FrozenPen(WithAlpha(hi, (byte)Math.Round((isLight ? 84 : 58) * intensity)), 1.2);
+        var dotBrush = FrozenBrush(WithAlpha(accent, (byte)Math.Round((isLight ? 54 : 52) * intensity)));
+
+        using (var dc = group.Open())
+        {
+            for (int i = 1; i < 4; i++)
+            {
+                double p = sub * i + .5;
+                dc.DrawLine(subPen, new Point(p, 0), new Point(p, major));
+                dc.DrawLine(subPen, new Point(0, p), new Point(major, p));
+            }
+            dc.DrawLine(majorPen, new Point(.5, 0), new Point(.5, major));
+            dc.DrawLine(majorPen, new Point(0, .5), new Point(major, .5));
+
+            double arm = compact ? 3.5 : 5;
+            dc.DrawLine(crossPen, new Point(.5, 0), new Point(.5, arm));
+            dc.DrawLine(crossPen, new Point(.5, major - arm), new Point(.5, major));
+            dc.DrawLine(crossPen, new Point(0, .5), new Point(arm, .5));
+            dc.DrawLine(crossPen, new Point(major - arm, .5), new Point(major, .5));
+            dc.DrawEllipse(dotBrush, null, new Point(major * .5 + .5, major * .5 + .5), 1.0, 1.0);
+        }
+
+        return TiledDrawingBrush(group, major, major);
+    }
+
+    private static Brush BuildHexBrush(Color hi, Color lo, Color accent, bool isLight, double intensity, bool compact)
+    {
+        double r = compact ? 10 : 15;
+        double w = Math.Sqrt(3) * r;
+        double stepY = 3 * r;
+
+        var group = new DrawingGroup();
+        var bevelLight = FrozenPen(WithAlpha(hi, (byte)Math.Round((isLight ? 78 : 34) * intensity)), 1.05);
+        var bevelShadow = FrozenPen(WithAlpha(lo, (byte)Math.Round((isLight ? 28 : 54) * intensity)), 1.15);
+        var ridge = FrozenPen(WithAlpha(accent, (byte)Math.Round((isLight ? 30 : 32) * intensity)), .85);
+        var cellFill = FrozenBrush(WithAlpha(hi, (byte)Math.Round((isLight ? 20 : 12) * intensity)));
+        var altFill = FrozenBrush(WithAlpha(lo, (byte)Math.Round((isLight ? 10 : 18) * intensity)));
+
+        using (var dc = group.Open())
+        {
+            Point[] centers =
+            [
+                new(0, 0), new(w, 0),
+                new(w * .5, 1.5 * r), new(-w * .5, 1.5 * r), new(w * 1.5, 1.5 * r),
+                new(0, 3 * r), new(w, 3 * r)
+            ];
+            for (int cIdx = 0; cIdx < centers.Length; cIdx++)
+            {
+                var c = centers[cIdx];
+                Point[] pts = HexPoints(c.X, c.Y, r - .7);
+                var poly = BuildHexPolygon(pts);
+                dc.DrawGeometry(cIdx % 2 == 0 ? cellFill : altFill, ridge, poly);
+                dc.DrawLine(bevelLight, pts[4], pts[5]);
+                dc.DrawLine(bevelLight, pts[5], pts[0]);
+                dc.DrawLine(bevelShadow, pts[1], pts[2]);
+                dc.DrawLine(bevelShadow, pts[2], pts[3]);
+            }
+        }
+
+        return TiledDrawingBrush(group, w, stepY);
+    }
+
+    private static Brush BuildCarbonBrush(Color hi, Color lo, Color accent, bool isLight, double intensity, bool compact)
+    {
+        double cell = compact ? 10 : 14;
+        double half = cell * .5;
+        var group = new DrawingGroup();
+
+        var darkPatch = new LinearGradientBrush(
+            WithAlpha(lo, (byte)Math.Round((isLight ? 36 : 74) * intensity)),
+            WithAlpha(hi, (byte)Math.Round((isLight ? 22 : 16) * intensity)), 90);
+        darkPatch.Freeze();
+        var lightPatch = new LinearGradientBrush(
+            WithAlpha(hi, (byte)Math.Round((isLight ? 72 : 38) * intensity)),
+            WithAlpha(accent, (byte)Math.Round((isLight ? 26 : 28) * intensity)), 0);
+        lightPatch.Freeze();
+        var seamPen = FrozenPen(WithAlpha(lo, (byte)Math.Round((isLight ? 24 : 58) * intensity)), .75);
+
+        using (var dc = group.Open())
+        {
+            dc.DrawRectangle(darkPatch, seamPen, new Rect(0, 0, half, half));
+            dc.DrawRectangle(lightPatch, seamPen, new Rect(half, 0, half, half));
+            dc.DrawRectangle(lightPatch, seamPen, new Rect(0, half, half, half));
+            dc.DrawRectangle(darkPatch, seamPen, new Rect(half, half, half, half));
+        }
+        return TiledDrawingBrush(group, cell, cell);
+    }
+
+    private static Brush BuildWavesBrush(Color hi, Color lo, Color accent, bool isLight, double intensity, bool compact)
+    {
+        double w = compact ? 26 : 38;
+        double h = w * .5;
+        var group = new DrawingGroup();
+        var outerPen = FrozenPen(WithAlpha(accent, (byte)Math.Round((isLight ? 44 : 48) * intensity)), 1.05);
+        var midPen = FrozenPen(WithAlpha(isLight ? lo : hi, (byte)Math.Round((isLight ? 24 : 26) * intensity)), .85);
+        var hiPen = FrozenPen(WithAlpha(hi, (byte)Math.Round((isLight ? 72 : 34) * intensity)), .8);
+
+        using (var dc = group.Open())
+        {
+            Point[] centers =
+            [
+                new(0, h), new(w, h),
+                new(w * .5, h * 2),
+                new(0, 0), new(w, 0),
+                new(w * .5, h)
+            ];
+            foreach (var c in centers)
+            {
+                dc.DrawEllipse(null, outerPen, c, w * .5, w * .5);
+                dc.DrawEllipse(null, hiPen, c, w * .36, w * .36);
+                dc.DrawEllipse(null, midPen, c, w * .22, w * .22);
+            }
+        }
+        return TiledDrawingBrush(group, w, h);
+    }
+
+    private static Brush BuildArtDecoBrush(Color hi, Color lo, Color accent, bool isLight, double intensity, bool compact)
+    {
+        double w = compact ? 28 : 42;
+        double h = w * .72;
+        var group = new DrawingGroup();
+        var archPen = FrozenPen(WithAlpha(accent, (byte)Math.Round((isLight ? 48 : 54) * intensity)), 1.05);
+        var ribPen = FrozenPen(WithAlpha(hi, (byte)Math.Round((isLight ? 68 : 34) * intensity)), .8);
+        var shadePen = FrozenPen(WithAlpha(lo, (byte)Math.Round((isLight ? 18 : 32) * intensity)), .85);
+
+        using (var dc = group.Open())
+        {
+            void DrawFan(double cx, double cy)
+            {
+                for (int r = 1; r <= 3; r++)
+                {
+                    double rad = w * .17 * r;
+                    dc.DrawEllipse(null, r == 3 ? archPen : ribPen, new Point(cx, cy), rad, rad);
+                }
+                for (int k = -2; k <= 2; k++)
+                {
+                    double a = -Math.PI * .5 + k * .36;
+                    dc.DrawLine(shadePen, new Point(cx, cy), new Point(cx + Math.Cos(a) * w * .5, cy + Math.Sin(a) * w * .5));
+                }
+            }
+            DrawFan(w * .5, h);
+            DrawFan(0, h * .5);
+            DrawFan(w, h * .5);
+            DrawFan(w * .5, 0);
+        }
+        return TiledDrawingBrush(group, w, h);
+    }
+
+    private static Brush BuildMeshBrush(Color hi, Color lo, Color accent, bool isLight, double intensity, bool compact)
+    {
+        double size = compact ? 22 : 32;
+        double half = size * .5;
+        var group = new DrawingGroup();
+        var linePen = FrozenPen(WithAlpha(isLight ? lo : hi, (byte)Math.Round((isLight ? 20 : 22) * intensity)), .8);
+        var accentPen = FrozenPen(WithAlpha(accent, (byte)Math.Round((isLight ? 38 : 42) * intensity)), .95);
+        var jewel = FrozenBrush(WithAlpha(hi, (byte)Math.Round((isLight ? 92 : 64) * intensity)));
+        var facet = FrozenBrush(WithAlpha(accent, (byte)Math.Round((isLight ? 16 : 18) * intensity)));
+
+        using (var dc = group.Open())
+        {
+            var diamond = new StreamGeometry();
+            using (var ctx = diamond.Open())
+            {
+                ctx.BeginFigure(new Point(half, 0), isFilled: true, isClosed: true);
+                ctx.LineTo(new Point(size, half), isStroked: true, isSmoothJoin: false);
+                ctx.LineTo(new Point(half, size), isStroked: true, isSmoothJoin: false);
+                ctx.LineTo(new Point(0, half), isStroked: true, isSmoothJoin: false);
+            }
+            diamond.Freeze();
+            dc.DrawGeometry(facet, accentPen, diamond);
+            dc.DrawLine(linePen, new Point(0, 0), new Point(size, size));
+            dc.DrawLine(linePen, new Point(size, 0), new Point(0, size));
+            dc.DrawEllipse(jewel, null, new Point(half, half), 1.4, 1.4);
+            dc.DrawEllipse(jewel, null, new Point(half, 0), 1.2, 1.2);
+            dc.DrawEllipse(jewel, null, new Point(0, half), 1.2, 1.2);
+        }
+        return TiledDrawingBrush(group, size, size);
+    }
+
+    // ---------------- Helpers ----------------
+
+    private static Color ShiftColor(Color c) => Color.FromRgb(
+        (byte)((c.G * .55 + 130) % 255),
+        (byte)((c.B * .55 + 115) % 255),
+        (byte)Math.Min(255, c.R * .45 + 190));
 
     private static StreamGeometry CreateContourRing(double cx, double cy, double radius, double phase, double warp)
     {

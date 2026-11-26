@@ -8,7 +8,7 @@ using Point = System.Windows.Point;
 
 namespace CydLan.Desktop;
 
-public enum SidebarEffectKind { Motes, EdgeGlow, Prism, Sweep }
+public enum SidebarEffectKind { Motes, EdgeGlow, Prism, Sweep, Aurora, Nebula, Waves, Ripples, Circuit }
 
 /// <summary>Renders palette-adaptive animated effects inside the side panel without reducing text legibility.</summary>
 public sealed class SidebarEffect : AmbientEffect
@@ -18,19 +18,32 @@ public sealed class SidebarEffect : AmbientEffect
         new FrameworkPropertyMetadata(SidebarEffectKind.Motes, FrameworkPropertyMetadataOptions.AffectsRender));
 
     private static readonly MoteSeed[] Motes = CreateMotes();
+    private static readonly Dictionary<Color, BitmapSource[]> MoteSpriteCache = [];
     private BitmapSource[]? moteSprites;
+    private BitmapSource[]? altMoteSprites;
     private Brush[]? glowWashes;
     private Brush[]? prismWashes;
+    private Brush[]? ribbonWashes;
+    private Brush[]? altRibbonWashes;
+    private Brush[]? softFills;
     private Pen[]? glowPens;
+    private Pen[]? finePens;
+    private Pen[]? altPens;
 
     public SidebarEffectKind Kind { get => (SidebarEffectKind)GetValue(KindProperty); set => SetValue(KindProperty, value); }
 
     protected override void OnTintChanged()
     {
         moteSprites = null;
+        altMoteSprites = null;
         glowWashes = null;
         prismWashes = null;
+        ribbonWashes = null;
+        altRibbonWashes = null;
+        softFills = null;
         glowPens = null;
+        finePens = null;
+        altPens = null;
     }
 
     protected override void OnRender(DrawingContext dc)
@@ -46,6 +59,11 @@ public sealed class SidebarEffect : AmbientEffect
             case SidebarEffectKind.EdgeGlow: DrawEdgeGlow(dc, width, height, intensity); break;
             case SidebarEffectKind.Prism: DrawPrism(dc, width, height, intensity); break;
             case SidebarEffectKind.Sweep: DrawSweep(dc, width, height, intensity); break;
+            case SidebarEffectKind.Aurora: DrawAurora(dc, width, height, intensity); break;
+            case SidebarEffectKind.Nebula: DrawNebula(dc, width, height, intensity); break;
+            case SidebarEffectKind.Waves: DrawWaves(dc, width, height, intensity); break;
+            case SidebarEffectKind.Ripples: DrawRipples(dc, width, height, intensity); break;
+            case SidebarEffectKind.Circuit: DrawCircuit(dc, width, height, intensity); break;
         }
     }
 
@@ -56,12 +74,12 @@ public sealed class SidebarEffect : AmbientEffect
         for (int i = 0; i < count; i++)
         {
             var mote = Motes[i];
-            double rise = (mote.Start + Progress * mote.Speed) % 1;
+            double rise = (mote.Start + Time * mote.Speed) % 1;
             double sway = Math.Sin((rise * 2 + mote.Lane) * Math.Tau) * 10;
             double x = 12 + (width - 24) * mote.Lane + sway;
             double y = (1 - rise) * (height + 16) - 8;
             double fade = Math.Min(1, Math.Min(rise, 1 - rise) * 7);
-            double blink = .35 + .65 * Math.Pow(.5 + .5 * Math.Cos((Progress * 3 + mote.Start) * Math.Tau), 2);
+            double blink = .35 + .65 * Math.Pow(.5 + .5 * Math.Cos((Time * 3 + mote.Start) * Math.Tau), 2);
             double radius = 10 * mote.Size;
             var sprite = moteSprites[EffectPalette.OpacityIndex(fade * blink * (.24 + .52 * intensity))];
             dc.DrawImage(sprite, new Rect(x - radius, y - radius, radius * 2, radius * 2));
@@ -71,15 +89,15 @@ public sealed class SidebarEffect : AmbientEffect
     private void DrawEdgeGlow(DrawingContext dc, double width, double height, double intensity)
     {
         glowWashes ??= BuildGlowWashes(Tint);
-        glowPens ??= BuildGlowPens(Tint);
+        glowPens ??= BuildGlowPens(Tint, 2.0);
         moteSprites ??= BuildMoteSprites(Tint);
 
-        double breathe = .45 + .55 * Math.Sin(Progress * Math.Tau * 2);
+        double breathe = .45 + .55 * Math.Sin(Time * Math.Tau * 2);
         double washWidth = Math.Min(36, width * .16);
         var wash = glowWashes[EffectPalette.OpacityIndex((.10 + .18 * breathe) * intensity)];
         dc.DrawRectangle(wash, null, new Rect(width - washWidth, 0, washWidth, height));
 
-        double travel = (Progress * 2.5) % 1;
+        double travel = (Time * 2.5) % 1;
         double beamCenter = travel * (height + 120) - 60;
         double beamHalf = Math.Min(65, height * .25);
         double xEdge = width - 1.5;
@@ -91,7 +109,7 @@ public sealed class SidebarEffect : AmbientEffect
 
         if (height > 120)
         {
-            double headerPulse = .25 + .75 * Math.Pow(.5 + .5 * Math.Sin(Progress * Math.Tau * 2), 2);
+            double headerPulse = .25 + .75 * Math.Pow(.5 + .5 * Math.Sin(Time * Math.Tau * 2), 2);
             var seamPen = glowPens[EffectPalette.OpacityIndex(.22 * headerPulse * intensity)];
             dc.DrawLine(seamPen, new Point(16, 73.5), new Point(width - 16, 73.5));
         }
@@ -104,25 +122,26 @@ public sealed class SidebarEffect : AmbientEffect
     private void DrawPrism(DrawingContext dc, double width, double height, double intensity)
     {
         prismWashes ??= BuildPrismWashes(Tint);
-        double u = (Progress * 2) % 1;
+        double u = (Time * 2) % 1;
         double bandY = u * (height + 160) - 80;
         double bandH = Math.Min(130, height * .45);
         var fill = prismWashes[EffectPalette.OpacityIndex(.22 + .36 * intensity)];
         dc.DrawRectangle(fill, null, new Rect(0, bandY - bandH / 2, width, bandH));
 
-        double waveX = (.5 + .5 * Math.Sin(Progress * Math.Tau * 2)) * width;
+        double waveX = (.5 + .5 * Math.Sin(Time * Math.Tau * 2)) * width;
         var accentWash = prismWashes[EffectPalette.OpacityIndex(.12 + .22 * intensity)];
         dc.DrawEllipse(accentWash, null, new Point(waveX, height * .35), width * .55, height * .30);
     }
 
     private void DrawSweep(DrawingContext dc, double width, double height, double intensity)
     {
-        glowPens ??= BuildGlowPens(Tint);
+        glowPens ??= BuildGlowPens(Tint, 2.0);
         moteSprites ??= BuildMoteSprites(Tint);
 
-        double u = (Progress * 3) % 1;
+        double u = (Time * 3) % 1;
+        double fade = Math.Min(1, Math.Min(u, 1 - u) * 8);
         double y = u * height;
-        var pen = glowPens[EffectPalette.OpacityIndex(.34 + .52 * intensity)];
+        var pen = glowPens[EffectPalette.OpacityIndex(fade * (.34 + .52 * intensity))];
         dc.DrawLine(pen, new Point(10, y), new Point(width - 10, y));
 
         for (double rowY = 74; rowY < height - 52; rowY += 46)
@@ -133,8 +152,262 @@ public sealed class SidebarEffect : AmbientEffect
             dc.DrawLine(tickPen, new Point(14, rowY), new Point(width - 14, rowY));
         }
 
-        double dotX = 16 + ((Progress * 5) % 1) * (width - 32);
-        dc.DrawImage(moteSprites[EffectPalette.OpacityIndex(.35 + .50 * intensity)], new Rect(dotX - 7, y - 7, 14, 14));
+        double dotX = 16 + ((Time * 5) % 1) * (width - 32);
+        dc.DrawImage(moteSprites[EffectPalette.OpacityIndex(fade * (.35 + .50 * intensity))], new Rect(dotX - 7, y - 7, 14, 14));
+    }
+
+    private void DrawAurora(DrawingContext dc, double width, double height, double intensity)
+    {
+        ribbonWashes ??= BuildVerticalRibbons(Tint, .32);
+        altRibbonWashes ??= BuildVerticalRibbons(ShiftColor(Tint), .22);
+        softFills ??= BuildSolidFills(Tint);
+
+        double time = Time * Math.Tau;
+        DrawVerticalRibbon(dc, width, height, ribbonWashes[EffectPalette.OpacityIndex(.24 * intensity + .06)],
+            baseX: width * .42, amplitude: width * .24, thickness: width * .52, phase: time, frequency: 1.8);
+        DrawVerticalRibbon(dc, width, height, altRibbonWashes[EffectPalette.OpacityIndex(.20 * intensity + .05)],
+            baseX: width * .60, amplitude: width * .22, thickness: width * .44, phase: -time * 1.25 + 1.5, frequency: 2.5);
+
+        int count = Math.Clamp((int)(height / 58), 5, 14);
+        for (int i = 0; i < count; i++)
+        {
+            double u = (i * .61803398875 + Time * (.35 + (i % 3) * .16)) % 1;
+            double fade = Math.Min(1, Math.Min(u, 1 - u) * 6);
+            double blink = .28 + .72 * Math.Pow(.5 + .5 * Math.Sin(time * 2.2 + i * 1.7), 2);
+            double x = width * (.16 + .68 * ((i * .41421356) % 1)) + Math.Sin(time + i) * 7;
+            double y = (1 - u) * height;
+            dc.DrawEllipse(softFills[EffectPalette.OpacityIndex(fade * blink * (.30 + .50 * intensity))], null, new Point(x, y), 1.4, 1.4);
+        }
+    }
+
+    private void DrawNebula(DrawingContext dc, double width, double height, double intensity)
+    {
+        moteSprites ??= BuildMoteSprites(Tint);
+        altMoteSprites ??= BuildMoteSprites(ShiftColor(Tint));
+        softFills ??= BuildSolidFills(Tint);
+
+        double time = Time * Math.Tau;
+        int clouds = height > 200 ? 6 : 4;
+        for (int i = 0; i < clouds; i++)
+        {
+            double angle = time * (.55 + (i % 3) * .22) + i * 1.45;
+            double cx = width * (.22 + .56 * ((i * .61803398875) % 1)) + Math.Sin(angle) * width * .16;
+            double cy = height * ((i + .5) / clouds) + Math.Cos(angle * .85) * Math.Min(36, height * .14);
+            double rx = Math.Min(width * .55, 118) * (.72 + .28 * Math.Sin(time * 1.3 + i));
+            double ry = Math.Min(height * .32, 110) * (.72 + .28 * Math.Cos(time * 1.1 - i));
+            double alpha = (.16 + .24 * intensity) * (.75 + .25 * Math.Sin(time * 1.7 + i * 2.1));
+            var sprites = i % 2 == 0 ? moteSprites : altMoteSprites;
+            dc.DrawImage(sprites[EffectPalette.OpacityIndex(alpha)], new Rect(cx - rx, cy - ry, rx * 2, ry * 2));
+        }
+
+        int stars = Math.Clamp((int)(height / 45), 6, 16);
+        for (int i = 0; i < stars; i++)
+        {
+            double x = 10 + (width - 20) * ((i * .61803398875) % 1);
+            double y = 10 + (height - 20) * ((i * .38196601125 + Time * .12) % 1);
+            double fade = Math.Min(1, Math.Min(y / height, 1 - y / height) * 6);
+            double twinkle = .2 + .8 * Math.Pow(.5 + .5 * Math.Sin(time * 3.1 + i * 2.3), 2);
+            dc.DrawEllipse(softFills[EffectPalette.OpacityIndex(fade * twinkle * (.32 + .52 * intensity))], null, new Point(x, y), 1.35, 1.35);
+        }
+    }
+
+    private void DrawWaves(DrawingContext dc, double width, double height, double intensity)
+    {
+        ribbonWashes ??= BuildVerticalRibbons(Tint, .36);
+        altRibbonWashes ??= BuildVerticalRibbons(EffectPalette.Blend(Tint, Colors.White, .28), .44);
+        finePens ??= BuildGlowPens(Tint, 1.15);
+        altPens ??= BuildGlowPens(ShiftColor(Tint), 1.0);
+
+        double time = Time * Math.Tau * 1.3;
+        DrawVerticalRibbonWithCrest(dc, width, height,
+            ribbonWashes[EffectPalette.OpacityIndex(.22 * intensity + .05)],
+            finePens[EffectPalette.OpacityIndex(.40 * intensity)],
+            baseX: width * .38, amplitude: width * .24, thickness: width * .42, phase: time, frequency: 1.7);
+        DrawVerticalRibbonWithCrest(dc, width, height,
+            altRibbonWashes[EffectPalette.OpacityIndex(.18 * intensity + .04)],
+            altPens[EffectPalette.OpacityIndex(.32 * intensity)],
+            baseX: width * .62, amplitude: width * .22, thickness: width * .36, phase: -time * 1.2 + 1.8, frequency: 2.3);
+    }
+
+    private void DrawRipples(DrawingContext dc, double width, double height, double intensity)
+    {
+        ribbonWashes ??= BuildVerticalRibbons(Tint, .22);
+        finePens ??= BuildGlowPens(Tint, 1.25);
+        altPens ??= BuildGlowPens(ShiftColor(Tint), 1.0);
+        softFills ??= BuildSolidFills(Tint);
+
+        double time = Time * Math.Tau;
+        DrawVerticalRibbon(dc, width, height, ribbonWashes[EffectPalette.OpacityIndex(.14 * intensity + .04)],
+            baseX: width * .50, amplitude: width * .16, thickness: width * .48, phase: time * .7, frequency: 1.5);
+
+        int centers = height > 220 ? 3 : 2;
+        for (int c = 0; c < centers; c++)
+        {
+            double cx = width * (.32 + (c % 2) * .36) + Math.Sin(time + c * 2.1) * width * .10;
+            double cy = height * ((c + .5) / centers) + Math.Cos(time * 1.1 + c) * Math.Min(26, height * .08);
+            for (int r = 0; r < 3; r++)
+            {
+                double phase = (Time * 1.4 + c * .31 + r / 3.0) % 1;
+                double fade = Math.Sin(phase * Math.PI) * (1 - phase * .3);
+                double rad = 8 + phase * Math.Min(width * .52, 118);
+                var pen = (r % 2 == 0 ? finePens : altPens)[EffectPalette.OpacityIndex(fade * (.24 + .44 * intensity))];
+                dc.DrawEllipse(null, pen, new Point(cx, cy), rad, rad);
+            }
+            dc.DrawEllipse(softFills[EffectPalette.OpacityIndex(.35 * intensity)], null, new Point(cx, cy), 1.8, 1.8);
+        }
+    }
+
+    private void DrawCircuit(DrawingContext dc, double width, double height, double intensity)
+    {
+        finePens ??= BuildGlowPens(Tint, 1.0);
+        glowPens ??= BuildGlowPens(Tint, 1.8);
+        altPens ??= BuildGlowPens(ShiftColor(Tint), 1.5);
+        moteSprites ??= BuildMoteSprites(Tint);
+        altMoteSprites ??= BuildMoteSprites(ShiftColor(Tint));
+
+        double[] lanes = [width * .20, width * .50, width * .80];
+        for (int i = 0; i < lanes.Length; i++)
+        {
+            double x = lanes[i];
+            double jogY = height * (.26 + i * .24);
+            double jogX = i == 1 ? x : (i == 0 ? x + 10 : x - 10);
+
+            var trace = new StreamGeometry();
+            using (var ctx = trace.Open())
+            {
+                ctx.BeginFigure(new Point(x, 8), isFilled: false, isClosed: false);
+                ctx.LineTo(new Point(x, jogY - 8), isStroked: true, isSmoothJoin: false);
+                ctx.LineTo(new Point(jogX, jogY), isStroked: true, isSmoothJoin: false);
+                ctx.LineTo(new Point(jogX, height - 8), isStroked: true, isSmoothJoin: false);
+            }
+            trace.Freeze();
+            dc.DrawGeometry(null, finePens[EffectPalette.OpacityIndex(.20 * intensity)], trace);
+
+            for (int p = 0; p < 2; p++)
+            {
+                double u = (Time * (1.6 + i * .35) + i * .29 + p * .5) % 1;
+                double fade = Math.Min(1, Math.Min(u, 1 - u) * 6);
+                double py = 8 + u * (height - 16);
+                double px = py < jogY - 8 ? x : py > jogY ? jogX : x + (jogX - x) * ((py - (jogY - 8)) / 8.0);
+                double tail = Math.Clamp(height * .12, 16, 66);
+                double py0 = Math.Max(8, py - tail);
+                double px0 = py0 < jogY - 8 ? x : py0 > jogY ? jogX : x + (jogX - x) * ((py0 - (jogY - 8)) / 8.0);
+
+                var pen = (i == 1 ? altPens : glowPens)[EffectPalette.OpacityIndex(.62 * intensity * fade)];
+                dc.DrawLine(pen, new Point(px0, py0), new Point(px, py));
+                var sprites = i == 1 ? altMoteSprites : moteSprites;
+                dc.DrawImage(sprites[EffectPalette.OpacityIndex(.65 * intensity * fade)], new Rect(px - 6, py - 6, 12, 12));
+            }
+        }
+    }
+
+    private static void DrawVerticalRibbon(DrawingContext dc, double width, double height, Brush fill,
+        double baseX, double amplitude, double thickness, double phase, double frequency)
+    {
+        const int steps = 44;
+        var wave = new StreamGeometry();
+        using (var ctx = wave.Open())
+        {
+            var left = new Point[steps + 1];
+            var right = new Point[steps + 1];
+            for (int s = 0; s <= steps; s++)
+            {
+                double t = s / (double)steps;
+                double y = t * height;
+                double env = Math.Sin(t * Math.PI);
+                double cx = baseX + Math.Sin(t * Math.Tau * frequency + phase) * amplitude * env;
+                double half = thickness * (.42 + .58 * env) * .5;
+                left[s] = new Point(Math.Max(0, cx - half), y);
+                right[s] = new Point(Math.Min(width, cx + half), y);
+            }
+            ctx.BeginFigure(left[0], isFilled: true, isClosed: true);
+            for (int s = 1; s <= steps; s++) ctx.LineTo(left[s], isStroked: false, isSmoothJoin: true);
+            for (int s = steps; s >= 0; s--) ctx.LineTo(right[s], isStroked: false, isSmoothJoin: true);
+        }
+        wave.Freeze();
+        dc.DrawGeometry(fill, null, wave);
+    }
+
+    private static void DrawVerticalRibbonWithCrest(DrawingContext dc, double width, double height, Brush fill, Pen crestPen,
+        double baseX, double amplitude, double thickness, double phase, double frequency)
+    {
+        const int steps = 44;
+        var wave = new StreamGeometry();
+        var crest = new StreamGeometry();
+        var left = new Point[steps + 1];
+        var right = new Point[steps + 1];
+        for (int s = 0; s <= steps; s++)
+        {
+            double t = s / (double)steps;
+            double y = t * height;
+            double env = Math.Sin(t * Math.PI);
+            double cx = baseX + Math.Sin(t * Math.Tau * frequency + phase) * amplitude * env;
+            double half = thickness * (.42 + .58 * env) * .5;
+            left[s] = new Point(Math.Max(0, cx - half), y);
+            right[s] = new Point(Math.Min(width, cx + half), y);
+        }
+        using (var ctx = wave.Open())
+        {
+            ctx.BeginFigure(left[0], isFilled: true, isClosed: true);
+            for (int s = 1; s <= steps; s++) ctx.LineTo(left[s], isStroked: false, isSmoothJoin: true);
+            for (int s = steps; s >= 0; s--) ctx.LineTo(right[s], isStroked: false, isSmoothJoin: true);
+        }
+        wave.Freeze();
+        dc.DrawGeometry(fill, null, wave);
+
+        using (var ctx = crest.Open())
+        {
+            ctx.BeginFigure(right[0], isFilled: false, isClosed: false);
+            for (int s = 1; s <= steps; s++) ctx.LineTo(right[s], isStroked: true, isSmoothJoin: true);
+        }
+        crest.Freeze();
+        dc.DrawGeometry(null, crestPen, crest);
+    }
+
+    private static Color ShiftColor(Color tint) => Color.FromRgb(
+        (byte)((tint.G * .55 + 135) % 255),
+        (byte)((tint.B * .55 + 115) % 255),
+        (byte)Math.Min(255, tint.R * .45 + 195));
+
+    private static Brush[] BuildVerticalRibbons(Color tint, double brightShift)
+    {
+        var brushes = new Brush[EffectPalette.OpacityLevels];
+        var core = EffectPalette.Blend(tint, Colors.White, brightShift);
+        for (int i = 0; i < brushes.Length; i++)
+        {
+            var clear = Color.FromArgb(0, core.R, core.G, core.B);
+            var mid = EffectPalette.WithOpacity(core, i);
+            var edge = EffectPalette.WithOpacity(tint, i / 2);
+            var brush = new LinearGradientBrush
+            {
+                StartPoint = new Point(0, 0),
+                EndPoint = new Point(0, 1),
+                GradientStops =
+                [
+                    new GradientStop(clear, 0),
+                    new GradientStop(edge, .2),
+                    new GradientStop(mid, .5),
+                    new GradientStop(edge, .8),
+                    new GradientStop(clear, 1)
+                ]
+            };
+            brush.Freeze();
+            brushes[i] = brush;
+        }
+        return brushes;
+    }
+
+    private static Brush[] BuildSolidFills(Color tint)
+    {
+        var brushes = new Brush[EffectPalette.OpacityLevels];
+        var bright = EffectPalette.Blend(tint, Colors.White, .40);
+        for (int i = 0; i < brushes.Length; i++)
+        {
+            var b = new SolidColorBrush(EffectPalette.WithOpacity(bright, i));
+            b.Freeze();
+            brushes[i] = b;
+        }
+        return brushes;
     }
 
     private static Brush[] BuildGlowWashes(Color tint)
@@ -171,7 +444,7 @@ public sealed class SidebarEffect : AmbientEffect
         return brushes;
     }
 
-    private static Pen[] BuildGlowPens(Color tint)
+    private static Pen[] BuildGlowPens(Color tint, double thickness)
     {
         var pens = new Pen[EffectPalette.OpacityLevels];
         var bright = EffectPalette.Blend(tint, Colors.White, .32);
@@ -179,7 +452,7 @@ public sealed class SidebarEffect : AmbientEffect
         {
             var brush = new SolidColorBrush(EffectPalette.WithOpacity(bright, i));
             brush.Freeze();
-            var pen = new Pen(brush, 2) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round };
+            var pen = new Pen(brush, thickness) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round };
             pen.Freeze();
             pens[i] = pen;
         }
@@ -188,6 +461,9 @@ public sealed class SidebarEffect : AmbientEffect
 
     private static BitmapSource[] BuildMoteSprites(Color tint)
     {
+        if (MoteSpriteCache.TryGetValue(tint, out var cached)) return cached;
+        if (MoteSpriteCache.Count >= 16) MoteSpriteCache.Clear();
+
         const int size = 28, stride = size * 4;
         var sprites = new BitmapSource[EffectPalette.OpacityLevels];
         for (int index = 0; index < sprites.Length; index++)
@@ -215,7 +491,7 @@ public sealed class SidebarEffect : AmbientEffect
             sprite.Freeze();
             sprites[index] = sprite;
         }
-        return sprites;
+        return MoteSpriteCache[tint] = sprites;
     }
 
     private static MoteSeed[] CreateMotes()

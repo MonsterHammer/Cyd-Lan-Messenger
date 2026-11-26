@@ -42,6 +42,7 @@ public partial class MainWindow : Window
         SourceInitialized += (_, _) =>
         {
             PopupHost.RoundCorners(this);
+            WindowOpacityHelper.Apply(this, ThemeManager.ActiveOverrides.WindowOpacity);
             if (PresentationSource.FromVisual(this) is HwndSource source)
             {
                 source.AddHook(RespectMonitorWorkArea);
@@ -569,9 +570,14 @@ public partial class MainWindow : Window
     }
     private async void CancelOffer_Click(object sender, RoutedEventArgs e) { if (((FrameworkElement)sender).DataContext is FileTransfer transfer) await model.CancelOfferAsync(transfer); }
     private async void DeclineFile_Click(object sender, RoutedEventArgs e) { if (((System.Windows.Controls.Button)sender).DataContext is FileTransfer transfer) await model.DeclineFileAsync(transfer); }
-    private async void MessageAcceptFile_Click(object sender, RoutedEventArgs e) { if (((System.Windows.Controls.Button)sender).DataContext is ChatMessage message && model.TransferFor(message) is { } transfer) await model.AcceptFileAsync(transfer); }
-    private async void MessageDeclineFile_Click(object sender, RoutedEventArgs e) { if (((System.Windows.Controls.Button)sender).DataContext is ChatMessage message && model.TransferFor(message) is { } transfer) await model.DeclineFileAsync(transfer); }
-    private void Settings_Click(object sender, RoutedEventArgs e) => PopupHost.ShowModal(this, new SettingsWindow(model));
+    private async void MessageAcceptFile_Click(object sender, RoutedEventArgs e) { if (((System.Windows.Controls.Button)sender).DataContext is ChatMessage message) await model.AcceptMessageFileAsync(message); }
+    private async void MessageDeclineFile_Click(object sender, RoutedEventArgs e) { if (((System.Windows.Controls.Button)sender).DataContext is ChatMessage message) await model.DeclineMessageFileAsync(message); }
+    internal SettingsWindow CreateSettingsWindow(string? page = null, bool rememberNavigation = true) =>
+        new(model, page ?? model.LastSettingsPage, model.LastAppearanceTab, rememberNavigation);
+    internal void OpenSettings(string? page = null, bool rememberNavigation = true) =>
+        PopupHost.ShowModal(this, CreateSettingsWindow(page, rememberNavigation));
+    private void Settings_Click(object sender, RoutedEventArgs e) => OpenSettings();
+    private void Profile_Click(object sender, RoutedEventArgs e) => OpenSettings("AccountPage", rememberNavigation: false);
     public void SetScrim(bool visible)
     {
         var fade = new System.Windows.Media.Animation.DoubleAnimation(visible ? 1 : 0, TimeSpan.FromMilliseconds(visible ? 160 : 120));

@@ -12,6 +12,8 @@ namespace CydLan.Desktop;
 public partial class App : System.Windows.Application
 {
     private Mutex? mutex;
+    private EventWaitHandle? activateEvent;
+    private RegisteredWaitHandle? activateRegistration;
     private Forms.NotifyIcon? tray;
     private TrayMenuWindow? trayMenu;
     private MessageNotificationWindow? notification;
@@ -36,8 +38,23 @@ public partial class App : System.Windows.Application
         if (!capturing)
         {
             string mutexName = preview ? "Local\\CydLan.Desktop.Preview" : labAddress is null ? "Local\\CydLan.Desktop" : "Local\\CydLan.Desktop.Lab";
+            string activateName = mutexName + ".Activate";
             mutex = new Mutex(true, mutexName, out var first);
-            if (!first) { System.Windows.MessageBox.Show("CydLan is already running.", "CydLan"); Shutdown(); return; }
+            if (!first)
+            {
+                bool signaled = false;
+                try
+                {
+                    using var existing = EventWaitHandle.OpenExisting(activateName);
+                    signaled = existing.Set();
+                }
+                catch (WaitHandleCannotBeOpenedException) { }
+                catch (UnauthorizedAccessException) { }
+                if (!signaled) System.Windows.MessageBox.Show("CydLan is already running.", "CydLan");
+                Shutdown();
+                return;
+            }
+            activateEvent = new EventWaitHandle(false, EventResetMode.AutoReset, activateName);
         }
         try
         {
@@ -50,13 +67,26 @@ public partial class App : System.Windows.Application
             model = new MainViewModel(preview, seedPreview: !e.Args.Contains("--empty-preview"), localStore: preview ? null : new LocalStore(dataDirectory), log: log);
             int themeArg = Array.IndexOf(e.Args, "--theme");
             if (preview && themeArg >= 0 && themeArg + 1 < e.Args.Length) model.Settings.Theme = ThemeManager.Normalize(e.Args[themeArg + 1]); // preview/screenshot override only
-            ThemeManager.Apply(model.Settings.Theme);
+            ThemeManager.Apply(model.Settings.Theme, AppearanceOverrides.From(model.Settings));
             var window = new MainWindow(model);
             if (e.Args.Contains("--compact")) { window.Width = window.MinWidth; window.Height = window.MinHeight; }
             window.Title = preview ? "CydLan · Offline preview" : labAddress is not null ? $"CydLan · Lab {labAddress}" : "CydLan · LAN messenger";
             if (e.Args.Contains("--transfers")) model.TransfersOpen = true;
             if (e.Args.Contains("--groups")) { model.GroupsOpen = true; model.SelectedGroup = model.Groups.FirstOrDefault(); }
             MainWindow = window;
+            if (activateEvent is not null)
+            {
+                activateRegistration = ThreadPool.RegisterWaitForSingleObject(activateEvent, (_, _) =>
+                {
+                    if (quitting) return;
+                    Dispatcher.BeginInvoke(() =>
+                    {
+                        if (quitting) return;
+                        if (tray is not null) tray.Visible = true;
+                        ShowWindow(window);
+                    });
+                }, null, Timeout.Infinite, executeOnlyOnce: false);
+            }
             if (!capturing && !preview)
             {
                 CreateTray(window);
@@ -188,6 +218,8 @@ public partial class App : System.Windows.Application
         catch (Exception e) { log?.Write("application.shutdown_failed", e); Environment.ExitCode = 1; }
         finally
         {
+            activateRegistration?.Unregister(null);
+            activateEvent?.Dispose();
             trayMenu?.CloseOnce();
             notification?.Close();
             tray?.Dispose(); mutex?.Dispose(); Shutdown(Environment.ExitCode);

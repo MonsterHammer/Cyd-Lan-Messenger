@@ -15,7 +15,7 @@ public sealed class Attachment
     /// <summary>Decoded thumbnail when the file is a readable image; null for other files.</summary>
     public ImageSource? Thumbnail { get; init; }
     public bool IsImage => Thumbnail is not null;
-    public string SizeLabel => IsFolder ? "Folder" : Size < 1024 * 1024 ? $"{Size / 1024d:0.#} KB" : $"{Size / (1024d * 1024):0.#} MB";
+    public string SizeLabel => IsFolder ? "Folder" : FileTransfer.FormatBytes(Size);
 
     public static Attachment From(string path)
     {
@@ -28,21 +28,40 @@ public sealed class Attachment
 
 public static class Images
 {
+    private static readonly object CacheGate = new();
+    private static readonly Dictionary<(string Path, long Ticks, long Length, int Width, int Height), WeakReference<BitmapImage>> WeakCache = [];
+
     /// <summary>Loads an image without locking the file; returns null when it is missing or not a decodable image.</summary>
     public static BitmapImage? Load(string path, int decodeWidth, int decodeHeight = 0)
     {
         try
         {
-            if (!File.Exists(path)) return null;
+            var info = new FileInfo(path);
+            if (!info.Exists) return null;
+            var key = (info.FullName, info.LastWriteTimeUtc.Ticks, info.Length, decodeWidth, decodeHeight);
+            lock (CacheGate)
+            {
+                if (WeakCache.TryGetValue(key, out var existing) && existing.TryGetTarget(out var hit)) return hit;
+            }
             var image = new BitmapImage();
             image.BeginInit();
             image.CacheOption = BitmapCacheOption.OnLoad;
             image.CreateOptions = BitmapCreateOptions.IgnoreColorProfile;
             image.DecodePixelWidth = decodeWidth;
             image.DecodePixelHeight = decodeHeight;
-            image.UriSource = new Uri(path);
+            image.UriSource = new Uri(info.FullName);
             image.EndInit();
             image.Freeze();
+            lock (CacheGate)
+            {
+                if (WeakCache.Count >= 128)
+                {
+                    foreach (var dead in WeakCache.Where(pair => !pair.Value.TryGetTarget(out _)).Select(pair => pair.Key).ToArray())
+                        WeakCache.Remove(dead);
+                    if (WeakCache.Count >= 192) WeakCache.Clear();
+                }
+                WeakCache[key] = new WeakReference<BitmapImage>(image);
+            }
             return image;
         }
         catch (Exception e) when (e is IOException or NotSupportedException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or System.Runtime.InteropServices.COMException or FileFormatException)

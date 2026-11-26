@@ -543,6 +543,63 @@ static async Task TestFiles()
         string incomplete = Path.Combine(directory, "incomplete.bin"); await two.AcceptFileAsync(interrupted!, incomplete);
         await Until(() => changed.State.StartsWith("Failed") && interrupted!.State.StartsWith("Failed"));
         Check(!File.Exists(incomplete) && !Directory.EnumerateFiles(directory, "*.partial").Any(), "An interrupted transfer must not expose an incomplete destination or leave partial bytes.");
+
+        // Large-file streaming & progress precision: GB formatting, monotonic progress, never reports 100% before completion, exact SHA-256 match.
+        Check(FileTransfer.FormatBytes(2_684_354_560L) == "2.5 GB", $"Expected GB formatting, got {FileTransfer.FormatBytes(2_684_354_560L)}.");
+        string largeSource = Path.Combine(directory, "large-64mb.bin");
+        string largeTarget = Path.Combine(directory, "large-64mb-received.bin");
+        const long largeSize = 64L * 1024 * 1024;
+        var chunk = RandomNumberGenerator.GetBytes(1024 * 1024);
+        byte[] sourceHash;
+        using (var hasher = IncrementalHash.CreateHash(HashAlgorithmName.SHA256))
+        await using (var outStream = File.Create(largeSource))
+        {
+            for (int m = 0; m < 64; m++)
+            {
+                chunk[0] = (byte)m;
+                await outStream.WriteAsync(chunk);
+                hasher.AppendData(chunk);
+            }
+            sourceHash = hasher.GetHashAndReset();
+        }
+        var progressSamples = new List<(string State, long Bytes, double Progress, int DisplayPercent)>();
+        void CaptureLargeProgress(FileTransfer t)
+        {
+            if (t.Name == "large-64mb.bin" && !t.Outgoing)
+                lock (progressSamples) progressSamples.Add((t.State, t.TransferredBytes, t.Progress, t.DisplayPercent));
+        }
+        two.TransferChanged += CaptureLargeProgress;
+        try
+        {
+            var largeOutgoing = await one.OfferFileAsync(b.UserId, largeSource);
+            await Until(() => !offers.IsEmpty);
+            Check(offers.TryDequeue(out var largeIncoming) && largeIncoming!.Size == largeSize, "Large file offer should preserve exact 64-bit byte length.");
+            await two.AcceptFileAsync(largeIncoming!, largeTarget);
+            await Until(() => largeIncoming!.State == "Received" && largeOutgoing.State == "Sent · receipt unavailable");
+            Check(largeIncoming!.TransferredBytes == largeSize && largeIncoming.Progress == 100 && largeIncoming.DisplayPercent == 100,
+                "Completed large transfer should finish at exact byte count and 100%.");
+            lock (progressSamples)
+            {
+                var transferring = progressSamples.Where(s => s.State == "Transferring").ToList();
+                Check(transferring.Count > 0 && transferring.All(s => s.Progress < 100 && s.DisplayPercent < 100),
+                    "Progress must never show 100% while still transferring.");
+                for (int i = 1; i < transferring.Count; i++)
+                    Check(transferring[i].Bytes >= transferring[i - 1].Bytes && transferring[i].Progress >= transferring[i - 1].Progress,
+                        "Transfer progress must advance monotonically.");
+            }
+            using var receivedFile = File.OpenRead(largeTarget);
+            byte[] receivedHash = await SHA256.HashDataAsync(receivedFile);
+            Check(receivedHash.SequenceEqual(sourceHash), "64 MB streamed file must match SHA-256 byte for byte.");
+        }
+        finally { two.TransferChanged -= CaptureLargeProgress; }
+
+        // Disconnecting a peer interrupts pending offers so neither side gets permanently stuck on Accept/Decline.
+        var orphaned = await one.OfferFileAsync(b.UserId, Path.Combine(directory, "source-0.bin"));
+        await Until(() => !offers.IsEmpty);
+        Check(offers.TryDequeue(out var orphanedIncoming) && orphanedIncoming!.State == "Waiting for approval", "Pending offer should await approval before disconnect.");
+        await one.DisposeAsync();
+        await Until(() => orphanedIncoming!.State == "Interrupted");
+        Check(orphanedIncoming!.State == "Interrupted", "Disconnecting the sender must interrupt pending offers instead of leaving them stuck.");
     }
     finally { DeleteTestDirectory(directory); }
 }

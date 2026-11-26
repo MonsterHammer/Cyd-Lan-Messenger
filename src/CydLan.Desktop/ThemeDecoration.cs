@@ -12,7 +12,9 @@ public enum DecorationZone { Title, Sidebar, Composer, Header, Rail }
 public enum DecorationDesign
 {
     None, Sakura, Steampunk, Forest, Paper, Anime, Aurora, Arcade, Pixel, Ocean, Lavender, Ember, Sand,
-    Cyberpunk, Midnight, Sunset, Mint, Matcha, Frost
+    Cyberpunk, Midnight, Sunset, Mint, Matcha, Frost,
+    Obsidian, Nord, Synthwave, Crimson, Emerald, Rose, Espresso, Cobalt, Sage, Amber,
+    Pineapple, CoralStar, NoirPink, Vampire, VoltSpark, KingdomRed, Bubblegum, RibbonBlush, NoirGold, WebCrimson, Jester, Cipher
 }
 
 /// <summary>Draws optional static theme details across the rail, side panel, title bar, header, and composer.</summary>
@@ -540,6 +542,167 @@ public sealed class ThemeDecoration : FrameworkElement
                 break;
             case (DecorationDesign.Frost, DecorationZone.Composer):
                 DrawCornerBrackets(dc, width, height, 10, brightLine, margin: 4);
+                break;
+
+            case (DecorationDesign.Obsidian or DecorationDesign.Cobalt, DecorationZone.Sidebar):
+                dc.DrawRectangle(subtleWash, null, bounds);
+                DrawCornerBrackets(dc, width, height, 12, accentLine, margin: 5);
+                dc.DrawLine(softLine, new Point(width - 6, 18), new Point(width - 6, height - 18));
+                break;
+            case (DecorationDesign.Obsidian or DecorationDesign.Cobalt, DecorationZone.Rail):
+                dc.DrawRectangle(subtleWash, null, bounds);
+                dc.DrawLine(accentLine, new Point(width - 3, 14), new Point(width - 3, height - 14));
+                break;
+            case (DecorationDesign.Obsidian or DecorationDesign.Cobalt, DecorationZone.Title):
+                dc.DrawLine(accentLine, new Point(10, height / 2), new Point(width - 10, height / 2));
+                DrawDiamond(dc, width - 26, height / 2, .85);
+                break;
+            case (DecorationDesign.Obsidian or DecorationDesign.Cobalt, DecorationZone.Header):
+                dc.DrawRectangle(headerWash, null, bounds);
+                dc.DrawLine(brightLine, new Point(16, height - 2), new Point(width - 16, height - 2));
+                DrawCornerBrackets(dc, width, height, 9, softLine, margin: 6);
+                break;
+            case (DecorationDesign.Obsidian or DecorationDesign.Cobalt, DecorationZone.Composer):
+                DrawCornerBrackets(dc, width, height, 9, accentLine, margin: 3);
+                break;
+
+            case (DecorationDesign.Nord or DecorationDesign.Emerald, DecorationZone.Sidebar):
+                dc.DrawRectangle(softWash, null, bounds);
+                DrawWave(dc, 14, height - 24, width - 28, 4.5, 2.2, accentLine!);
+                DrawDot(dc, width - 22, 22, 2.2);
+                break;
+            case (DecorationDesign.Nord or DecorationDesign.Emerald, DecorationZone.Rail):
+                dc.DrawRectangle(subtleWash, null, bounds);
+                DrawDot(dc, width / 2, height * .54, 2.4);
+                DrawDot(dc, width / 2, height * .54 + 12, 1.5);
+                break;
+            case (DecorationDesign.Nord or DecorationDesign.Emerald, DecorationZone.Title):
+                DrawWave(dc, 10, height / 2, width - 20, 3, 2.5, brightLine!);
+                break;
+            case (DecorationDesign.Nord or DecorationDesign.Emerald, DecorationZone.Header):
+                dc.DrawRectangle(headerWash, null, bounds);
+                DrawWave(dc, 18, height - 10, width - 36, 4, 3.2, accentLine!);
+                break;
+            case (DecorationDesign.Nord or DecorationDesign.Emerald, DecorationZone.Composer):
+                dc.DrawRoundedRectangle(null, softLine, new Rect(2.5, 2.5, width - 5, height - 5), 10, 10);
+                break;
+
+            case (DecorationDesign.Synthwave or DecorationDesign.Crimson, DecorationZone.Sidebar):
+                dc.DrawRectangle(softWash, null, bounds);
+                for (int i = 0; i < 4; i++)
+                    dc.DrawLine(i % 2 == 0 ? accentLine : softLine, new Point(12, height - 12 - i * 8), new Point(width - 12, height - 12 - i * 8));
+                DrawStar(dc, width - 24, 22, 1.0);
+                break;
+            case (DecorationDesign.Synthwave or DecorationDesign.Crimson, DecorationZone.Rail):
+                dc.DrawRectangle(softWash, null, bounds);
+                DrawStar(dc, width / 2, height * .55, .95);
+                break;
+            case (DecorationDesign.Synthwave or DecorationDesign.Crimson, DecorationZone.Title):
+                dc.DrawLine(brightLine, new Point(8, height / 2 - 3), new Point(width - 8, height / 2 - 3));
+                dc.DrawLine(accentLine, new Point(20, height / 2 + 3), new Point(width - 8, height / 2 + 3));
+                break;
+            case (DecorationDesign.Synthwave or DecorationDesign.Crimson, DecorationZone.Header):
+                dc.DrawRectangle(headerWash, null, bounds);
+                dc.DrawLine(brightLine, new Point(16, height - 3), new Point(width - 16, height - 3));
+                DrawStar(dc, width - 36, 20, 1.1);
+                break;
+            case (DecorationDesign.Synthwave or DecorationDesign.Crimson, DecorationZone.Composer):
+                DrawCornerBrackets(dc, width, height, 11, brightLine, margin: 3);
+                break;
+
+            case (DecorationDesign.Rose or DecorationDesign.Sage or DecorationDesign.Espresso or DecorationDesign.Amber, DecorationZone.Sidebar):
+                dc.DrawRectangle(subtleWash, null, bounds);
+                DrawBubble(dc, width - 24, height - 24, 9);
+                DrawBubble(dc, width - 42, height - 16, 5.5);
+                break;
+            case (DecorationDesign.Rose or DecorationDesign.Sage or DecorationDesign.Espresso or DecorationDesign.Amber, DecorationZone.Rail):
+                dc.DrawRectangle(subtleWash, null, bounds);
+                DrawBubble(dc, width / 2, height * .56, 6);
+                break;
+            case (DecorationDesign.Rose or DecorationDesign.Sage or DecorationDesign.Espresso or DecorationDesign.Amber, DecorationZone.Title):
+                DrawBubble(dc, width - 32, height / 2, 5.5);
+                DrawDot(dc, width - 48, height / 2, 2);
+                break;
+            case (DecorationDesign.Rose or DecorationDesign.Sage or DecorationDesign.Espresso or DecorationDesign.Amber, DecorationZone.Header):
+                dc.DrawRectangle(headerWash, null, bounds);
+                DrawBubble(dc, width - 34, height * .5, 8);
+                dc.DrawLine(softLine, new Point(18, height - 2), new Point(width - 18, height - 2));
+                break;
+            case (DecorationDesign.Rose or DecorationDesign.Sage or DecorationDesign.Espresso or DecorationDesign.Amber, DecorationZone.Composer):
+                dc.DrawRoundedRectangle(null, softLine, new Rect(2.5, 2.5, width - 5, height - 5), 11, 11);
+                break;
+
+            case (DecorationDesign.Pineapple or DecorationDesign.CoralStar or DecorationDesign.RibbonBlush, DecorationZone.Sidebar):
+                dc.DrawRectangle(subtleWash, null, bounds);
+                DrawBubble(dc, width - 22, height - 22, 10);
+                DrawBubble(dc, width - 42, height - 14, 6);
+                DrawBubble(dc, width - 26, height - 42, 4.5);
+                break;
+            case (DecorationDesign.Pineapple or DecorationDesign.CoralStar or DecorationDesign.RibbonBlush, DecorationZone.Rail):
+                dc.DrawRectangle(subtleWash, null, bounds);
+                DrawBubble(dc, width / 2, height * .54, 6.5);
+                DrawBubble(dc, width / 2 + 4, height * .54 + 14, 3.5);
+                break;
+            case (DecorationDesign.Pineapple or DecorationDesign.CoralStar or DecorationDesign.RibbonBlush, DecorationZone.Title):
+                DrawBubble(dc, width - 28, height / 2, 6);
+                DrawBubble(dc, width - 46, height / 2 - 2, 3.8);
+                break;
+            case (DecorationDesign.Pineapple or DecorationDesign.CoralStar or DecorationDesign.RibbonBlush, DecorationZone.Header):
+                dc.DrawRectangle(headerWash, null, bounds);
+                DrawBubble(dc, width - 30, height * .46, 9);
+                DrawBubble(dc, width - 52, height * .60, 5);
+                DrawWave(dc, 18, height - 8, width - 36, 3.2, 3.5, softLine!);
+                break;
+            case (DecorationDesign.Pineapple or DecorationDesign.CoralStar or DecorationDesign.RibbonBlush, DecorationZone.Composer):
+                dc.DrawRoundedRectangle(null, accentLine, new Rect(2.5, 2.5, width - 5, height - 5), 13, 13);
+                break;
+
+            case (DecorationDesign.NoirPink or DecorationDesign.Bubblegum or DecorationDesign.VoltSpark or DecorationDesign.KingdomRed, DecorationZone.Sidebar):
+                dc.DrawRectangle(softWash, null, bounds);
+                DrawStar(dc, width - 24, 22, 1.15);
+                DrawStar(dc, width - 38, height - 20, .9);
+                DrawDiamond(dc, width - 20, height - 34, .95);
+                break;
+            case (DecorationDesign.NoirPink or DecorationDesign.Bubblegum or DecorationDesign.VoltSpark or DecorationDesign.KingdomRed, DecorationZone.Rail):
+                dc.DrawRectangle(softWash, null, bounds);
+                DrawStar(dc, width / 2, height * .55, 1.0);
+                break;
+            case (DecorationDesign.NoirPink or DecorationDesign.Bubblegum or DecorationDesign.VoltSpark or DecorationDesign.KingdomRed, DecorationZone.Title):
+                DrawStar(dc, width - 30, height / 2, 1.0);
+                DrawStar(dc, width - 50, height / 2, .72);
+                dc.DrawLine(brightLine, new Point(10, height - 2), new Point(width - 10, height - 2));
+                break;
+            case (DecorationDesign.NoirPink or DecorationDesign.Bubblegum or DecorationDesign.VoltSpark or DecorationDesign.KingdomRed, DecorationZone.Header):
+                dc.DrawRectangle(headerWash, null, bounds);
+                DrawStar(dc, width - 34, 20, 1.15);
+                DrawDiamond(dc, width - 54, height - 18, .9);
+                dc.DrawLine(brightLine, new Point(16, height - 2), new Point(width - 16, height - 2));
+                break;
+            case (DecorationDesign.NoirPink or DecorationDesign.Bubblegum or DecorationDesign.VoltSpark or DecorationDesign.KingdomRed, DecorationZone.Composer):
+                DrawCornerBrackets(dc, width, height, 10, brightLine, margin: 3);
+                break;
+
+            case (DecorationDesign.Vampire or DecorationDesign.NoirGold or DecorationDesign.WebCrimson or DecorationDesign.Jester or DecorationDesign.Cipher, DecorationZone.Sidebar):
+                dc.DrawRectangle(softWash, null, bounds);
+                DrawCornerBrackets(dc, width, height, 12, brightLine, margin: 4);
+                DrawDiamond(dc, width - 22, height - 24, 1.05);
+                break;
+            case (DecorationDesign.Vampire or DecorationDesign.NoirGold or DecorationDesign.WebCrimson or DecorationDesign.Jester or DecorationDesign.Cipher, DecorationZone.Rail):
+                dc.DrawRectangle(subtleWash, null, bounds);
+                DrawDiamond(dc, width / 2, height * .54, 1.0);
+                dc.DrawLine(accentLine, new Point(width - 2.5, 14), new Point(width - 2.5, height - 14));
+                break;
+            case (DecorationDesign.Vampire or DecorationDesign.NoirGold or DecorationDesign.WebCrimson or DecorationDesign.Jester or DecorationDesign.Cipher, DecorationZone.Title):
+                dc.DrawLine(brightLine, new Point(8, height / 2), new Point(width - 8, height / 2));
+                DrawDiamond(dc, width - 32, height / 2, .95);
+                break;
+            case (DecorationDesign.Vampire or DecorationDesign.NoirGold or DecorationDesign.WebCrimson or DecorationDesign.Jester or DecorationDesign.Cipher, DecorationZone.Header):
+                dc.DrawRectangle(headerWash, null, bounds);
+                DrawCornerBrackets(dc, width, height, 9, accentLine, margin: 5);
+                dc.DrawLine(brightLine, new Point(16, height - 2.5), new Point(width - 16, height - 2.5));
+                break;
+            case (DecorationDesign.Vampire or DecorationDesign.NoirGold or DecorationDesign.WebCrimson or DecorationDesign.Jester or DecorationDesign.Cipher, DecorationZone.Composer):
+                DrawCornerBrackets(dc, width, height, 10, accentLine, margin: 3);
                 break;
         }
     }

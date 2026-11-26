@@ -146,8 +146,18 @@ public sealed partial class LanService
 
     private async Task AnswerNativeFolderAsync(FileTransfer transfer, string operation, string state)
     {
-        var folder = RequireNativeFolder(transfer);
-        await SendAsync(folder.Session, "folder", FolderBody(folder, operation));
+        if (!nativeFolders.TryGetValue((transfer.PeerId, transfer.Id), out var folder) || folder.Transfer != transfer ||
+            transfer.State != "Waiting for approval" || folder.Token.IsCancellationRequested)
+        {
+            if (transfer.State == "Waiting for approval")
+            {
+                transfer.State = state;
+                TransferChanged?.Invoke(transfer);
+            }
+            return;
+        }
+        try { await SendAsync(folder.Session, "folder", FolderBody(folder, operation)); }
+        catch (Exception e) when (e is IOException or SocketException or OperationCanceledException) { }
         folder.Stop(state);
     }
 
@@ -198,7 +208,7 @@ public sealed partial class LanService
                 });
                 int port = await part.Port.Task.WaitAsync(FolderStepTimeout, folder.Token);
                 await SendFilePayloadAsync(folder.Session, port, entry.Id, path, entry.Size,
-                    bytes => ReportFolderProgress(transfer, sent + bytes), folder.Token);
+                    bytes => ReportFolderProgress(folder, sent + bytes), folder.Token);
                 sent += entry.Size;
             }
             finally { folderSends.TryRemove(key, out _); }
@@ -283,7 +293,7 @@ public sealed partial class LanService
         try
         {
             await ReceiveFilePayloadAsync(stream, id, part.Path, part.Entry.Size,
-                bytes => ReportFolderProgress(part.Folder.Transfer, part.PreviousBytes + bytes), part.Folder.Token);
+                bytes => ReportFolderProgress(part.Folder, part.PreviousBytes + bytes), part.Folder.Token);
         }
         catch (Exception e) { error = e; }
         finally { part.Completed.TrySetResult(error); }
@@ -304,10 +314,16 @@ public sealed partial class LanService
         return path;
     }
 
-    private void ReportFolderProgress(FileTransfer transfer, long bytes)
+    private void ReportFolderProgress(NativeFolder folder, long bytes)
     {
+        var transfer = folder.Transfer;
+        bool enteringTransfer = transfer.State != "Transferring";
         transfer.State = "Transferring";
-        transfer.Progress = Percent(bytes, transfer.Size);
+        transfer.TransferredBytes = bytes;
+        transfer.Progress = TransferPercent(bytes, transfer.Size);
+        long now = Environment.TickCount64;
+        if (!enteringTransfer && now - folder.LastProgressReport < 50) return;
+        folder.LastProgressReport = now;
         TransferChanged?.Invoke(transfer);
     }
 
@@ -318,6 +334,7 @@ public sealed partial class LanService
         try
         {
             await transferWork();
+            transfer.TransferredBytes = transfer.Size;
             transfer.Progress = 100;
             state = transfer.Outgoing ? "Sent · receipt unavailable" : "Received";
         }
@@ -371,6 +388,7 @@ public sealed partial class LanService
         public Session Session { get; }
         public FileTransfer Transfer { get; }
         public int FileCount { get; }
+        public long LastProgressReport { get; set; }
         public CancellationToken Token { get; }
         public TaskCompletionSource<string> Decision { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource Finished { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);

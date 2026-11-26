@@ -246,6 +246,8 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
             Settings = store.LoadSettings();
             if (Settings.Port is < 1 or > 65535) Settings.Port = 50000;
             if (Settings.Status is not ("chat" or "away" or "busy" or "dnd")) Settings.Status = "chat";
+            LastSettingsPage = SettingsWindow.NormalizePage(Settings.LastSettingsPage);
+            LastAppearanceTab = SettingsWindow.NormalizeAppearanceTab(Settings.LastAppearanceTab);
             // Earlier builds used 32-character IDs, which LAN Messenger cannot match for incoming files.
             if (!AppSettings.IsValidUserId(Settings.UserId)) Settings.UserId = AppSettings.NewUserId();
             store.SaveSettings(Settings);
@@ -493,7 +495,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         {
             var message = new ChatMessage { PeerId = peer.Id, Outgoing = true, Delivery = "Sending…", Id = NextMessageId().ToString(), FolderAttachment = file.IsFolder };
             string path = file.Path;
-            try { if (file.IsImage) { path = KeepCopy(file.Path); message.ImagePath = path; } else message.FileName = file.Name; }
+            try { if (file.IsImage && file.Size <= LanService.MaxInlineImageBytes) { path = KeepCopy(file.Path); message.ImagePath = path; } else message.FileName = file.Name; }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException) { log?.Write("attachment.prepare_failed", e); Toast = $"{file.Name} couldn't be prepared: {e.Message}"; continue; }
             AddMessage(message); queued.Add((message, path));
         }
@@ -526,14 +528,14 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         // What the receiver sees under a file someone offered.
         "Waiting for approval" => "Waiting",
         "Accepted" or "Connecting" => "Accepted",
-        "Transferring" => $"Receiving {t.Progress:0}%",
+        "Transferring" => $"Receiving {t.DisplayPercent}% · {FileTransfer.FormatBytes(t.TransferredBytes)} / {t.SizeLabel}",
         var state when state.StartsWith("Failed", StringComparison.Ordinal) => state,
         _ => t.State,
     } : t.State switch
     {
-        "Waiting for approval" => t.Inline ? "Sending…" : "Waiting for them to accept",
+        "Waiting for approval" => "Waiting for them to accept",
         "Connecting" => "Accepted",
-        "Transferring" => $"Accepted · sending {t.Progress:0}%",
+        "Transferring" => $"Accepted · sending {t.DisplayPercent}% · {FileTransfer.FormatBytes(t.TransferredBytes)} / {t.SizeLabel}",
         "Sent · receipt unavailable" => "Sent",
         "Declined" or "Cancelled" or "Aborted" or "Interrupted" => t.State,
         var state when state.StartsWith("Failed", StringComparison.Ordinal) => state,
@@ -541,7 +543,24 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     };
     private static bool IsFinished(string state) => state is "Received" or "Sent · receipt unavailable" or "Declined" or "Cancelled" or "Aborted" or "Interrupted" || state.StartsWith("Failed", StringComparison.Ordinal);
     /// <summary>Withdraws an offer the other person has not accepted yet.</summary>
-    public async Task CancelOfferAsync(FileTransfer transfer) { if (lan is not null) await RunAsync(() => lan.CancelFileAsync(transfer)); }
+    public async Task CancelOfferAsync(FileTransfer transfer)
+    {
+        if (lan is null) return;
+        try { await lan.CancelFileAsync(transfer); }
+        catch (InvalidOperationException)
+        {
+            if (transfer.State == "Waiting for approval")
+            {
+                transfer.State = "Cancelled";
+                OnTransferChanged(transfer);
+            }
+        }
+        catch (Exception e) when (e is IOException or System.Net.Sockets.SocketException or OperationCanceledException or UnauthorizedAccessException)
+        {
+            log?.Write("operation.failed", e, ("operation", nameof(CancelOfferAsync)));
+            Toast = e.Message;
+        }
+    }
     private void OnTransferChanged(FileTransfer transfer)
     {
         // Progress can fire for every network buffer. Persist state changes only, without file names or paths.
@@ -556,10 +575,11 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         if (!Transfers.Contains(transfer))
         {
             transfer.PeerName = Peers.FirstOrDefault(p => p.Id == transfer.PeerId)?.Name ?? transfer.PeerId; Transfers.Insert(0, transfer);
-            if (!transfer.Outgoing && !transfer.Inline)
+            if (!transfer.Outgoing)
             {
-                NotifyIncoming(transfer.PeerName, "Wants to send you " + transfer.Name);
-                // Offered files belong in the conversation timeline, like messages.
+                if (!transfer.Inline || !Settings.AutoAcceptFiles)
+                    NotifyIncoming(transfer.PeerName, "Wants to send you " + transfer.Name);
+                // Offered files and images belong in the conversation timeline so the recipient can accept or decline.
                 if (Peers.FirstOrDefault(p => p.Id == transfer.PeerId) is { } sender && !transferMessages.ContainsKey(transfer.Id))
                 {
                     var offer = new ChatMessage { Id = transfer.Id, PeerId = sender.Id, FileName = transfer.Name, FolderAttachment = transfer.Folder, TransferId = transfer.Id, Delivery = DeliveryFor(transfer) };
@@ -581,20 +601,38 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         var peer = Peers.FirstOrDefault(p => p.Id == transfer.PeerId);
         if (transfer.Inline)
         {
-            // Inline images show in the conversation (and in Files, as a record).
+            // Accepted inline images upgrade their offer bubble into the photo in the conversation.
             if (transfer.Outgoing || transfer.State != "Received" || peer is null || !receivedImages.Add(transfer.Id)) return;
             if (Images.Load(transfer.Path, 64) is null)
             {
                 try { File.Delete(transfer.Path); } catch (IOException) { }
                 Diagnostics.Insert(0, $"{DateTime.Now:HH:mm:ss}  Discarded an image from {peer.Name} that could not be decoded.");
                 log?.Write("image.decode_failed", null, ("peer", peer.Id), ("id", transfer.Id));
+                if (transferMessages.TryGetValue(transfer.Id, out var invalidOffer))
+                {
+                    invalidOffer.Delivery = "Failed";
+                    Save();
+                }
                 return;
             }
-            AddMessage(new() { Id = transfer.Id, PeerId = peer.Id, ImagePath = transfer.Path, Delivery = "Received" });
-            peer.Preview = "Photo"; peer.Typing = "";
-            RefreshRecentChats();
-            if (SelectedPeer?.Id != peer.Id || !IsConversationSection || !Replying) peer.Unread++;
-            RefreshMessages(); Changed(nameof(PeopleSummary)); Save(); NotifyIncoming(peer.Name, "Sent you a photo");
+            if (transferMessages.TryGetValue(transfer.Id, out var offerMessage))
+            {
+                offerMessage.ImagePath = transfer.Path;
+                offerMessage.FileName = "";
+                offerMessage.Delivery = "Received";
+                peer.Preview = "Photo"; peer.Typing = "";
+                RefreshRecentChats();
+                Save();
+                if (Settings.AutoAcceptFiles) NotifyIncoming(peer.Name, "Sent you a photo");
+            }
+            else
+            {
+                AddMessage(new() { Id = transfer.Id, PeerId = peer.Id, ImagePath = transfer.Path, Delivery = "Received" });
+                peer.Preview = "Photo"; peer.Typing = "";
+                RefreshRecentChats();
+                if (SelectedPeer?.Id != peer.Id || !IsConversationSection || !Replying) peer.Unread++;
+                RefreshMessages(); Changed(nameof(PeopleSummary)); Save(); NotifyIncoming(peer.Name, "Sent you a photo");
+            }
         }
     }
     public async Task OfferFileAsync(string path)
@@ -604,9 +642,64 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         await RunAsync(async () => { await lan!.OfferFileAsync(SelectedPeer.Id, path); TransfersOpen = true; });
     }
     /// <summary>Saves an offered file straight into the received files folder, as LAN Messenger does.</summary>
-    public async Task AcceptFileAsync(FileTransfer transfer) { if (lan is not null) await RunAsync(() => lan.AcceptFileIntoAsync(transfer, ReceivedFilesFolder)); }
+    public async Task AcceptFileAsync(FileTransfer transfer)
+    {
+        if (lan is null) return;
+        try { await lan.AcceptFileIntoAsync(transfer, ReceivedFilesFolder); }
+        catch (InvalidOperationException e)
+        {
+            if (transfer.State == "Waiting for approval")
+            {
+                transfer.State = "Interrupted";
+                OnTransferChanged(transfer);
+            }
+            Toast = e.Message;
+        }
+        catch (Exception e) when (e is IOException or System.Net.Sockets.SocketException or OperationCanceledException or UnauthorizedAccessException)
+        {
+            log?.Write("operation.failed", e, ("operation", nameof(AcceptFileAsync)));
+            Toast = e.Message;
+        }
+    }
     public FileTransfer? TransferFor(ChatMessage message) => Transfers.FirstOrDefault(t => t.Id == message.TransferId && t.PeerId == message.PeerId);
-    public async Task DeclineFileAsync(FileTransfer transfer) { if (lan is not null) await RunAsync(() => lan.DeclineFileAsync(transfer)); }
+    public async Task DeclineFileAsync(FileTransfer transfer)
+    {
+        if (lan is null) return;
+        try { await lan.DeclineFileAsync(transfer); }
+        catch (InvalidOperationException)
+        {
+            if (transfer.State == "Waiting for approval")
+            {
+                transfer.State = "Declined";
+                OnTransferChanged(transfer);
+            }
+        }
+        catch (Exception e) when (e is IOException or System.Net.Sockets.SocketException or OperationCanceledException or UnauthorizedAccessException)
+        {
+            log?.Write("operation.failed", e, ("operation", nameof(DeclineFileAsync)));
+            Toast = e.Message;
+        }
+    }
+    public async Task AcceptMessageFileAsync(ChatMessage message)
+    {
+        if (TransferFor(message) is { } transfer && transfer.State == "Waiting for approval")
+        {
+            await AcceptFileAsync(transfer);
+            return;
+        }
+        message.Delivery = TransferFor(message) is { } stale ? DeliveryFor(stale) : "Interrupted";
+        Save();
+    }
+    public async Task DeclineMessageFileAsync(ChatMessage message)
+    {
+        if (TransferFor(message) is { } transfer && transfer.State == "Waiting for approval")
+        {
+            await DeclineFileAsync(transfer);
+            return;
+        }
+        message.Delivery = TransferFor(message) is { } stale ? DeliveryFor(stale) : "Declined";
+        Save();
+    }
     // ---------------- Group chat (LAN Messenger "chat rooms") ----------------
     // Wire format: groupmessage with thread + groupmsgop (request | join | message | leave), one copy per participant, never acknowledged.
     public async Task<GroupChat?> CreateGroupAsync(string name, IEnumerable<string> memberIds)
@@ -706,6 +799,8 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     }
 
     // ---------------- Preferences ----------------
+    public string LastSettingsPage { get; set; } = "GeneralPage";
+    public string LastAppearanceTab { get; set; } = "Themes";
     public string ReceivedFilesFolder => string.IsNullOrWhiteSpace(Settings.ReceivedFilesFolder) ? AppSettings.DefaultReceivedFilesFolder : Settings.ReceivedFilesFolder;
     private string BackgroundsDirectory => Path.Combine(ImagesDirectory, "backgrounds");
     public BitmapImage? ChatBackground { get; private set; }
@@ -714,6 +809,58 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     public static double FontSizeFor(string size) => size switch { "small" => 13, "large" => 17, _ => 15 };
     public bool SteampunkEngineEnabled => Settings.SteampunkEngineEnabled;
     public bool SakuraPetalsEnabled => Settings.SakuraPetalsEnabled;
+    public bool ThemeDetailsEnabled => Settings.ThemeDetailsEnabled;
+    public bool FirefliesEnabled => Settings.FirefliesEnabled;
+    public double FireflyIntensity => Math.Clamp(Settings.FireflyIntensity, .1, 1);
+    public bool RainEnabled => Settings.RainEnabled;
+    public double RainIntensity => Math.Clamp(Settings.RainIntensity, .1, 1);
+    public bool SnowEnabled => Settings.SnowEnabled;
+    public double SnowIntensity => Math.Clamp(Settings.SnowIntensity, .1, 1);
+    public bool StarfieldEnabled => Settings.StarfieldEnabled;
+    public bool BubblesEnabled => Settings.BubblesEnabled;
+    public bool EmbersEnabled => Settings.EmbersEnabled;
+    public bool MatrixEnabled => Settings.MatrixEnabled;
+    public double MatrixIntensity => Math.Clamp(Settings.MatrixIntensity, .1, 1);
+    public bool ConstellationEnabled => Settings.ConstellationEnabled;
+    public double ConstellationIntensity => Math.Clamp(Settings.ConstellationIntensity, .1, 1);
+    public bool BokehEnabled => Settings.BokehEnabled;
+    public double BokehIntensity => Math.Clamp(Settings.BokehIntensity, .1, 1);
+    public double EffectSpeed => double.IsFinite(Settings.EffectSpeed) ? Math.Clamp(Settings.EffectSpeed, .4, 2.0) : 1.0;
+    public double WindowOpacity => double.IsFinite(Settings.WindowOpacity) ? Math.Clamp(Settings.WindowOpacity, .80, 1.0) : 1.0;
+    public double EffectiveMessageFontSize => Settings.MessageFontSizePx is { } px && double.IsFinite(px)
+        ? Math.Clamp(Math.Round(px), 11, 22)
+        : FontSizeFor(Settings.MessageFontSize);
+    private string? previewChatCanvasGradient;
+    private double? previewChatCanvasIntensity;
+    private bool? previewSeamlessComposer;
+    private double? previewBackgroundBlur;
+    private bool? previewOnlineRing;
+    private string? previewAvatarShape;
+    private System.Windows.Media.Effects.BlurEffect? cachedBlurEffect;
+    private double cachedBlurRadius = -1;
+    public string ChatCanvasGradient => ChatCanvasOverlay.Normalize(previewChatCanvasGradient ?? Settings.ChatCanvasGradient);
+    public bool ChatCanvasGradientEnabled => ChatCanvasGradient != ChatCanvasOverlay.Off;
+    public double ChatCanvasGradientIntensity => Math.Clamp(previewChatCanvasIntensity ?? Settings.ChatCanvasGradientIntensity, .1, 1);
+    public bool SeamlessComposerEnabled => previewSeamlessComposer ?? Settings.SeamlessComposerEnabled;
+    public int ChatBackdropRowSpan => SeamlessComposerEnabled ? 4 : 1;
+    public double ChatBackgroundBlur => Math.Clamp(previewBackgroundBlur ?? Settings.ChatBackgroundBlur, 0, 24);
+    public System.Windows.Media.Effects.Effect? ChatBackgroundBlurEffect
+    {
+        get
+        {
+            double r = ChatBackgroundBlur;
+            if (r < .1) return null;
+            if (cachedBlurEffect is null || Math.Abs(cachedBlurRadius - r) > .05)
+            {
+                cachedBlurRadius = r;
+                cachedBlurEffect = new System.Windows.Media.Effects.BlurEffect { Radius = r };
+            }
+            return cachedBlurEffect;
+        }
+    }
+    public bool OnlineRingEnabled => previewOnlineRing ?? Settings.OnlineRingEnabled;
+    public bool UseCustomAvatarShape => AppearanceOptions.NormalizeAvatarShape(previewAvatarShape ?? Settings.AvatarShape) is not (AppearanceOptions.Default or AppearanceOptions.AvatarCircle);
+    public bool UseCircularHeaderAvatar => !UseCustomAvatarShape;
     public double EffectIntensity => Math.Clamp(Settings.EffectIntensity, .1, 1);
     public double TypingIntensity => Math.Clamp(Settings.TypingIntensity ?? EffectIntensity, .1, 1);
     public double ClickIntensity => Math.Clamp(Settings.ClickIntensity ?? EffectIntensity, .1, 1);
@@ -725,6 +872,32 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     public double TitleSparklesIntensity => Math.Clamp(Settings.TitleSparklesIntensity, .1, 1);
     public bool HeaderPulseEnabled => Settings.HeaderPulseEnabled;
     public double HeaderPulseIntensity => Math.Clamp(Settings.HeaderPulseIntensity, .1, 1);
+    public bool TitleShimmerEnabled => Settings.TitleShimmerEnabled;
+    public double TitleShimmerIntensity => Math.Clamp(Settings.TitleShimmerIntensity, .1, 1);
+    public bool TitleCometEnabled => Settings.TitleCometEnabled;
+    public double TitleCometIntensity => Math.Clamp(Settings.TitleCometIntensity, .1, 1);
+    public bool TitleEqualizerEnabled => Settings.TitleEqualizerEnabled;
+    public double TitleEqualizerIntensity => Math.Clamp(Settings.TitleEqualizerIntensity, .1, 1);
+    public bool TitleLaserEnabled => Settings.TitleLaserEnabled;
+    public double TitleLaserIntensity => Math.Clamp(Settings.TitleLaserIntensity, .1, 1);
+    public bool TitleAuroraEnabled => Settings.TitleAuroraEnabled;
+    public double TitleAuroraIntensity => Math.Clamp(Settings.TitleAuroraIntensity, .1, 1);
+    public bool TitleWaveEnabled => Settings.TitleWaveEnabled;
+    public double TitleWaveIntensity => Math.Clamp(Settings.TitleWaveIntensity, .1, 1);
+    public bool HeaderPrismEnabled => Settings.HeaderPrismEnabled;
+    public double HeaderPrismIntensity => Math.Clamp(Settings.HeaderPrismIntensity, .1, 1);
+    public bool HeaderRipplesEnabled => Settings.HeaderRipplesEnabled;
+    public double HeaderRipplesIntensity => Math.Clamp(Settings.HeaderRipplesIntensity, .1, 1);
+    public bool HeaderCircuitEnabled => Settings.HeaderCircuitEnabled;
+    public double HeaderCircuitIntensity => Math.Clamp(Settings.HeaderCircuitIntensity, .1, 1);
+    public bool HeaderStarlightEnabled => Settings.HeaderStarlightEnabled;
+    public double HeaderStarlightIntensity => Math.Clamp(Settings.HeaderStarlightIntensity, .1, 1);
+    public bool HeaderNebulaEnabled => Settings.HeaderNebulaEnabled;
+    public double HeaderNebulaIntensity => Math.Clamp(Settings.HeaderNebulaIntensity, .1, 1);
+    public bool HeaderSilkEnabled => Settings.HeaderSilkEnabled;
+    public double HeaderSilkIntensity => Math.Clamp(Settings.HeaderSilkIntensity, .1, 1);
+    public bool HeaderPlasmaEnabled => Settings.HeaderPlasmaEnabled;
+    public double HeaderPlasmaIntensity => Math.Clamp(Settings.HeaderPlasmaIntensity, .1, 1);
     public bool RailBeaconEnabled => Settings.RailBeaconEnabled;
     public double RailBeaconIntensity => Math.Clamp(Settings.RailBeaconIntensity, .1, 1);
     public bool RailStreamEnabled => Settings.RailStreamEnabled;
@@ -733,6 +906,14 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     public double RailStardustIntensity => Math.Clamp(Settings.RailStardustIntensity, .1, 1);
     public bool RailScanEnabled => Settings.RailScanEnabled;
     public double RailScanIntensity => Math.Clamp(Settings.RailScanIntensity, .1, 1);
+    public bool RailAuroraEnabled => Settings.RailAuroraEnabled;
+    public double RailAuroraIntensity => Math.Clamp(Settings.RailAuroraIntensity, .1, 1);
+    public bool RailPulseEnabled => Settings.RailPulseEnabled;
+    public double RailPulseIntensity => Math.Clamp(Settings.RailPulseIntensity, .1, 1);
+    public bool RailPlasmaEnabled => Settings.RailPlasmaEnabled;
+    public double RailPlasmaIntensity => Math.Clamp(Settings.RailPlasmaIntensity, .1, 1);
+    public bool RailCascadeEnabled => Settings.RailCascadeEnabled;
+    public double RailCascadeIntensity => Math.Clamp(Settings.RailCascadeIntensity, .1, 1);
     public bool SidebarMotesEnabled => Settings.SidebarMotesEnabled;
     public double SidebarMotesIntensity => Math.Clamp(Settings.SidebarMotesIntensity, .1, 1);
     public bool SidebarGlowEnabled => Settings.SidebarGlowEnabled;
@@ -741,6 +922,16 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     public double SidebarPrismIntensity => Math.Clamp(Settings.SidebarPrismIntensity, .1, 1);
     public bool SidebarSweepEnabled => Settings.SidebarSweepEnabled;
     public double SidebarSweepIntensity => Math.Clamp(Settings.SidebarSweepIntensity, .1, 1);
+    public bool SidebarAuroraEnabled => Settings.SidebarAuroraEnabled;
+    public double SidebarAuroraIntensity => Math.Clamp(Settings.SidebarAuroraIntensity, .1, 1);
+    public bool SidebarNebulaEnabled => Settings.SidebarNebulaEnabled;
+    public double SidebarNebulaIntensity => Math.Clamp(Settings.SidebarNebulaIntensity, .1, 1);
+    public bool SidebarWavesEnabled => Settings.SidebarWavesEnabled;
+    public double SidebarWavesIntensity => Math.Clamp(Settings.SidebarWavesIntensity, .1, 1);
+    public bool SidebarRipplesEnabled => Settings.SidebarRipplesEnabled;
+    public double SidebarRipplesIntensity => Math.Clamp(Settings.SidebarRipplesIntensity, .1, 1);
+    public bool SidebarCircuitEnabled => Settings.SidebarCircuitEnabled;
+    public double SidebarCircuitIntensity => Math.Clamp(Settings.SidebarCircuitIntensity, .1, 1);
     public double StarfieldIntensity => Math.Clamp(Settings.StarfieldIntensity, .1, 1);
     public double BubblesIntensity => Math.Clamp(Settings.BubblesIntensity, .1, 1);
     public double EmbersIntensity => Math.Clamp(Settings.EmbersIntensity, .1, 1);
@@ -748,6 +939,9 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     public double ButtonSheenIntensity => Math.Clamp(Settings.ButtonSheenIntensity, .1, 1);
     public double ButtonBounceIntensity => Math.Clamp(Settings.ButtonBounceIntensity, .1, 1);
     public double ButtonRingIntensity => Math.Clamp(Settings.ButtonRingIntensity, .1, 1);
+    public double ButtonPulseIntensity => Math.Clamp(Settings.ButtonPulseIntensity, .1, 1);
+    public double ButtonLiftIntensity => Math.Clamp(Settings.ButtonLiftIntensity, .1, 1);
+    public double ButtonSparkIntensity => Math.Clamp(Settings.ButtonSparkIntensity, .1, 1);
     private string? previewChromeTexture;
     private double? previewChromeTextureIntensity;
     public string ChromeTexture => CydLan.Desktop.ChromeTexture.Normalize(previewChromeTexture ?? Settings.ChromeTexture);
@@ -761,6 +955,9 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     public bool SidebarStarfieldVisible => Settings.StarfieldEnabled && Settings.AmbientOnSidebarEnabled;
     public bool SidebarBubblesVisible => Settings.BubblesEnabled && Settings.AmbientOnSidebarEnabled;
     public bool SidebarEmbersVisible => Settings.EmbersEnabled && Settings.AmbientOnSidebarEnabled;
+    public bool SidebarMatrixVisible => Settings.MatrixEnabled && Settings.AmbientOnSidebarEnabled;
+    public bool SidebarConstellationVisible => Settings.ConstellationEnabled && Settings.AmbientOnSidebarEnabled;
+    public bool SidebarBokehVisible => Settings.BokehEnabled && Settings.AmbientOnSidebarEnabled;
 
     public void PreviewChromeTexture(string? texture, double? intensity)
     {
@@ -771,17 +968,71 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         Changed(nameof(ChromeTextureIntensity));
     }
 
+    public void PreviewChatCanvas(string? gradient, double? intensity)
+    {
+        previewChatCanvasGradient = gradient;
+        previewChatCanvasIntensity = intensity;
+        Changed(nameof(ChatCanvasGradient));
+        Changed(nameof(ChatCanvasGradientEnabled));
+        Changed(nameof(ChatCanvasGradientIntensity));
+    }
+
+    public void PreviewSeamlessComposer(bool? seamless)
+    {
+        previewSeamlessComposer = seamless;
+        Changed(nameof(SeamlessComposerEnabled));
+        Changed(nameof(ChatBackdropRowSpan));
+    }
+
+    public void PreviewBackgroundBlur(double? blur)
+    {
+        previewBackgroundBlur = blur;
+        Changed(nameof(ChatBackgroundBlur));
+        Changed(nameof(ChatBackgroundBlurEffect));
+    }
+
+    public void PreviewAvatarOptions(string? avatarShape, bool? onlineRing)
+    {
+        previewAvatarShape = avatarShape;
+        previewOnlineRing = onlineRing;
+        Changed(nameof(UseCustomAvatarShape));
+        Changed(nameof(UseCircularHeaderAvatar));
+        Changed(nameof(OnlineRingEnabled));
+    }
+
     public void ApplySettings()
     {
         if (System.Windows.Application.Current is { } app)
         {
             try { app.Resources["MessageFontFamily"] = new FontFamily(Settings.MessageFont + ", Segoe UI"); } catch (ArgumentException) { }
-            app.Resources["MessageFontSize"] = FontSizeFor(Settings.MessageFontSize);
+            app.Resources["MessageFontSize"] = EffectiveMessageFontSize;
         }
+        AmbientEffect.SetSpeed(EffectSpeed);
+        MessageMotion.Configure(Settings.MessageAnimation);
+        ThemeManager.Apply(Settings.Theme, AppearanceOverrides.From(Settings));
         ChatBackground = Settings.ChatBackgroundPath.Length == 0 ? null : Images.LoadChatBackground(Settings.ChatBackgroundPath);
         Changed(nameof(ChatBackground)); Changed(nameof(ChatBackgroundOpacity));
         Changed(nameof(SteampunkEngineEnabled));
         Changed(nameof(SakuraPetalsEnabled));
+        Changed(nameof(ThemeDetailsEnabled));
+        Changed(nameof(FirefliesEnabled));
+        Changed(nameof(FireflyIntensity));
+        Changed(nameof(RainEnabled));
+        Changed(nameof(RainIntensity));
+        Changed(nameof(SnowEnabled));
+        Changed(nameof(SnowIntensity));
+        Changed(nameof(StarfieldEnabled));
+        Changed(nameof(BubblesEnabled));
+        Changed(nameof(EmbersEnabled));
+        Changed(nameof(MatrixEnabled));
+        Changed(nameof(MatrixIntensity));
+        Changed(nameof(ConstellationEnabled));
+        Changed(nameof(ConstellationIntensity));
+        Changed(nameof(BokehEnabled));
+        Changed(nameof(BokehIntensity));
+        Changed(nameof(EffectSpeed));
+        Changed(nameof(WindowOpacity));
+        Changed(nameof(EffectiveMessageFontSize));
         Changed(nameof(EffectIntensity));
         Changed(nameof(EngineIntensity));
         Changed(nameof(PetalIntensity));
@@ -791,6 +1042,32 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         Changed(nameof(TitleSparklesIntensity));
         Changed(nameof(HeaderPulseEnabled));
         Changed(nameof(HeaderPulseIntensity));
+        Changed(nameof(TitleShimmerEnabled));
+        Changed(nameof(TitleShimmerIntensity));
+        Changed(nameof(TitleCometEnabled));
+        Changed(nameof(TitleCometIntensity));
+        Changed(nameof(TitleEqualizerEnabled));
+        Changed(nameof(TitleEqualizerIntensity));
+        Changed(nameof(TitleLaserEnabled));
+        Changed(nameof(TitleLaserIntensity));
+        Changed(nameof(TitleAuroraEnabled));
+        Changed(nameof(TitleAuroraIntensity));
+        Changed(nameof(TitleWaveEnabled));
+        Changed(nameof(TitleWaveIntensity));
+        Changed(nameof(HeaderPrismEnabled));
+        Changed(nameof(HeaderPrismIntensity));
+        Changed(nameof(HeaderRipplesEnabled));
+        Changed(nameof(HeaderRipplesIntensity));
+        Changed(nameof(HeaderCircuitEnabled));
+        Changed(nameof(HeaderCircuitIntensity));
+        Changed(nameof(HeaderStarlightEnabled));
+        Changed(nameof(HeaderStarlightIntensity));
+        Changed(nameof(HeaderNebulaEnabled));
+        Changed(nameof(HeaderNebulaIntensity));
+        Changed(nameof(HeaderSilkEnabled));
+        Changed(nameof(HeaderSilkIntensity));
+        Changed(nameof(HeaderPlasmaEnabled));
+        Changed(nameof(HeaderPlasmaIntensity));
         Changed(nameof(RailBeaconEnabled));
         Changed(nameof(RailBeaconIntensity));
         Changed(nameof(RailStreamEnabled));
@@ -799,6 +1076,14 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         Changed(nameof(RailStardustIntensity));
         Changed(nameof(RailScanEnabled));
         Changed(nameof(RailScanIntensity));
+        Changed(nameof(RailAuroraEnabled));
+        Changed(nameof(RailAuroraIntensity));
+        Changed(nameof(RailPulseEnabled));
+        Changed(nameof(RailPulseIntensity));
+        Changed(nameof(RailPlasmaEnabled));
+        Changed(nameof(RailPlasmaIntensity));
+        Changed(nameof(RailCascadeEnabled));
+        Changed(nameof(RailCascadeIntensity));
         Changed(nameof(SidebarMotesEnabled));
         Changed(nameof(SidebarMotesIntensity));
         Changed(nameof(SidebarGlowEnabled));
@@ -807,6 +1092,16 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         Changed(nameof(SidebarPrismIntensity));
         Changed(nameof(SidebarSweepEnabled));
         Changed(nameof(SidebarSweepIntensity));
+        Changed(nameof(SidebarAuroraEnabled));
+        Changed(nameof(SidebarAuroraIntensity));
+        Changed(nameof(SidebarNebulaEnabled));
+        Changed(nameof(SidebarNebulaIntensity));
+        Changed(nameof(SidebarWavesEnabled));
+        Changed(nameof(SidebarWavesIntensity));
+        Changed(nameof(SidebarRipplesEnabled));
+        Changed(nameof(SidebarRipplesIntensity));
+        Changed(nameof(SidebarCircuitEnabled));
+        Changed(nameof(SidebarCircuitIntensity));
         Changed(nameof(StarfieldIntensity));
         Changed(nameof(BubblesIntensity));
         Changed(nameof(EmbersIntensity));
@@ -814,11 +1109,30 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         Changed(nameof(ButtonSheenIntensity));
         Changed(nameof(ButtonBounceIntensity));
         Changed(nameof(ButtonRingIntensity));
+        Changed(nameof(ButtonPulseIntensity));
+        Changed(nameof(ButtonLiftIntensity));
+        Changed(nameof(ButtonSparkIntensity));
         previewChromeTexture = null;
         previewChromeTextureIntensity = null;
+        previewChatCanvasGradient = null;
+        previewChatCanvasIntensity = null;
+        previewSeamlessComposer = null;
+        previewBackgroundBlur = null;
+        previewOnlineRing = null;
+        previewAvatarShape = null;
         Changed(nameof(ChromeTexture));
         Changed(nameof(ChromeTextureEnabled));
         Changed(nameof(ChromeTextureIntensity));
+        Changed(nameof(ChatCanvasGradient));
+        Changed(nameof(ChatCanvasGradientEnabled));
+        Changed(nameof(ChatCanvasGradientIntensity));
+        Changed(nameof(SeamlessComposerEnabled));
+        Changed(nameof(ChatBackdropRowSpan));
+        Changed(nameof(ChatBackgroundBlur));
+        Changed(nameof(ChatBackgroundBlurEffect));
+        Changed(nameof(OnlineRingEnabled));
+        Changed(nameof(UseCustomAvatarShape));
+        Changed(nameof(UseCircularHeaderAvatar));
         Changed(nameof(AmbientOnSidebarEnabled));
         Changed(nameof(SidebarPetalsVisible));
         Changed(nameof(SidebarFirefliesVisible));
@@ -827,12 +1141,18 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         Changed(nameof(SidebarStarfieldVisible));
         Changed(nameof(SidebarBubblesVisible));
         Changed(nameof(SidebarEmbersVisible));
+        Changed(nameof(SidebarMatrixVisible));
+        Changed(nameof(SidebarConstellationVisible));
+        Changed(nameof(SidebarBokehVisible));
         Changed(nameof(Settings));
         ButtonEffects.Configure(
             Settings.ButtonGlowEnabled, ButtonGlowIntensity,
             Settings.ButtonSheenEnabled, ButtonSheenIntensity,
             Settings.ButtonBounceEnabled, ButtonBounceIntensity,
-            Settings.ButtonRingEnabled, ButtonRingIntensity);
+            Settings.ButtonRingEnabled, ButtonRingIntensity,
+            Settings.ButtonPulseEnabled, ButtonPulseIntensity,
+            Settings.ButtonLiftEnabled, ButtonLiftIntensity,
+            Settings.ButtonSparkEnabled, ButtonSparkIntensity);
         TargetAura.Configure(
             Settings.TargetAura, Settings.TargetAuraIntensity,
             Settings.AuraSelectedModuleEnabled, Settings.AuraSelectedPersonEnabled, Settings.AuraHighlightButtonsEnabled);
@@ -850,6 +1170,26 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         bool avatarChanged = previousAvatar != Settings.AvatarPath;
         if (avatarChanged && previousAvatar.StartsWith(Path.Combine(ImagesDirectory, "profile"), StringComparison.OrdinalIgnoreCase)) TryDelete(previousAvatar);
         Settings.Theme = ThemeManager.Normalize(Settings.Theme);
+        Settings.CustomAccentColor = AppearanceOptions.NormalizeHex(Settings.CustomAccentColor);
+        Settings.CustomEffectColor = AppearanceOptions.NormalizeHex(Settings.CustomEffectColor);
+        Settings.CustomOutgoingBubbleColor = AppearanceOptions.NormalizeHex(Settings.CustomOutgoingBubbleColor);
+        Settings.CustomIncomingBubbleColor = AppearanceOptions.NormalizeHex(Settings.CustomIncomingBubbleColor);
+        Settings.BubbleStyle = AppearanceOptions.NormalizeBubbleStyle(Settings.BubbleStyle);
+        Settings.BubbleShape = AppearanceOptions.NormalizeBubbleShape(Settings.BubbleShape);
+        Settings.ChatDensity = AppearanceOptions.NormalizeChatDensity(Settings.ChatDensity);
+        Settings.ChatCanvasGradient = ChatCanvasOverlay.Normalize(Settings.ChatCanvasGradient);
+        Settings.ChatCanvasGradientIntensity = Math.Clamp(double.IsFinite(Settings.ChatCanvasGradientIntensity) ? Settings.ChatCanvasGradientIntensity : .55, .1, 1);
+        Settings.ChatBackgroundBlur = Math.Clamp(double.IsFinite(Settings.ChatBackgroundBlur) ? Settings.ChatBackgroundBlur : 0, 0, 24);
+        Settings.CornerStyle = AppearanceOptions.NormalizeCornerStyle(Settings.CornerStyle);
+        Settings.AvatarShape = AppearanceOptions.NormalizeAvatarShape(Settings.AvatarShape);
+        Settings.UiFont = (Settings.UiFont ?? "").Trim();
+        Settings.WindowOpacity = Math.Clamp(double.IsFinite(Settings.WindowOpacity) ? Settings.WindowOpacity : 1.0, .80, 1.0);
+        Settings.EffectSpeed = Math.Clamp(double.IsFinite(Settings.EffectSpeed) ? Settings.EffectSpeed : 1.0, .4, 2.0);
+        Settings.MessageAnimation = MessageMotion.Normalize(Settings.MessageAnimation);
+        Settings.MessageFontSizePx = Settings.MessageFontSizePx is { } px && double.IsFinite(px) ? Math.Clamp(Math.Round(px), 11, 22) : null;
+        Settings.SavedPresets ??= [];
+        Settings.LastSettingsPage = SettingsWindow.NormalizePage(Settings.LastSettingsPage);
+        Settings.LastAppearanceTab = SettingsWindow.NormalizeAppearanceTab(Settings.LastAppearanceTab);
         Settings.TypingEffect = ChatEffects.Normalize(Settings.TypingEffect, typing: true);
         Settings.ClickEffect = ChatEffects.Normalize(Settings.ClickEffect);
         Settings.ChatBackgroundOpacity = ChatBackgroundOpacity;
@@ -883,6 +1223,8 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         var removed = history.FindAll(match);
         history.RemoveAll(match);
         foreach (var messages in historyByChat.Values) messages.RemoveAll(match);
+        foreach (var message in removed)
+            if (message.TransferId.Length > 0) transferMessages.Remove(message.TransferId);
         RefreshRecentChats();
         // Pictures are CydLan's own copies; files saved to the received files folder are kept.
         foreach (var image in removed.Select(m => m.ImagePath).Where(p => p.Length > 0 && Path.GetFullPath(p).StartsWith(Path.GetFullPath(ImagesDirectory), StringComparison.OrdinalIgnoreCase)))
@@ -893,7 +1235,12 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     }
     public void ClearTransferHistory()
     {
-        foreach (var t in Transfers.Where(t => t.State is not ("Waiting for approval" or "Accepted" or "Connecting" or "Transferring")).ToList()) Transfers.Remove(t);
+        foreach (var t in Transfers.Where(t => t.State is not ("Waiting for approval" or "Accepted" or "Connecting" or "Transferring")).ToList())
+        {
+            Transfers.Remove(t);
+            transferMessages.Remove(t.Id);
+            receivedImages.Remove(t.Id);
+        }
         Save();
     }
 

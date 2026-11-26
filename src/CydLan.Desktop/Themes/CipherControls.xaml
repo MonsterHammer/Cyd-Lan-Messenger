@@ -1,0 +1,8 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <CornerRadius x:Key="ControlCorner">2</CornerRadius>
+    <CornerRadius x:Key="PanelCorner">4</CornerRadius>
+    <CornerRadius x:Key="ComposerCorner">4</CornerRadius>
+    <CornerRadius x:Key="MessageBubbleCorner">4</CornerRadius>
+    <CornerRadius x:Key="FileBubbleCorner">3</CornerRadius>
+    <CornerRadius x:Key="MarkerCorner">1</CornerRadius>
+</ResourceDictionary>

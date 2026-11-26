@@ -8,7 +8,7 @@ using Point = System.Windows.Point;
 
 namespace CydLan.Desktop;
 
-public enum WeatherEffectKind { Fireflies, Rain, Snow, Starfield, Bubbles, Embers }
+public enum WeatherEffectKind { Fireflies, Rain, Snow, Starfield, Bubbles, Embers, Matrix, Constellation, Bokeh }
 
 public sealed class WeatherEffect : AmbientEffect
 {
@@ -20,23 +20,28 @@ public sealed class WeatherEffect : AmbientEffect
         "M0,-5 V5 M-4.3,-2.5 L4.3,2.5 M-4.3,2.5 L4.3,-2.5 M-1.6,-3.8 L0,-2.5 L1.6,-3.8 M-1.6,3.8 L0,2.5 L1.6,3.8");
     private static readonly Geometry StarGlyph = Geometry.Parse("M0,-4 Q0,0 4,0 Q0,0 0,4 Q0,0 -4,0 Q0,0 0,-4 Z");
     private static readonly Lazy<RainTrack[]> RainTracks = new(BuildRainTracks);
+    private static readonly Dictionary<Color, BitmapSource[]> FireflySpriteCache = [];
+    private static readonly Dictionary<Color, BitmapSource[]> BokehSpriteCache = [];
     private BitmapSource[]? fireflySprites;
+    private BitmapSource[]? bokehSprites;
     private Pen[]? streakPens;
     private Brush[]? tintFills;
     public WeatherEffectKind Kind { get => (WeatherEffectKind)GetValue(KindProperty); set => SetValue(KindProperty, value); }
 
-    protected override int FrameRate => Kind == WeatherEffectKind.Rain ? 30 : base.FrameRate;
-    protected override void OnTintChanged() { fireflySprites = null; streakPens = null; tintFills = null; }
+    protected override int FrameRate => Kind is WeatherEffectKind.Rain or WeatherEffectKind.Matrix ? 30 : base.FrameRate;
+    protected override void OnTintChanged() { fireflySprites = null; bokehSprites = null; streakPens = null; tintFills = null; }
 
     protected override void OnRender(DrawingContext dc)
     {
         base.OnRender(dc);
         if (ActualWidth < 24 || ActualHeight < 24) return;
         double intensity = Math.Clamp(Intensity, .1, 1);
-        if (Kind == WeatherEffectKind.Rain)
+        switch (Kind)
         {
-            DrawRain(dc, intensity);
-            return;
+            case WeatherEffectKind.Rain: DrawRain(dc, intensity); return;
+            case WeatherEffectKind.Matrix: DrawMatrix(dc, intensity); return;
+            case WeatherEffectKind.Constellation: DrawConstellation(dc, intensity); return;
+            case WeatherEffectKind.Bokeh: DrawBokeh(dc, intensity); return;
         }
         int count = (int)Math.Clamp(ActualWidth * ActualHeight / 6100 * intensity, 5, IsLargeSurface ? 24 : 32);
         for (int i = 0; i < count; i++)
@@ -44,7 +49,7 @@ public sealed class WeatherEffect : AmbientEffect
             double lane = Fraction((i + 1) * .61803398875);
             double offset = Fraction((i + 1) * .41421356237);
             double size = .62 + .58 * Fraction(i * .754877666);
-            double phase = Fraction(offset + Progress * (1 + i % 2));
+            double phase = Fraction(offset + Time * (1 + i % 2));
             double wave = (phase + lane) * Math.Tau;
             double x = 12 + (ActualWidth - 24) * lane;
             double y = phase * (ActualHeight + 24) - 12;
@@ -69,8 +74,8 @@ public sealed class WeatherEffect : AmbientEffect
                     dc.Pop();
                     break;
                 case WeatherEffectKind.Starfield:
-                    double twinkle = .2 + .8 * Math.Pow(.5 + .5 * Math.Sin((Progress * 4 + offset) * Math.Tau), 2);
-                    double sx = Fraction(lane + Progress * (.35 + (i % 3) * .2)) * (ActualWidth - 20) + 10;
+                    double twinkle = .2 + .8 * Math.Pow(.5 + .5 * Math.Sin((Time * 4 + offset) * Math.Tau), 2);
+                    double sx = Fraction(lane + Time * (.35 + (i % 3) * .2)) * (ActualWidth - 20) + 10;
                     double sy = 10 + (ActualHeight - 20) * offset;
                     var starM = Matrix.Identity;
                     starM.Scale(size * (.75 + .35 * twinkle), size * (.75 + .35 * twinkle));
@@ -99,7 +104,7 @@ public sealed class WeatherEffect : AmbientEffect
         }
         if (Kind == WeatherEffectKind.Starfield)
         {
-            double shoot = (Progress * 4) % 1;
+            double shoot = (Time * 4) % 1;
             if (shoot < .28)
             {
                 double t = shoot / .28;
@@ -126,6 +131,142 @@ public sealed class WeatherEffect : AmbientEffect
         return tintFills[EffectPalette.OpacityIndex(opacity)];
     }
 
+    private void DrawMatrix(DrawingContext dc, double intensity)
+    {
+        double colGap = ActualWidth < 180 ? 11 : 18;
+        int cols = Math.Clamp((int)(ActualWidth / colGap * (.45 + .55 * intensity)), 6, IsLargeSurface ? 32 : 44);
+        double cellH = ActualHeight < 90 ? 6 : 9;
+        int tail = ActualHeight < 90 ? 5 : 9;
+
+        for (int i = 0; i < cols; i++)
+        {
+            double lane = Fraction((i + 1) * .61803398875);
+            double offset = Fraction((i + 1) * .38196601125);
+            double speed = 2.0 + (i % 4) * .8;
+            double phase = Fraction(offset + Time * speed);
+            double x = 8 + (ActualWidth - 16) * lane;
+            double headY = phase * (ActualHeight + tail * cellH + 16) - 8;
+
+            for (int t = 0; t < tail; t++)
+            {
+                double y = headY - t * cellH;
+                if (y < -cellH || y > ActualHeight + cellH) continue;
+                double falloff = 1.0 - t / (double)tail;
+                int glyphSeed = (i * 31 + t * 17 + (int)(Time * 40)) & 7;
+                double alpha = falloff * falloff * (t == 0 ? .88 : .62) * (.35 + .65 * intensity);
+                var brush = TintFill(alpha);
+                if (t == 0)
+                {
+                    dc.DrawRoundedRectangle(brush, null, new Rect(x - 2.2, y - 2.2, 4.4, 4.4), 1, 1);
+                }
+                else
+                {
+                    double w = glyphSeed % 3 == 0 ? 4.2 : 2.6;
+                    double h = glyphSeed % 2 == 0 ? 4.6 : 2.8;
+                    dc.DrawRectangle(brush, null, new Rect(x - w * .5, y - h * .5, w, h));
+                    if (glyphSeed is 1 or 5)
+                        dc.DrawRectangle(TintFill(alpha * .55), null, new Rect(x + 1.4, y - 1, 1.4, 2.2));
+                }
+            }
+        }
+    }
+
+    private void DrawConstellation(DrawingContext dc, double intensity)
+    {
+        int count = Math.Clamp((int)(ActualWidth * ActualHeight / 10500 * (.5 + .5 * intensity)), 7, IsLargeSurface ? 20 : 26);
+        Span<Point> nodes = stackalloc Point[count];
+        double linkDist = ActualWidth < 180 ? 52 : 112;
+        double linkDistSq = linkDist * linkDist;
+
+        for (int i = 0; i < count; i++)
+        {
+            double lane = Fraction((i + 1) * .61803398875);
+            double offset = Fraction((i + 1) * .41421356237);
+            double angle = (Time * (1 + i % 2) + offset) * Math.Tau;
+            double x = 10 + (ActualWidth - 20) * lane + Math.Cos(angle + i) * Math.Min(22, ActualWidth * .12);
+            double y = 10 + (ActualHeight - 20) * offset + Math.Sin(angle * 1.2 - i) * Math.Min(18, ActualHeight * .14);
+            nodes[i] = new Point(Math.Clamp(x, 6, ActualWidth - 6), Math.Clamp(y, 6, ActualHeight - 6));
+        }
+
+        for (int i = 0; i < count; i++)
+        {
+            for (int j = i + 1; j < count; j++)
+            {
+                double dx = nodes[i].X - nodes[j].X;
+                double dy = nodes[i].Y - nodes[j].Y;
+                double dSq = dx * dx + dy * dy;
+                if (dSq >= linkDistSq) continue;
+                double closeness = 1.0 - Math.Sqrt(dSq) / linkDist;
+                dc.DrawLine(StreakPen(closeness * closeness * (.30 + .45 * intensity)), nodes[i], nodes[j]);
+            }
+        }
+
+        for (int i = 0; i < count; i++)
+        {
+            double pulse = .45 + .55 * Math.Pow(.5 + .5 * Math.Sin((Time * 4 + i * .37) * Math.Tau), 2);
+            double r = (ActualWidth < 180 ? 1.5 : 2.1) + (i % 3) * .45;
+            dc.DrawEllipse(TintFill(pulse * (.45 + .52 * intensity)), null, nodes[i], r, r);
+        }
+    }
+
+    private void DrawBokeh(DrawingContext dc, double intensity)
+    {
+        bokehSprites ??= BuildBokehSprites();
+        int count = Math.Clamp((int)(ActualWidth * ActualHeight / 15000 * (.5 + .5 * intensity)), 5, IsLargeSurface ? 15 : 20);
+        double maxR = ActualWidth < 180 ? 16 : 36;
+        for (int i = 0; i < count; i++)
+        {
+            double lane = Fraction((i + 1) * .61803398875);
+            double offset = Fraction((i + 1) * .38196601125);
+            double depth = .45 + .55 * Fraction(i * .754877666);
+            double phase = Fraction(offset + Time * (.5 + depth * .6));
+            double x = (ActualWidth + maxR * 2) * lane - maxR + Math.Sin((phase + lane) * Math.Tau) * 24 * depth;
+            double y = (1 - phase) * (ActualHeight + maxR * 2) - maxR;
+            double r = (maxR * .42 + maxR * .58 * depth);
+            double breathe = .65 + .35 * Math.Sin((Time * 3 + offset) * Math.Tau);
+            double alpha = Fade(phase) * breathe * (.22 + .42 * intensity) * (.65 + .35 * depth);
+            dc.DrawImage(bokehSprites[EffectPalette.OpacityIndex(alpha)], new Rect(x - r, y - r, r * 2, r * 2));
+        }
+    }
+
+    private BitmapSource[] BuildBokehSprites()
+    {
+        Color tint = Tint;
+        if (BokehSpriteCache.TryGetValue(tint, out var cached)) return cached;
+        if (BokehSpriteCache.Count >= 8) BokehSpriteCache.Clear();
+
+        const int size = 48, stride = size * 4;
+        var sprites = new BitmapSource[EffectPalette.OpacityLevels];
+        Color rimColor = EffectPalette.Blend(tint, Colors.White, .48);
+        for (int index = 0; index < sprites.Length; index++)
+        {
+            var pixels = new byte[size * stride];
+            double strength = index / (double)(sprites.Length - 1);
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    double dx = (x + .5) / size * 2 - 1, dy = (y + .5) / size * 2 - 1;
+                    double d = Math.Sqrt(dx * dx + dy * dy);
+                    if (d >= 1) continue;
+                    double disc = d < .86 ? .52 + .22 * (1 - d) : Math.Max(0, (1 - d) / .14) * .72;
+                    double rim = Math.Exp(-Math.Pow((d - .80) / .11, 2)) * .58;
+                    byte alpha = (byte)Math.Clamp(255 * strength * Math.Min(1, disc + rim), 0, 255);
+                    Color c = EffectPalette.Blend(tint, rimColor, Math.Clamp(rim * 1.4, 0, 1));
+                    int offset = y * stride + x * 4;
+                    pixels[offset] = (byte)(c.B * alpha / 255);
+                    pixels[offset + 1] = (byte)(c.G * alpha / 255);
+                    pixels[offset + 2] = (byte)(c.R * alpha / 255);
+                    pixels[offset + 3] = alpha;
+                }
+            }
+            var sprite = BitmapSource.Create(size, size, 96, 96, PixelFormats.Pbgra32, null, pixels, stride);
+            sprite.Freeze();
+            sprites[index] = sprite;
+        }
+        return BokehSpriteCache[tint] = sprites;
+    }
+
     private void DrawRain(DrawingContext dc, double intensity)
     {
         var tracks = RainTracks.Value;
@@ -133,7 +274,7 @@ public sealed class WeatherEffect : AmbientEffect
         int count = (int)Math.Clamp(ActualWidth * ActualHeight / 2050 * (.18 + .82 * intensity), 10, IsLargeSurface ? 76 : 96);
         for (int i = 0; i < count; i++)
         {
-            var (drop, phase) = tracks[i].Sample(Progress);
+            var (drop, phase) = tracks[i].Sample(Time);
             double x = drop.Lane * (ActualWidth + 90) - 60 + phase * drop.Drift;
             double y = phase * travel - 15;
             double length = drop.Length;
@@ -189,6 +330,10 @@ public sealed class WeatherEffect : AmbientEffect
 
     private BitmapSource[] BuildFireflySprites()
     {
+        Color tint = Tint;
+        if (FireflySpriteCache.TryGetValue(tint, out var cached)) return cached;
+        if (FireflySpriteCache.Count >= 8) FireflySpriteCache.Clear();
+
         const int size = 32, stride = size * 4;
         var sprites = new BitmapSource[EffectPalette.OpacityLevels];
         for (int index = 0; index < sprites.Length; index++)
@@ -204,7 +349,7 @@ public sealed class WeatherEffect : AmbientEffect
                     double glow = Math.Max(0, 1 - distance);
                     double center = Math.Clamp(1 - distance * 5, 0, 1);
                     byte alpha = (byte)(255 * strength * Math.Min(1, glow * glow * .8 + center * .45));
-                    var color = EffectPalette.Blend(Tint, Colors.White, center * .55);
+                    var color = EffectPalette.Blend(tint, Colors.White, center * .55);
                     int offset = y * stride + x * 4;
                     pixels[offset] = (byte)(color.B * alpha / 255);
                     pixels[offset + 1] = (byte)(color.G * alpha / 255);
@@ -216,6 +361,6 @@ public sealed class WeatherEffect : AmbientEffect
             sprite.Freeze();
             sprites[index] = sprite;
         }
-        return sprites;
+        return FireflySpriteCache[tint] = sprites;
     }
 }

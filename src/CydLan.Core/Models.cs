@@ -63,7 +63,8 @@ public sealed class ChatMessage : Observable
     public bool CanRetry => Outgoing && !Broadcast && ImagePath.Length == 0 && FileName.Length == 0 && Delivery is "Failed" or "Unconfirmed";
     public string TimeLabel => Time.ToLocalTime().ToString("h:mm tt");
     /// <summary>Local copy of an image sent or received in this conversation; empty for text messages.</summary>
-    public string ImagePath { get; set; } = "";
+    private string imagePath = "";
+    public string ImagePath { get => imagePath; set { if (Set(ref imagePath, value)) { Changed(nameof(HasImage)); Changed(nameof(CanRetry)); } } }
     /// <summary>Name of a non-image file offered in this conversation; empty otherwise.</summary>
     private string fileName = "";
     public string FileName { get => fileName; set { if (Set(ref fileName, value)) Changed(nameof(HasFile)); } }
@@ -100,6 +101,7 @@ public sealed class FileTransfer : Observable
     internal FolderArchive? Archive { get; init; }
     private string state = "Waiting for approval";
     private double progress;
+    private long transferredBytes;
     public string State
     {
         get => state;
@@ -109,6 +111,7 @@ public sealed class FileTransfer : Observable
             Changed(nameof(IsActive));
             Changed(nameof(IsConnecting));
             Changed(nameof(ActiveLabel));
+            Changed(nameof(StatusLabel));
         }
     }
     [System.Text.Json.Serialization.JsonIgnore]
@@ -116,9 +119,44 @@ public sealed class FileTransfer : Observable
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsConnecting => State is "Accepted" or "Connecting";
     [System.Text.Json.Serialization.JsonIgnore]
-    public string ActiveLabel => IsConnecting ? "Connecting…" : Outgoing ? "Sending…" : "Receiving…";
-    public double Progress { get => progress; set => Set(ref progress, value); }
-    public string SizeLabel => Size < 1024 * 1024 ? $"{Size / 1024d:0.#} KB" : $"{Size / (1024d * 1024):0.#} MB";
+    public int DisplayPercent => State is "Received" or "Sent · receipt unavailable" ? 100 : (int)Math.Floor(Math.Clamp(Progress, 0, 99));
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string ActiveLabel => IsConnecting
+        ? "Connecting…"
+        : $"{(Outgoing ? "Sending" : "Receiving")} {DisplayPercent}% · {FormatBytes(TransferredBytes)} / {SizeLabel}";
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string StatusLabel => State == "Transferring"
+        ? $"{(Outgoing ? "Sending" : "Receiving")} {DisplayPercent}% · {FormatBytes(TransferredBytes)}"
+        : State;
+    public double Progress
+    {
+        get => progress;
+        set
+        {
+            if (!Set(ref progress, value)) return;
+            Changed(nameof(DisplayPercent));
+            Changed(nameof(ActiveLabel));
+            Changed(nameof(StatusLabel));
+        }
+    }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public long TransferredBytes
+    {
+        get => transferredBytes;
+        set
+        {
+            if (!Set(ref transferredBytes, value)) return;
+            Changed(nameof(ActiveLabel));
+            Changed(nameof(StatusLabel));
+        }
+    }
+    public string SizeLabel => FormatBytes(Size);
+    public static string FormatBytes(long bytes) => bytes switch
+    {
+        >= 1024L * 1024 * 1024 => $"{bytes / (1024d * 1024 * 1024):0.##} GB",
+        >= 1024L * 1024 => $"{bytes / (1024d * 1024):0.#} MB",
+        _ => $"{bytes / 1024d:0.#} KB"
+    };
 }
 
 public sealed class AppSettings
@@ -172,6 +210,14 @@ public sealed class AppSettings
     public double RailStardustIntensity { get; set; } = .65;
     public bool RailScanEnabled { get; set; }
     public double RailScanIntensity { get; set; } = .65;
+    public bool RailAuroraEnabled { get; set; }
+    public double RailAuroraIntensity { get; set; } = .65;
+    public bool RailPulseEnabled { get; set; }
+    public double RailPulseIntensity { get; set; } = .65;
+    public bool RailPlasmaEnabled { get; set; }
+    public double RailPlasmaIntensity { get; set; } = .65;
+    public bool RailCascadeEnabled { get; set; }
+    public double RailCascadeIntensity { get; set; } = .65;
     public bool SidebarMotesEnabled { get; set; }
     public double SidebarMotesIntensity { get; set; } = .65;
     public bool SidebarGlowEnabled { get; set; }
@@ -180,6 +226,16 @@ public sealed class AppSettings
     public double SidebarPrismIntensity { get; set; } = .65;
     public bool SidebarSweepEnabled { get; set; }
     public double SidebarSweepIntensity { get; set; } = .65;
+    public bool SidebarAuroraEnabled { get; set; }
+    public double SidebarAuroraIntensity { get; set; } = .65;
+    public bool SidebarNebulaEnabled { get; set; }
+    public double SidebarNebulaIntensity { get; set; } = .65;
+    public bool SidebarWavesEnabled { get; set; }
+    public double SidebarWavesIntensity { get; set; } = .65;
+    public bool SidebarRipplesEnabled { get; set; }
+    public double SidebarRipplesIntensity { get; set; } = .65;
+    public bool SidebarCircuitEnabled { get; set; }
+    public double SidebarCircuitIntensity { get; set; } = .65;
     public bool AmbientOnSidebarEnabled { get; set; }
     public bool StarfieldEnabled { get; set; }
     public double StarfieldIntensity { get; set; } = .65;
@@ -195,6 +251,39 @@ public sealed class AppSettings
     public double ButtonBounceIntensity { get; set; } = .65;
     public bool ButtonRingEnabled { get; set; }
     public double ButtonRingIntensity { get; set; } = .65;
+    public bool ButtonPulseEnabled { get; set; }
+    public double ButtonPulseIntensity { get; set; } = .65;
+    public bool ButtonLiftEnabled { get; set; }
+    public double ButtonLiftIntensity { get; set; } = .65;
+    public bool ButtonSparkEnabled { get; set; }
+    public double ButtonSparkIntensity { get; set; } = .65;
+    // Additional separated Title bar & Chat header effects
+    public bool TitleShimmerEnabled { get; set; }
+    public double TitleShimmerIntensity { get; set; } = .65;
+    public bool TitleCometEnabled { get; set; }
+    public double TitleCometIntensity { get; set; } = .65;
+    public bool TitleEqualizerEnabled { get; set; }
+    public double TitleEqualizerIntensity { get; set; } = .65;
+    public bool TitleLaserEnabled { get; set; }
+    public double TitleLaserIntensity { get; set; } = .65;
+    public bool TitleAuroraEnabled { get; set; }
+    public double TitleAuroraIntensity { get; set; } = .65;
+    public bool TitleWaveEnabled { get; set; }
+    public double TitleWaveIntensity { get; set; } = .65;
+    public bool HeaderPrismEnabled { get; set; }
+    public double HeaderPrismIntensity { get; set; } = .65;
+    public bool HeaderRipplesEnabled { get; set; }
+    public double HeaderRipplesIntensity { get; set; } = .65;
+    public bool HeaderCircuitEnabled { get; set; }
+    public double HeaderCircuitIntensity { get; set; } = .65;
+    public bool HeaderStarlightEnabled { get; set; }
+    public double HeaderStarlightIntensity { get; set; } = .65;
+    public bool HeaderNebulaEnabled { get; set; }
+    public double HeaderNebulaIntensity { get; set; } = .65;
+    public bool HeaderSilkEnabled { get; set; }
+    public double HeaderSilkIntensity { get; set; } = .65;
+    public bool HeaderPlasmaEnabled { get; set; }
+    public double HeaderPlasmaIntensity { get; set; } = .65;
     public string ChromeTexture { get; set; } = "off";
     public double ChromeTextureIntensity { get; set; } = .65;
     public string TargetAura { get; set; } = "off";
@@ -202,6 +291,35 @@ public sealed class AppSettings
     public bool AuraSelectedModuleEnabled { get; set; } = true;
     public bool AuraSelectedPersonEnabled { get; set; } = true;
     public bool AuraHighlightButtonsEnabled { get; set; } = true;
+    // Opt-in appearance remixing (empty / "default" / "off" = use bundled theme)
+    public string CustomAccentColor { get; set; } = "";
+    public string CustomEffectColor { get; set; } = "";
+    public string CustomOutgoingBubbleColor { get; set; } = "";
+    public string CustomIncomingBubbleColor { get; set; } = "";
+    public string ChatSurfaceMode { get; set; } = "separate";
+    public string CustomChatBackgroundColor { get; set; } = "";
+    public string BubbleStyle { get; set; } = "soft";
+    public string BubbleShape { get; set; } = "default";
+    public string ChatDensity { get; set; } = "cozy";
+    public double? MessageFontSizePx { get; set; }
+    public string ChatCanvasGradient { get; set; } = "off";
+    public double ChatCanvasGradientIntensity { get; set; } = .55;
+    public bool SeamlessComposerEnabled { get; set; }
+    public double ChatBackgroundBlur { get; set; }
+    public string CornerStyle { get; set; } = "default";
+    public string AvatarShape { get; set; } = "default";
+    public bool OnlineRingEnabled { get; set; }
+    public string UiFont { get; set; } = "";
+    public double WindowOpacity { get; set; } = 1.0;
+    public double EffectSpeed { get; set; } = 1.0;
+    public string MessageAnimation { get; set; } = "off";
+    public bool MatrixEnabled { get; set; }
+    public double MatrixIntensity { get; set; } = .65;
+    public bool ConstellationEnabled { get; set; }
+    public double ConstellationIntensity { get; set; } = .65;
+    public bool BokehEnabled { get; set; }
+    public double BokehIntensity { get; set; } = .65;
+    public List<AppearancePreset> SavedPresets { get; set; } = [];
     public int Port { get; set; } = 50000;
     public string Multicast { get; set; } = "239.255.100.100";
 
@@ -235,6 +353,17 @@ public sealed class AppSettings
     /// <summary>LAN Messenger's default storage folder (Documents\Received Files), so both apps save to the same place.</summary>
     public static string DefaultReceivedFilesFolder => System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Received Files");
     public bool AutoAcceptFiles { get; set; }
+    // Preferences dialog navigation memory
+    public string LastSettingsPage { get; set; } = "GeneralPage";
+    public string LastAppearanceTab { get; set; } = "Themes";
+}
+
+/// <summary>A user-saved appearance configuration encoded as a compact look code.</summary>
+public sealed class AppearancePreset
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N")[..12];
+    public string Name { get; set; } = "";
+    public string Code { get; set; } = "";
 }
 
 /// <summary>A LAN Messenger group conversation ("chat room"), identified by its thread ID.</summary>

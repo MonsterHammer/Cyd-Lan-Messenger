@@ -41,7 +41,7 @@ public partial class TrayMenuWindow : Window
     }
     private void Open_Click(object sender, RoutedEventArgs e) { CloseOnce(); App.ShowWindow(mainWindow); }
     private void Transfers_Click(object sender, RoutedEventArgs e) { model.TransfersOpen = true; CloseOnce(); App.ShowWindow(mainWindow); }
-    private void Settings_Click(object sender, RoutedEventArgs e) { CloseOnce(); App.ShowWindow(mainWindow); PopupHost.ShowModal(mainWindow, new SettingsWindow(model)); }
+    private void Settings_Click(object sender, RoutedEventArgs e) { CloseOnce(); App.ShowWindow(mainWindow); mainWindow.OpenSettings(); }
     private async void Quit_Click(object sender, RoutedEventArgs e) { CloseOnce(); await ((App)System.Windows.Application.Current).QuitAsync(); }
 
     [StructLayout(LayoutKind.Sequential)]

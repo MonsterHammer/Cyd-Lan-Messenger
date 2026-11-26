@@ -17,8 +17,25 @@ public abstract class AmbientEffect : FrameworkElement
             FrameworkPropertyMetadataOptions.AffectsRender, (element, _) => ((AmbientEffect)element).OnTintChanged()));
 
     private Window? host;
+    private bool subscribed;
     private int activeFrameRate;
+    private double activeSpeed = 1.0;
+    private double accumulatedPhase;
+
+    public static double SpeedMultiplier { get; private set; } = 1.0;
+    internal static event Action? SpeedChanged;
+
+    public static void SetSpeed(double speed)
+    {
+        double clamped = double.IsFinite(speed) ? Math.Clamp(speed, .4, 2.0) : 1.0;
+        if (Math.Abs(SpeedMultiplier - clamped) < .001) return;
+        SpeedMultiplier = clamped;
+        SpeedChanged?.Invoke();
+    }
+
     internal double Progress => (double)GetValue(ProgressProperty);
+    /// <summary>Continuous monotonic phase that advances seamlessly without periodic wrap jumps or focus-switch resets.</summary>
+    protected double Time => accumulatedPhase + Progress;
     public double Intensity { get => (double)GetValue(IntensityProperty); set => SetValue(IntensityProperty, value); }
     public Color Tint { get => (Color)GetValue(TintProperty); set => SetValue(TintProperty, value); }
 
@@ -27,33 +44,48 @@ public abstract class AmbientEffect : FrameworkElement
         IsHitTestVisible = false;
         ClipToBounds = true;
         SetResourceReference(TintProperty, "EffectColor");
-        Loaded += (_, _) =>
-        {
-            host = Window.GetWindow(this);
-            if (host is not null)
-            {
-                host.StateChanged += HostStateChanged;
-                host.Activated += HostStateChanged;
-                host.Deactivated += HostStateChanged;
-            }
-            SystemParameters.StaticPropertyChanged += SystemPropertyChanged;
-            UpdateAnimation();
-        };
-        Unloaded += (_, _) =>
-        {
-            if (host is not null)
-            {
-                host.StateChanged -= HostStateChanged;
-                host.Activated -= HostStateChanged;
-                host.Deactivated -= HostStateChanged;
-            }
-            host = null;
-            SystemParameters.StaticPropertyChanged -= SystemPropertyChanged;
-            UpdateAnimation();
-        };
+        Loaded += (_, _) => Attach();
+        Unloaded += (_, _) => Detach();
         IsVisibleChanged += (_, _) => UpdateAnimation();
         SizeChanged += (_, _) => UpdateAnimation();
     }
+
+    private void Attach()
+    {
+        if (subscribed) { UpdateAnimation(); return; }
+        subscribed = true;
+        host = Window.GetWindow(this);
+        if (host is not null)
+        {
+            host.StateChanged += HostStateChanged;
+            host.Activated += HostStateChanged;
+            host.Deactivated += HostStateChanged;
+            host.Closed += HostClosed;
+        }
+        SystemParameters.StaticPropertyChanged += SystemPropertyChanged;
+        SpeedChanged += OnSpeedChanged;
+        UpdateAnimation();
+    }
+
+    private void Detach()
+    {
+        if (!subscribed) return;
+        subscribed = false;
+        if (host is not null)
+        {
+            host.StateChanged -= HostStateChanged;
+            host.Activated -= HostStateChanged;
+            host.Deactivated -= HostStateChanged;
+            host.Closed -= HostClosed;
+        }
+        host = null;
+        SystemParameters.StaticPropertyChanged -= SystemPropertyChanged;
+        SpeedChanged -= OnSpeedChanged;
+        UpdateAnimation();
+    }
+
+    private void HostClosed(object? sender, EventArgs e) => Detach();
+    private void OnSpeedChanged() => UpdateAnimation();
 
     protected virtual void OnTintChanged() { }
     protected virtual int FrameRate => 24;
@@ -78,15 +110,24 @@ public abstract class AmbientEffect : FrameworkElement
     {
         int requestedFrameRate = host is { IsActive: true, WindowState: not WindowState.Minimized } && IsVisible &&
             SystemParameters.ClientAreaAnimation ? (IsLargeSurface ? Math.Min(18, FrameRate) : FrameRate) : 0;
-        if (activeFrameRate == requestedFrameRate) return;
+        double speed = SpeedMultiplier;
+        if (activeFrameRate == requestedFrameRate && (requestedFrameRate == 0 || Math.Abs(activeSpeed - speed) < .001)) return;
+        if (activeFrameRate > 0)
+            accumulatedPhase += Progress;
         activeFrameRate = requestedFrameRate;
+        activeSpeed = speed;
         if (requestedFrameRate == 0)
         {
             BeginAnimation(ProgressProperty, null);
             return;
         }
 
-        var drift = new DoubleAnimation(0, 1, TimeSpan.FromSeconds(26)) { RepeatBehavior = RepeatBehavior.Forever };
+        // IsCumulative advances Progress monotonically (0 -> 1 -> 2 -> ...) so no effect ever resets at cycle boundaries.
+        var drift = new DoubleAnimation(0, 1, TimeSpan.FromSeconds(26.0 / speed))
+        {
+            RepeatBehavior = RepeatBehavior.Forever,
+            IsCumulative = true
+        };
         Timeline.SetDesiredFrameRate(drift, requestedFrameRate);
         BeginAnimation(ProgressProperty, drift);
     }

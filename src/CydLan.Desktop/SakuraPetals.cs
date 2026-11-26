@@ -24,7 +24,7 @@ public sealed class SakuraPetals : AmbientEffect
         double intensity = Math.Clamp(Intensity, .1, 1);
         int count = (int)Math.Clamp(width * height / 8500 * intensity, 4, Petals.Length);
         fills ??= Enumerable.Range(0, EffectPalette.OpacityLevels).Select(index => PetalBrush(Tint, index)).ToArray();
-        double time = Progress;
+        double time = Time;
         for (int index = 0; index < count; index++)
         {
             var petal = Petals[index];

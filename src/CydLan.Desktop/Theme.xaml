@@ -9,6 +9,23 @@
     <!-- Message text; Preferences › Messages replaces these at runtime. -->
     <FontFamily x:Key="MessageFontFamily">Segoe UI Variable Text, Segoe UI</FontFamily>
     <sys:Double x:Key="MessageFontSize">15</sys:Double>
+    <SolidColorBrush x:Key="IncomingBubbleBackground" Color="#F1F3F5"/>
+    <SolidColorBrush x:Key="OutgoingBubbleBackground" Color="#E6F1F4"/>
+    <SolidColorBrush x:Key="IncomingBubbleBorder" Color="Transparent"/>
+    <SolidColorBrush x:Key="OutgoingBubbleBorder" Color="Transparent"/>
+    <Thickness x:Key="IncomingBubbleBorderThickness">0</Thickness>
+    <Thickness x:Key="OutgoingBubbleBorderThickness">0</Thickness>
+    <SolidColorBrush x:Key="IncomingBubbleForeground" Color="#1D2326"/>
+    <SolidColorBrush x:Key="OutgoingBubbleForeground" Color="#1D2326"/>
+    <CornerRadius x:Key="IncomingBubbleCorner">12</CornerRadius>
+    <CornerRadius x:Key="OutgoingBubbleCorner">12</CornerRadius>
+    <Thickness x:Key="MessageBubblePadding">12,8</Thickness>
+    <Thickness x:Key="MessageRowMargin">0,0,0,16</Thickness>
+    <sys:Double x:Key="MessageMaxWidth">540</sys:Double>
+    <CornerRadius x:Key="RowAvatarCorner">15</CornerRadius>
+    <sys:Double x:Key="RowAvatarRadius">15</sys:Double>
+    <CornerRadius x:Key="HeaderAvatarCorner">20</CornerRadius>
+    <sys:Double x:Key="HeaderAvatarRadius">20</sys:Double>
     <Style x:Key="FocusRing">
       <Setter Property="Control.Template"><Setter.Value><ControlTemplate>
         <Border Margin="-2" CornerRadius="{DynamicResource ControlCorner}" BorderThickness="2" BorderBrush="{DynamicResource Accent}" SnapsToDevicePixels="True"/>
@@ -16,7 +33,7 @@
     </Style>
     <Style TargetType="Window">
       <Setter Property="Icon" Value="{StaticResource BrandAppIcon}"/>
-      <Setter Property="FontFamily" Value="{StaticResource UiFont}"/><Setter Property="FontSize" Value="13"/>
+      <Setter Property="FontFamily" Value="{DynamicResource UiFont}"/><Setter Property="FontSize" Value="13"/>
       <Setter Property="Foreground" Value="{DynamicResource Ink}"/><Setter Property="Background" Value="{DynamicResource Canvas}"/>
       <Setter Property="UseLayoutRounding" Value="True"/>
     </Style>
@@ -197,7 +214,7 @@
             <MultiDataTrigger>
               <MultiDataTrigger.Conditions>
                 <Condition Binding="{Binding IsSelected, RelativeSource={RelativeSource TemplatedParent}}" Value="True"/>
-                <Condition Binding="{Binding DataContext.Settings.ThemeDetailsEnabled, RelativeSource={RelativeSource AncestorType=local:MainWindow}}" Value="True"/>
+                <Condition Binding="{Binding DataContext.ThemeDetailsEnabled, RelativeSource={RelativeSource AncestorType=local:MainWindow}}" Value="True"/>
               </MultiDataTrigger.Conditions>
               <Setter TargetName="Row" Property="Background" Value="{DynamicResource DetailedRowSelected}"/>
             </MultiDataTrigger>

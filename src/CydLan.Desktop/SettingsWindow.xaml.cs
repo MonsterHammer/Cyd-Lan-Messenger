@@ -1,20 +1,45 @@
 using System.Net;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
+using CydLan.Core;
 using FontFamily = System.Windows.Media.FontFamily;
 
 namespace CydLan.Desktop;
 
 public partial class SettingsWindow : Window
 {
+    private const string UiFontThemeDefault = "Theme default";
     private readonly MainViewModel model;
     private readonly string originalTheme;
+    private readonly AppearanceOverrides originalOverrides;
+    private readonly List<AppearancePreset> savedPresets;
     private string selectedTheme;
+    private string currentThemeFilter = "all";
+    private string accentHex = "", effectHex = "", outgoingBubbleHex = "", incomingBubbleHex = "", chatBackgroundHex = "";
+    private double? customFontPx;
     private bool updatingThemeFilter;
+    private bool applyingAppearance;
+    private bool restoringNavigation;
+    private bool closing;
     private bool saved;
-    public SettingsWindow(MainViewModel model)
+
+    public static string NormalizePage(string? name) => name switch
+    {
+        "AccountPage" or "MessagesPage" or "HistoryPage" or "AlertsPage" or "NetworkPage" or "FilesPage" or "AppearancePage" or "AboutPage" => name,
+        _ => "GeneralPage"
+    };
+
+    public static string NormalizeAppearanceTab(string? name) => name switch
+    {
+        "Colors" or "Bubbles" or "Textures" or "Ambient" or "Headers" or "Panels" or "Aura" or "Customize" => name,
+        _ => "Themes"
+    };
+
+    public SettingsWindow(MainViewModel model, string? initialPage = null, string? initialAppearanceTab = null, bool rememberNavigation = false)
     {
         InitializeComponent(); this.model = model; DataContext = model;
         VersionText.Text = $"Version {typeof(SettingsWindow).Assembly.GetName().Version?.ToString(3)}";
@@ -28,9 +53,9 @@ public partial class SettingsWindow : Window
         avatarPath = s.AvatarPath; ShowAvatar();
         DisplayNameBox.TextChanged += (_, _) => ShowAvatar();
         // Messages
-        FontBox.ItemsSource = Fonts.SystemFontFamilies.Select(f => f.Source).Append("Segoe UI Variable Text").Distinct().OrderBy(n => n).ToList();
-        FontBox.SelectedItem = s.MessageFont; if (FontBox.SelectedItem is null) FontBox.SelectedItem = "Segoe UI Variable Text";
-        SizeBox.SelectedItem = SizeBox.Items.Cast<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag == s.MessageFontSize) ?? SizeBox.Items[1];
+        var systemFonts = Fonts.SystemFontFamilies.Select(f => f.Source).Append("Segoe UI Variable Text").Distinct().OrderBy(n => n).ToList();
+        FontBox.ItemsSource = systemFonts;
+        UiFontBox.ItemsSource = systemFonts.Prepend(UiFontThemeDefault).ToList();
         (s.SendWithCtrlEnter ? SendCtrlEnter : SendEnter).IsChecked = true;
         TrimBox.IsChecked = s.TrimMessages;
         // History
@@ -45,95 +70,709 @@ public partial class SettingsWindow : Window
         FolderBox.Text = model.ReceivedFilesFolder; AutoAcceptBox.IsChecked = s.AutoAcceptFiles;
         // Appearance (live preview; Cancel restores)
         originalTheme = ThemeManager.Normalize(s.Theme);
+        originalOverrides = AppearanceOverrides.From(s);
         selectedTheme = originalTheme;
-        FilterThemes("all");
+        savedPresets = (s.SavedPresets ?? []).Select(p => new AppearancePreset { Id = p.Id, Name = p.Name, Code = p.Code }).ToList();
+
+        applyingAppearance = true;
+        AccentColorBox.ItemsSource = AppearanceOptions.AccentSwatches;
+        EffectColorBox.ItemsSource = AppearanceOptions.EffectSwatches;
+        OutgoingBubbleColorBox.ItemsSource = AppearanceOptions.BubbleSwatches;
+        IncomingBubbleColorBox.ItemsSource = AppearanceOptions.BubbleSwatches;
+        ChatBackgroundColorBox.ItemsSource = AppearanceOptions.ChatBackgroundSwatches;
+        BubbleStyleBox.ItemsSource = AppearanceOptions.BubbleStyles;
+        BubbleShapeBox.ItemsSource = AppearanceOptions.BubbleShapes;
+        CornerStyleBox.ItemsSource = AppearanceOptions.CornerStyles;
+        AvatarShapeBox.ItemsSource = AppearanceOptions.AvatarShapes;
+        ChromeTextureBox.ItemsSource = ChromeTexture.Catalog;
+        TargetAuraBox.ItemsSource = TargetAura.Catalog;
+        ChatCanvasBox.ItemsSource = ChatCanvasOverlay.Catalog;
+
         backgroundPath = s.ChatBackgroundPath;
         BackgroundOpacityBox.Value = model.ChatBackgroundOpacity;
         ShowBackground(model.ChatBackground);
-        TypingEffectBox.SelectedValue = ChatEffects.Normalize(s.TypingEffect, typing: true);
-        ClickEffectBox.SelectedValue = ChatEffects.Normalize(s.ClickEffect);
-        SteampunkEngineBox.IsChecked = s.SteampunkEngineEnabled;
-        SakuraPetalsBox.IsChecked = s.SakuraPetalsEnabled;
-        TypingIntensityBox.Value = model.TypingIntensity;
-        ClickIntensityBox.Value = model.ClickIntensity;
-        ThemeDetailsBox.IsChecked = s.ThemeDetailsEnabled;
-        EngineIntensityBox.Value = model.EngineIntensity;
-        PetalIntensityBox.Value = model.PetalIntensity;
-        FirefliesBox.IsChecked = s.FirefliesEnabled;
-        FireflyIntensityBox.Value = s.FireflyIntensity;
-        RainBox.IsChecked = s.RainEnabled;
-        RainIntensityBox.Value = s.RainIntensity;
-        SnowBox.IsChecked = s.SnowEnabled;
-        SnowIntensityBox.Value = s.SnowIntensity;
-        InkBloomIntensityBox.Value = s.InkBloomIntensity;
-        SendPulseBox.IsChecked = s.SendPulseEnabled;
-        SendPulseIntensityBox.Value = s.SendPulseIntensity;
-        AmbientOnSidebarBox.IsChecked = s.AmbientOnSidebarEnabled;
-        HeaderAuroraBox.IsChecked = s.HeaderAuroraEnabled;
-        HeaderAuroraIntensityBox.Value = model.HeaderAuroraIntensity;
-        TitleSparklesBox.IsChecked = s.TitleSparklesEnabled;
-        TitleSparklesIntensityBox.Value = model.TitleSparklesIntensity;
-        HeaderPulseBox.IsChecked = s.HeaderPulseEnabled;
-        HeaderPulseIntensityBox.Value = model.HeaderPulseIntensity;
-        RailBeaconBox.IsChecked = s.RailBeaconEnabled;
-        RailBeaconIntensityBox.Value = model.RailBeaconIntensity;
-        RailStreamBox.IsChecked = s.RailStreamEnabled;
-        RailStreamIntensityBox.Value = model.RailStreamIntensity;
-        RailStardustBox.IsChecked = s.RailStardustEnabled;
-        RailStardustIntensityBox.Value = model.RailStardustIntensity;
-        RailScanBox.IsChecked = s.RailScanEnabled;
-        RailScanIntensityBox.Value = model.RailScanIntensity;
-        SidebarMotesBox.IsChecked = s.SidebarMotesEnabled;
-        SidebarMotesIntensityBox.Value = model.SidebarMotesIntensity;
-        SidebarGlowBox.IsChecked = s.SidebarGlowEnabled;
-        SidebarGlowIntensityBox.Value = model.SidebarGlowIntensity;
-        SidebarPrismBox.IsChecked = s.SidebarPrismEnabled;
-        SidebarPrismIntensityBox.Value = model.SidebarPrismIntensity;
-        SidebarSweepBox.IsChecked = s.SidebarSweepEnabled;
-        SidebarSweepIntensityBox.Value = model.SidebarSweepIntensity;
-        StarfieldBox.IsChecked = s.StarfieldEnabled;
-        StarfieldIntensityBox.Value = model.StarfieldIntensity;
-        BubblesBox.IsChecked = s.BubblesEnabled;
-        BubblesIntensityBox.Value = model.BubblesIntensity;
-        EmbersBox.IsChecked = s.EmbersEnabled;
-        EmbersIntensityBox.Value = model.EmbersIntensity;
-        ButtonGlowBox.IsChecked = s.ButtonGlowEnabled;
-        ButtonGlowIntensityBox.Value = model.ButtonGlowIntensity;
-        ButtonSheenBox.IsChecked = s.ButtonSheenEnabled;
-        ButtonSheenIntensityBox.Value = model.ButtonSheenIntensity;
-        ButtonBounceBox.IsChecked = s.ButtonBounceEnabled;
-        ButtonBounceIntensityBox.Value = model.ButtonBounceIntensity;
-        ButtonRingBox.IsChecked = s.ButtonRingEnabled;
-        ButtonRingIntensityBox.Value = model.ButtonRingIntensity;
-        ChromeTextureBox.ItemsSource = ChromeTexture.Catalog;
-        ChromeTextureBox.SelectedValue = ChromeTexture.Normalize(s.ChromeTexture);
-        ChromeTextureIntensityBox.Value = model.ChromeTextureIntensity;
-        TargetAuraBox.ItemsSource = TargetAura.Catalog;
-        TargetAuraBox.SelectedValue = TargetAura.Normalize(s.TargetAura);
-        TargetAuraIntensityBox.Value = Math.Clamp(s.TargetAuraIntensity, .1, 1);
-        AuraModuleBox.IsChecked = s.AuraSelectedModuleEnabled;
-        AuraPersonBox.IsChecked = s.AuraSelectedPersonEnabled;
-        AuraButtonsBox.IsChecked = s.AuraHighlightButtonsEnabled;
+
+        LoadAppearanceControls(s);
+        RefreshPresets();
+        applyingAppearance = false;
+
         ApplyTargetAuraPreview();
+        ApplyBackgroundBlurPreview();
+        UpdateFontPreview();
+
+        if (initialAppearanceTab is not null || initialPage is not null)
+        {
+            restoringNavigation = true;
+            if (initialAppearanceTab is not null) ShowAppearanceTab(NormalizeAppearanceTab(initialAppearanceTab));
+            if (initialPage is not null) ShowPage(NormalizePage(initialPage));
+            restoringNavigation = false;
+        }
+        if (rememberNavigation && initialPage is not null) model.LastSettingsPage = NormalizePage(initialPage);
+        if (rememberNavigation && initialAppearanceTab is not null) model.LastAppearanceTab = NormalizeAppearanceTab(initialAppearanceTab);
+
         Closed += (_, _) =>
         {
             if (!saved)
             {
-                ThemeManager.Apply(originalTheme);
+                ThemeManager.Apply(originalTheme, originalOverrides);
+                AmbientEffect.SetSpeed(model.EffectSpeed);
+                MessageMotion.Configure(s.MessageAnimation);
                 model.PreviewChromeTexture(null, null);
+                model.PreviewChatCanvas(null, null);
+                model.PreviewSeamlessComposer(null);
+                model.PreviewBackgroundBlur(null);
+                model.PreviewAvatarOptions(null, null);
                 ButtonEffects.Configure(
                     s.ButtonGlowEnabled, model.ButtonGlowIntensity,
                     s.ButtonSheenEnabled, model.ButtonSheenIntensity,
                     s.ButtonBounceEnabled, model.ButtonBounceIntensity,
-                    s.ButtonRingEnabled, model.ButtonRingIntensity);
+                    s.ButtonRingEnabled, model.ButtonRingIntensity,
+                    s.ButtonPulseEnabled, model.ButtonPulseIntensity,
+                    s.ButtonLiftEnabled, model.ButtonLiftIntensity,
+                    s.ButtonSparkEnabled, model.ButtonSparkIntensity);
                 TargetAura.Configure(
                     s.TargetAura, s.TargetAuraIntensity,
                     s.AuraSelectedModuleEnabled, s.AuraSelectedPersonEnabled, s.AuraHighlightButtonsEnabled);
             }
             foreach (var path in unsavedAvatars.Where(p => p != model.Settings.AvatarPath)) try { System.IO.File.Delete(path); } catch (System.IO.IOException) { }
+            closing = true;
+            updatingThemeFilter = true;
+            applyingAppearance = true;
+            ThemeBox.ItemsSource = null;
+            AccentColorBox.ItemsSource = null;
+            EffectColorBox.ItemsSource = null;
+            OutgoingBubbleColorBox.ItemsSource = null;
+            IncomingBubbleColorBox.ItemsSource = null;
+            ChatBackgroundColorBox.ItemsSource = null;
+            BubbleStyleBox.ItemsSource = null;
+            BubbleShapeBox.ItemsSource = null;
+            CornerStyleBox.ItemsSource = null;
+            AvatarShapeBox.ItemsSource = null;
+            ChromeTextureBox.ItemsSource = null;
+            TargetAuraBox.ItemsSource = null;
+            ChatCanvasBox.ItemsSource = null;
+            FontBox.ItemsSource = null;
+            UiFontBox.ItemsSource = null;
+            PresetBox.ItemsSource = null;
+            BackgroundPreview.Effect = null;
+            BackgroundPreview.Source = null;
+            AvatarPreview.Source = null;
+            chosenBackground = null;
+            DataContext = null;
         };
+    }
+
+    private void LoadAppearanceControls(AppSettings s)
+    {
+        selectedTheme = ThemeManager.Normalize(s.Theme);
+        FilterThemes(currentThemeFilter);
+        if (ThemeBox.SelectedValue is not string matched || matched != selectedTheme)
+        {
+            ThemeFilterAll.IsChecked = true;
+            FilterThemes("all");
+        }
+        ThemeDetailsBox.IsChecked = s.ThemeDetailsEnabled;
+
+        SetColorChannel(AccentColorBox, AccentHexBox, ref accentHex, s.CustomAccentColor);
+        SetColorChannel(EffectColorBox, EffectHexBox, ref effectHex, s.CustomEffectColor);
+        SetColorChannel(OutgoingBubbleColorBox, OutgoingBubbleHexBox, ref outgoingBubbleHex, s.CustomOutgoingBubbleColor);
+        SetColorChannel(IncomingBubbleColorBox, IncomingBubbleHexBox, ref incomingBubbleHex, s.CustomIncomingBubbleColor);
+        bool matchThemeChat = AppearanceOptions.NormalizeChatSurfaceMode(s.ChatSurfaceMode) == AppearanceOptions.ChatSurfaceTheme;
+        ChatSurfaceTheme.IsChecked = matchThemeChat;
+        ChatSurfaceSeparate.IsChecked = !matchThemeChat;
+        TextureOnChatBox.IsChecked = matchThemeChat;
+        SetColorChannel(ChatBackgroundColorBox, ChatBackgroundHexBox, ref chatBackgroundHex, s.CustomChatBackgroundColor);
+
+        BubbleStyleBox.SelectedValue = AppearanceOptions.NormalizeBubbleStyle(s.BubbleStyle);
+        BubbleShapeBox.SelectedValue = AppearanceOptions.NormalizeBubbleShape(s.BubbleShape);
+        switch (AppearanceOptions.NormalizeChatDensity(s.ChatDensity))
+        {
+            case AppearanceOptions.DensityCompact: DensityCompact.IsChecked = true; break;
+            case AppearanceOptions.DensitySpacious: DensitySpacious.IsChecked = true; break;
+            default: DensityCozy.IsChecked = true; break;
+        }
+        switch (MessageMotion.Normalize(s.MessageAnimation))
+        {
+            case MessageMotion.Fade: AnimFade.IsChecked = true; break;
+            case MessageMotion.Slide: AnimSlide.IsChecked = true; break;
+            case MessageMotion.Pop: AnimPop.IsChecked = true; break;
+            default: AnimOff.IsChecked = true; break;
+        }
+        CornerStyleBox.SelectedValue = AppearanceOptions.NormalizeCornerStyle(s.CornerStyle);
+        AvatarShapeBox.SelectedValue = AppearanceOptions.NormalizeAvatarShape(s.AvatarShape);
+        OnlineRingBox.IsChecked = s.OnlineRingEnabled;
+
+        TypingEffectBox.SelectedValue = ChatEffects.Normalize(s.TypingEffect, typing: true);
+        ClickEffectBox.SelectedValue = ChatEffects.Normalize(s.ClickEffect);
+        SteampunkEngineBox.IsChecked = s.SteampunkEngineEnabled;
+        SakuraPetalsBox.IsChecked = s.SakuraPetalsEnabled;
+        TypingIntensityBox.Value = ClampUnit(s.TypingIntensity ?? s.EffectIntensity, .75);
+        ClickIntensityBox.Value = ClampUnit(s.ClickIntensity ?? s.EffectIntensity, .75);
+        EngineIntensityBox.Value = ClampUnit(s.EngineIntensity, .85);
+        PetalIntensityBox.Value = ClampUnit(s.PetalIntensity, .75);
+        FirefliesBox.IsChecked = s.FirefliesEnabled;
+        FireflyIntensityBox.Value = ClampUnit(s.FireflyIntensity, .65);
+        RainBox.IsChecked = s.RainEnabled;
+        RainIntensityBox.Value = ClampUnit(s.RainIntensity, .65);
+        SnowBox.IsChecked = s.SnowEnabled;
+        SnowIntensityBox.Value = ClampUnit(s.SnowIntensity, .65);
+        StarfieldBox.IsChecked = s.StarfieldEnabled;
+        StarfieldIntensityBox.Value = ClampUnit(s.StarfieldIntensity, .65);
+        BubblesBox.IsChecked = s.BubblesEnabled;
+        BubblesIntensityBox.Value = ClampUnit(s.BubblesIntensity, .65);
+        EmbersBox.IsChecked = s.EmbersEnabled;
+        EmbersIntensityBox.Value = ClampUnit(s.EmbersIntensity, .65);
+        MatrixBox.IsChecked = s.MatrixEnabled;
+        MatrixIntensityBox.Value = ClampUnit(s.MatrixIntensity, .65);
+        ConstellationBox.IsChecked = s.ConstellationEnabled;
+        ConstellationIntensityBox.Value = ClampUnit(s.ConstellationIntensity, .65);
+        BokehBox.IsChecked = s.BokehEnabled;
+        BokehIntensityBox.Value = ClampUnit(s.BokehIntensity, .65);
+        EffectSpeedBox.Value = double.IsFinite(s.EffectSpeed) ? Math.Clamp(s.EffectSpeed, .4, 2.0) : 1.0;
+        InkBloomIntensityBox.Value = ClampUnit(s.InkBloomIntensity, .65);
+        SendPulseBox.IsChecked = s.SendPulseEnabled;
+        SendPulseIntensityBox.Value = ClampUnit(s.SendPulseIntensity, .65);
+        AmbientOnSidebarBox.IsChecked = s.AmbientOnSidebarEnabled;
+
+        HeaderAuroraBox.IsChecked = s.HeaderAuroraEnabled;
+        HeaderAuroraIntensityBox.Value = ClampUnit(s.HeaderAuroraIntensity, .65);
+        TitleSparklesBox.IsChecked = s.TitleSparklesEnabled;
+        TitleSparklesIntensityBox.Value = ClampUnit(s.TitleSparklesIntensity, .65);
+        HeaderPulseBox.IsChecked = s.HeaderPulseEnabled;
+        HeaderPulseIntensityBox.Value = ClampUnit(s.HeaderPulseIntensity, .65);
+        TitleShimmerBox.IsChecked = s.TitleShimmerEnabled;
+        TitleShimmerIntensityBox.Value = ClampUnit(s.TitleShimmerIntensity, .65);
+        TitleCometBox.IsChecked = s.TitleCometEnabled;
+        TitleCometIntensityBox.Value = ClampUnit(s.TitleCometIntensity, .65);
+        TitleEqualizerBox.IsChecked = s.TitleEqualizerEnabled;
+        TitleEqualizerIntensityBox.Value = ClampUnit(s.TitleEqualizerIntensity, .65);
+        TitleLaserBox.IsChecked = s.TitleLaserEnabled;
+        TitleLaserIntensityBox.Value = ClampUnit(s.TitleLaserIntensity, .65);
+        TitleAuroraBox.IsChecked = s.TitleAuroraEnabled;
+        TitleAuroraIntensityBox.Value = ClampUnit(s.TitleAuroraIntensity, .65);
+        TitleWaveBox.IsChecked = s.TitleWaveEnabled;
+        TitleWaveIntensityBox.Value = ClampUnit(s.TitleWaveIntensity, .65);
+        HeaderPrismBox.IsChecked = s.HeaderPrismEnabled;
+        HeaderPrismIntensityBox.Value = ClampUnit(s.HeaderPrismIntensity, .65);
+        HeaderRipplesBox.IsChecked = s.HeaderRipplesEnabled;
+        HeaderRipplesIntensityBox.Value = ClampUnit(s.HeaderRipplesIntensity, .65);
+        HeaderCircuitBox.IsChecked = s.HeaderCircuitEnabled;
+        HeaderCircuitIntensityBox.Value = ClampUnit(s.HeaderCircuitIntensity, .65);
+        HeaderStarlightBox.IsChecked = s.HeaderStarlightEnabled;
+        HeaderStarlightIntensityBox.Value = ClampUnit(s.HeaderStarlightIntensity, .65);
+        HeaderNebulaBox.IsChecked = s.HeaderNebulaEnabled;
+        HeaderNebulaIntensityBox.Value = ClampUnit(s.HeaderNebulaIntensity, .65);
+        HeaderSilkBox.IsChecked = s.HeaderSilkEnabled;
+        HeaderSilkIntensityBox.Value = ClampUnit(s.HeaderSilkIntensity, .65);
+        HeaderPlasmaBox.IsChecked = s.HeaderPlasmaEnabled;
+        HeaderPlasmaIntensityBox.Value = ClampUnit(s.HeaderPlasmaIntensity, .65);
+
+        RailBeaconBox.IsChecked = s.RailBeaconEnabled;
+        RailBeaconIntensityBox.Value = ClampUnit(s.RailBeaconIntensity, .65);
+        RailStreamBox.IsChecked = s.RailStreamEnabled;
+        RailStreamIntensityBox.Value = ClampUnit(s.RailStreamIntensity, .65);
+        RailStardustBox.IsChecked = s.RailStardustEnabled;
+        RailStardustIntensityBox.Value = ClampUnit(s.RailStardustIntensity, .65);
+        RailScanBox.IsChecked = s.RailScanEnabled;
+        RailScanIntensityBox.Value = ClampUnit(s.RailScanIntensity, .65);
+        RailAuroraBox.IsChecked = s.RailAuroraEnabled;
+        RailAuroraIntensityBox.Value = ClampUnit(s.RailAuroraIntensity, .65);
+        RailPulseBox.IsChecked = s.RailPulseEnabled;
+        RailPulseIntensityBox.Value = ClampUnit(s.RailPulseIntensity, .65);
+        RailPlasmaBox.IsChecked = s.RailPlasmaEnabled;
+        RailPlasmaIntensityBox.Value = ClampUnit(s.RailPlasmaIntensity, .65);
+        RailCascadeBox.IsChecked = s.RailCascadeEnabled;
+        RailCascadeIntensityBox.Value = ClampUnit(s.RailCascadeIntensity, .65);
+
+        SidebarMotesBox.IsChecked = s.SidebarMotesEnabled;
+        SidebarMotesIntensityBox.Value = ClampUnit(s.SidebarMotesIntensity, .65);
+        SidebarGlowBox.IsChecked = s.SidebarGlowEnabled;
+        SidebarGlowIntensityBox.Value = ClampUnit(s.SidebarGlowIntensity, .65);
+        SidebarPrismBox.IsChecked = s.SidebarPrismEnabled;
+        SidebarPrismIntensityBox.Value = ClampUnit(s.SidebarPrismIntensity, .65);
+        SidebarSweepBox.IsChecked = s.SidebarSweepEnabled;
+        SidebarSweepIntensityBox.Value = ClampUnit(s.SidebarSweepIntensity, .65);
+        SidebarAuroraBox.IsChecked = s.SidebarAuroraEnabled;
+        SidebarAuroraIntensityBox.Value = ClampUnit(s.SidebarAuroraIntensity, .65);
+        SidebarNebulaBox.IsChecked = s.SidebarNebulaEnabled;
+        SidebarNebulaIntensityBox.Value = ClampUnit(s.SidebarNebulaIntensity, .65);
+        SidebarWavesBox.IsChecked = s.SidebarWavesEnabled;
+        SidebarWavesIntensityBox.Value = ClampUnit(s.SidebarWavesIntensity, .65);
+        SidebarRipplesBox.IsChecked = s.SidebarRipplesEnabled;
+        SidebarRipplesIntensityBox.Value = ClampUnit(s.SidebarRipplesIntensity, .65);
+        SidebarCircuitBox.IsChecked = s.SidebarCircuitEnabled;
+        SidebarCircuitIntensityBox.Value = ClampUnit(s.SidebarCircuitIntensity, .65);
+
+        ButtonGlowBox.IsChecked = s.ButtonGlowEnabled;
+        ButtonGlowIntensityBox.Value = ClampUnit(s.ButtonGlowIntensity, .65);
+        ButtonSheenBox.IsChecked = s.ButtonSheenEnabled;
+        ButtonSheenIntensityBox.Value = ClampUnit(s.ButtonSheenIntensity, .65);
+        ButtonBounceBox.IsChecked = s.ButtonBounceEnabled;
+        ButtonBounceIntensityBox.Value = ClampUnit(s.ButtonBounceIntensity, .65);
+        ButtonRingBox.IsChecked = s.ButtonRingEnabled;
+        ButtonRingIntensityBox.Value = ClampUnit(s.ButtonRingIntensity, .65);
+        ButtonPulseBox.IsChecked = s.ButtonPulseEnabled;
+        ButtonPulseIntensityBox.Value = ClampUnit(s.ButtonPulseIntensity, .65);
+        ButtonLiftBox.IsChecked = s.ButtonLiftEnabled;
+        ButtonLiftIntensityBox.Value = ClampUnit(s.ButtonLiftIntensity, .65);
+        ButtonSparkBox.IsChecked = s.ButtonSparkEnabled;
+        ButtonSparkIntensityBox.Value = ClampUnit(s.ButtonSparkIntensity, .65);
+
+        ChromeTextureBox.SelectedValue = ChromeTexture.Normalize(s.ChromeTexture);
+        ChromeTextureIntensityBox.Value = ClampUnit(s.ChromeTextureIntensity, .65);
+        TargetAuraBox.SelectedValue = TargetAura.Normalize(s.TargetAura);
+        TargetAuraIntensityBox.Value = ClampUnit(s.TargetAuraIntensity, .70);
+        AuraModuleBox.IsChecked = s.AuraSelectedModuleEnabled;
+        AuraPersonBox.IsChecked = s.AuraSelectedPersonEnabled;
+        AuraButtonsBox.IsChecked = s.AuraHighlightButtonsEnabled;
+
+        string uiFont = (s.UiFont ?? "").Trim();
+        UiFontBox.SelectedItem = uiFont.Length == 0 ? UiFontThemeDefault : uiFont;
+        if (UiFontBox.SelectedItem is null) UiFontBox.SelectedItem = UiFontThemeDefault;
+
+        FontBox.SelectedItem = s.MessageFont;
+        if (FontBox.SelectedItem is null) FontBox.SelectedItem = "Segoe UI Variable Text";
+        SizeBox.SelectedItem = SizeBox.Items.Cast<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag == s.MessageFontSize) ?? SizeBox.Items[1];
+        customFontPx = s.MessageFontSizePx is { } px && double.IsFinite(px) ? Math.Clamp(Math.Round(px), 11, 22) : null;
+        MessageFontPxBox.Value = customFontPx ?? MainViewModel.FontSizeFor(SelectedFontSizeTag);
+        WindowOpacityBox.Value = double.IsFinite(s.WindowOpacity) ? Math.Clamp(s.WindowOpacity, .80, 1.0) : 1.0;
+
+        ChatCanvasBox.SelectedValue = ChatCanvasOverlay.Normalize(s.ChatCanvasGradient);
+        ChatCanvasIntensityBox.Value = ClampUnit(s.ChatCanvasGradientIntensity, .55);
+        SeamlessComposerBox.IsChecked = s.SeamlessComposerEnabled;
+        BackgroundBlurBox.Value = double.IsFinite(s.ChatBackgroundBlur) ? Math.Clamp(s.ChatBackgroundBlur, 0, 24) : 0;
+    }
+
+    private void WriteAppearanceTo(AppSettings s)
+    {
+        s.Theme = SelectedTheme;
+        s.ThemeDetailsEnabled = ThemeDetailsBox.IsChecked == true;
+        s.CustomAccentColor = accentHex;
+        s.CustomEffectColor = effectHex;
+        s.CustomOutgoingBubbleColor = outgoingBubbleHex;
+        s.CustomIncomingBubbleColor = incomingBubbleHex;
+        s.ChatSurfaceMode = SelectedChatSurfaceMode;
+        s.CustomChatBackgroundColor = chatBackgroundHex;
+        s.BubbleStyle = AppearanceOptions.NormalizeBubbleStyle(BubbleStyleBox.SelectedValue as string);
+        s.BubbleShape = AppearanceOptions.NormalizeBubbleShape(BubbleShapeBox.SelectedValue as string);
+        s.ChatDensity = SelectedChatDensity;
+        s.CornerStyle = AppearanceOptions.NormalizeCornerStyle(CornerStyleBox.SelectedValue as string);
+        s.AvatarShape = AppearanceOptions.NormalizeAvatarShape(AvatarShapeBox.SelectedValue as string);
+        s.OnlineRingEnabled = OnlineRingBox.IsChecked == true;
+        s.UiFont = SelectedUiFont;
+        s.MessageFont = FontBox.SelectedItem as string ?? "Segoe UI Variable Text";
+        s.MessageFontSize = SelectedFontSizeTag;
+        s.MessageFontSizePx = customFontPx;
+        s.WindowOpacity = WindowOpacityBox.Value;
+        s.EffectSpeed = EffectSpeedBox.Value;
+        s.MessageAnimation = SelectedMessageAnimation;
+        s.ChatCanvasGradient = ChatCanvasOverlay.Normalize(ChatCanvasBox.SelectedValue as string);
+        s.ChatCanvasGradientIntensity = ChatCanvasIntensityBox.Value;
+        s.SeamlessComposerEnabled = SeamlessComposerBox.IsChecked == true;
+        s.ChatBackgroundBlur = BackgroundBlurBox.Value;
+        s.TypingEffect = ChatEffects.Normalize(TypingEffectBox.SelectedValue as string, typing: true);
+        s.ClickEffect = ChatEffects.Normalize(ClickEffectBox.SelectedValue as string);
+        s.SteampunkEngineEnabled = SteampunkEngineBox.IsChecked == true;
+        s.SakuraPetalsEnabled = SakuraPetalsBox.IsChecked == true;
+        s.TypingIntensity = TypingIntensityBox.Value;
+        s.ClickIntensity = ClickIntensityBox.Value;
+        s.EngineIntensity = EngineIntensityBox.Value;
+        s.PetalIntensity = PetalIntensityBox.Value;
+        s.FirefliesEnabled = FirefliesBox.IsChecked == true;
+        s.FireflyIntensity = FireflyIntensityBox.Value;
+        s.RainEnabled = RainBox.IsChecked == true;
+        s.RainIntensity = RainIntensityBox.Value;
+        s.SnowEnabled = SnowBox.IsChecked == true;
+        s.SnowIntensity = SnowIntensityBox.Value;
+        s.StarfieldEnabled = StarfieldBox.IsChecked == true;
+        s.StarfieldIntensity = StarfieldIntensityBox.Value;
+        s.BubblesEnabled = BubblesBox.IsChecked == true;
+        s.BubblesIntensity = BubblesIntensityBox.Value;
+        s.EmbersEnabled = EmbersBox.IsChecked == true;
+        s.EmbersIntensity = EmbersIntensityBox.Value;
+        s.MatrixEnabled = MatrixBox.IsChecked == true;
+        s.MatrixIntensity = MatrixIntensityBox.Value;
+        s.ConstellationEnabled = ConstellationBox.IsChecked == true;
+        s.ConstellationIntensity = ConstellationIntensityBox.Value;
+        s.BokehEnabled = BokehBox.IsChecked == true;
+        s.BokehIntensity = BokehIntensityBox.Value;
+        s.InkBloomIntensity = InkBloomIntensityBox.Value;
+        s.SendPulseEnabled = SendPulseBox.IsChecked == true;
+        s.SendPulseIntensity = SendPulseIntensityBox.Value;
+        s.AmbientOnSidebarEnabled = AmbientOnSidebarBox.IsChecked == true;
+        s.HeaderAuroraEnabled = HeaderAuroraBox.IsChecked == true;
+        s.HeaderAuroraIntensity = HeaderAuroraIntensityBox.Value;
+        s.TitleSparklesEnabled = TitleSparklesBox.IsChecked == true;
+        s.TitleSparklesIntensity = TitleSparklesIntensityBox.Value;
+        s.HeaderPulseEnabled = HeaderPulseBox.IsChecked == true;
+        s.HeaderPulseIntensity = HeaderPulseIntensityBox.Value;
+        s.TitleShimmerEnabled = TitleShimmerBox.IsChecked == true;
+        s.TitleShimmerIntensity = TitleShimmerIntensityBox.Value;
+        s.TitleCometEnabled = TitleCometBox.IsChecked == true;
+        s.TitleCometIntensity = TitleCometIntensityBox.Value;
+        s.TitleEqualizerEnabled = TitleEqualizerBox.IsChecked == true;
+        s.TitleEqualizerIntensity = TitleEqualizerIntensityBox.Value;
+        s.TitleLaserEnabled = TitleLaserBox.IsChecked == true;
+        s.TitleLaserIntensity = TitleLaserIntensityBox.Value;
+        s.TitleAuroraEnabled = TitleAuroraBox.IsChecked == true;
+        s.TitleAuroraIntensity = TitleAuroraIntensityBox.Value;
+        s.TitleWaveEnabled = TitleWaveBox.IsChecked == true;
+        s.TitleWaveIntensity = TitleWaveIntensityBox.Value;
+        s.HeaderPrismEnabled = HeaderPrismBox.IsChecked == true;
+        s.HeaderPrismIntensity = HeaderPrismIntensityBox.Value;
+        s.HeaderRipplesEnabled = HeaderRipplesBox.IsChecked == true;
+        s.HeaderRipplesIntensity = HeaderRipplesIntensityBox.Value;
+        s.HeaderCircuitEnabled = HeaderCircuitBox.IsChecked == true;
+        s.HeaderCircuitIntensity = HeaderCircuitIntensityBox.Value;
+        s.HeaderStarlightEnabled = HeaderStarlightBox.IsChecked == true;
+        s.HeaderStarlightIntensity = HeaderStarlightIntensityBox.Value;
+        s.HeaderNebulaEnabled = HeaderNebulaBox.IsChecked == true;
+        s.HeaderNebulaIntensity = HeaderNebulaIntensityBox.Value;
+        s.HeaderSilkEnabled = HeaderSilkBox.IsChecked == true;
+        s.HeaderSilkIntensity = HeaderSilkIntensityBox.Value;
+        s.HeaderPlasmaEnabled = HeaderPlasmaBox.IsChecked == true;
+        s.HeaderPlasmaIntensity = HeaderPlasmaIntensityBox.Value;
+        s.RailBeaconEnabled = RailBeaconBox.IsChecked == true;
+        s.RailBeaconIntensity = RailBeaconIntensityBox.Value;
+        s.RailStreamEnabled = RailStreamBox.IsChecked == true;
+        s.RailStreamIntensity = RailStreamIntensityBox.Value;
+        s.RailStardustEnabled = RailStardustBox.IsChecked == true;
+        s.RailStardustIntensity = RailStardustIntensityBox.Value;
+        s.RailScanEnabled = RailScanBox.IsChecked == true;
+        s.RailScanIntensity = RailScanIntensityBox.Value;
+        s.RailAuroraEnabled = RailAuroraBox.IsChecked == true;
+        s.RailAuroraIntensity = RailAuroraIntensityBox.Value;
+        s.RailPulseEnabled = RailPulseBox.IsChecked == true;
+        s.RailPulseIntensity = RailPulseIntensityBox.Value;
+        s.RailPlasmaEnabled = RailPlasmaBox.IsChecked == true;
+        s.RailPlasmaIntensity = RailPlasmaIntensityBox.Value;
+        s.RailCascadeEnabled = RailCascadeBox.IsChecked == true;
+        s.RailCascadeIntensity = RailCascadeIntensityBox.Value;
+        s.SidebarMotesEnabled = SidebarMotesBox.IsChecked == true;
+        s.SidebarMotesIntensity = SidebarMotesIntensityBox.Value;
+        s.SidebarGlowEnabled = SidebarGlowBox.IsChecked == true;
+        s.SidebarGlowIntensity = SidebarGlowIntensityBox.Value;
+        s.SidebarPrismEnabled = SidebarPrismBox.IsChecked == true;
+        s.SidebarPrismIntensity = SidebarPrismIntensityBox.Value;
+        s.SidebarSweepEnabled = SidebarSweepBox.IsChecked == true;
+        s.SidebarSweepIntensity = SidebarSweepIntensityBox.Value;
+        s.SidebarAuroraEnabled = SidebarAuroraBox.IsChecked == true;
+        s.SidebarAuroraIntensity = SidebarAuroraIntensityBox.Value;
+        s.SidebarNebulaEnabled = SidebarNebulaBox.IsChecked == true;
+        s.SidebarNebulaIntensity = SidebarNebulaIntensityBox.Value;
+        s.SidebarWavesEnabled = SidebarWavesBox.IsChecked == true;
+        s.SidebarWavesIntensity = SidebarWavesIntensityBox.Value;
+        s.SidebarRipplesEnabled = SidebarRipplesBox.IsChecked == true;
+        s.SidebarRipplesIntensity = SidebarRipplesIntensityBox.Value;
+        s.SidebarCircuitEnabled = SidebarCircuitBox.IsChecked == true;
+        s.SidebarCircuitIntensity = SidebarCircuitIntensityBox.Value;
+        s.ButtonGlowEnabled = ButtonGlowBox.IsChecked == true;
+        s.ButtonGlowIntensity = ButtonGlowIntensityBox.Value;
+        s.ButtonSheenEnabled = ButtonSheenBox.IsChecked == true;
+        s.ButtonSheenIntensity = ButtonSheenIntensityBox.Value;
+        s.ButtonBounceEnabled = ButtonBounceBox.IsChecked == true;
+        s.ButtonBounceIntensity = ButtonBounceIntensityBox.Value;
+        s.ButtonRingEnabled = ButtonRingBox.IsChecked == true;
+        s.ButtonRingIntensity = ButtonRingIntensityBox.Value;
+        s.ButtonPulseEnabled = ButtonPulseBox.IsChecked == true;
+        s.ButtonPulseIntensity = ButtonPulseIntensityBox.Value;
+        s.ButtonLiftEnabled = ButtonLiftBox.IsChecked == true;
+        s.ButtonLiftIntensity = ButtonLiftIntensityBox.Value;
+        s.ButtonSparkEnabled = ButtonSparkBox.IsChecked == true;
+        s.ButtonSparkIntensity = ButtonSparkIntensityBox.Value;
+        s.ChromeTexture = ChromeTexture.Normalize(ChromeTextureBox.SelectedValue as string);
+        s.ChromeTextureIntensity = ChromeTextureIntensityBox.Value;
+        s.TargetAura = TargetAura.Normalize(TargetAuraBox.SelectedValue as string);
+        s.TargetAuraIntensity = TargetAuraIntensityBox.Value;
+        s.AuraSelectedModuleEnabled = AuraModuleBox.IsChecked == true;
+        s.AuraSelectedPersonEnabled = AuraPersonBox.IsChecked == true;
+        s.AuraHighlightButtonsEnabled = AuraButtonsBox.IsChecked == true;
+    }
+
+    private string SelectedChatSurfaceMode =>
+        ChatSurfaceTheme.IsChecked == true ? AppearanceOptions.ChatSurfaceTheme : AppearanceOptions.ChatSurfaceSeparate;
+
+    private string SelectedChatDensity =>
+        DensityCompact.IsChecked == true ? AppearanceOptions.DensityCompact
+        : DensitySpacious.IsChecked == true ? AppearanceOptions.DensitySpacious
+        : AppearanceOptions.DensityCozy;
+
+    private string SelectedMessageAnimation =>
+        AnimFade.IsChecked == true ? MessageMotion.Fade
+        : AnimSlide.IsChecked == true ? MessageMotion.Slide
+        : AnimPop.IsChecked == true ? MessageMotion.Pop
+        : MessageMotion.Off;
+
+    private string SelectedUiFont => UiFontBox.SelectedItem is string font && font != UiFontThemeDefault ? font : "";
+    private string SelectedFontSizeTag => (SizeBox.SelectedItem as ComboBoxItem)?.Tag as string ?? "medium";
+    private static double ClampUnit(double value, double fallback) => double.IsFinite(value) ? Math.Clamp(value, .1, 1) : fallback;
+
+    private AppearanceOverrides BuildCurrentOverrides() => new(
+        accentHex,
+        effectHex,
+        outgoingBubbleHex,
+        incomingBubbleHex,
+        AppearanceOptions.NormalizeBubbleStyle(BubbleStyleBox.SelectedValue as string),
+        AppearanceOptions.NormalizeBubbleShape(BubbleShapeBox.SelectedValue as string),
+        SelectedChatDensity,
+        AppearanceOptions.NormalizeCornerStyle(CornerStyleBox.SelectedValue as string),
+        AppearanceOptions.NormalizeAvatarShape(AvatarShapeBox.SelectedValue as string),
+        SelectedUiFont,
+        WindowOpacityBox.Value,
+        SelectedChatSurfaceMode,
+        chatBackgroundHex);
+
+    private void ApplyLiveThemeOverrides()
+    {
+        if (!IsInitialized || closing || applyingAppearance) return;
+        var overrides = BuildCurrentOverrides();
+        ThemeManager.Apply(SelectedTheme, overrides);
+        model.PreviewAvatarOptions(overrides.AvatarShape, OnlineRingBox.IsChecked == true);
+    }
+
+    private void ApplyAllLivePreviews()
+    {
+        if (!IsInitialized || closing) return;
+        ApplyLiveThemeOverrides();
+        AmbientEffect.SetSpeed(EffectSpeedBox.Value);
+        MessageMotion.Configure(SelectedMessageAnimation);
+        ApplyChromeTexturePreview();
+        ApplyChatCanvasPreview();
+        ApplySeamlessComposerPreview();
+        ApplyBackgroundBlurPreview();
+        ApplyButtonPreview();
+        ApplyTargetAuraPreview();
         UpdateFontPreview();
     }
+
+    private void SetColorChannel(System.Windows.Controls.ListBox box, System.Windows.Controls.TextBox hexBox, ref string backingField, string? value)
+    {
+        string normalized = AppearanceOptions.NormalizeHex(value);
+        backingField = normalized;
+        hexBox.Text = normalized;
+        if (normalized.Length == 0)
+            box.SelectedValue = "";
+        else
+        {
+            box.SelectedValue = normalized;
+            if (box.SelectedValue as string != normalized) box.SelectedItem = null;
+        }
+    }
+
+    private void ColorOverride_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (!IsInitialized || closing || applyingAppearance) return;
+        if (sender is not System.Windows.Controls.ListBox box || box.SelectedValue is not string value) return;
+        applyingAppearance = true;
+        if (box == AccentColorBox) { accentHex = value; AccentHexBox.Text = value; }
+        else if (box == EffectColorBox) { effectHex = value; EffectHexBox.Text = value; }
+        else if (box == OutgoingBubbleColorBox) { outgoingBubbleHex = value; OutgoingBubbleHexBox.Text = value; }
+        else if (box == IncomingBubbleColorBox) { incomingBubbleHex = value; IncomingBubbleHexBox.Text = value; }
+        else if (box == ChatBackgroundColorBox) { chatBackgroundHex = value; ChatBackgroundHexBox.Text = value; }
+        applyingAppearance = false;
+        ApplyLiveThemeOverrides();
+    }
+
+    private void ChatSurface_Checked(object sender, RoutedEventArgs e)
+    {
+        if (!IsInitialized || closing || applyingAppearance) return;
+        applyingAppearance = true;
+        TextureOnChatBox.IsChecked = ChatSurfaceTheme.IsChecked == true;
+        applyingAppearance = false;
+        ApplyLiveThemeOverrides();
+    }
+
+    private void TextureOnChat_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!IsInitialized || closing || applyingAppearance) return;
+        bool onChat = TextureOnChatBox.IsChecked == true;
+        applyingAppearance = true;
+        ChatSurfaceTheme.IsChecked = onChat;
+        ChatSurfaceSeparate.IsChecked = !onChat;
+        applyingAppearance = false;
+        ApplyLiveThemeOverrides();
+    }
+
+    private void ColorHex_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter) return;
+        CommitHexInput(sender);
+        e.Handled = true;
+    }
+
+    private void ColorHex_Committed(object sender, KeyboardFocusChangedEventArgs e) => CommitHexInput(sender);
+
+    private void CommitHexInput(object sender)
+    {
+        if (!IsInitialized || closing || applyingAppearance || sender is not System.Windows.Controls.TextBox box) return;
+        string raw = box.Text.Trim();
+        string normalized;
+        if (raw.Length == 0) normalized = "";
+        else if (AppearanceOptions.TryParseHex(raw, out _)) normalized = AppearanceOptions.NormalizeHex(raw);
+        else
+        {
+            applyingAppearance = true;
+            box.Text = box == AccentHexBox ? accentHex
+                : box == EffectHexBox ? effectHex
+                : box == OutgoingBubbleHexBox ? outgoingBubbleHex
+                : box == IncomingBubbleHexBox ? incomingBubbleHex
+                : chatBackgroundHex;
+            applyingAppearance = false;
+            return;
+        }
+        applyingAppearance = true;
+        if (box == AccentHexBox) SetColorChannel(AccentColorBox, AccentHexBox, ref accentHex, normalized);
+        else if (box == EffectHexBox) SetColorChannel(EffectColorBox, EffectHexBox, ref effectHex, normalized);
+        else if (box == OutgoingBubbleHexBox) SetColorChannel(OutgoingBubbleColorBox, OutgoingBubbleHexBox, ref outgoingBubbleHex, normalized);
+        else if (box == IncomingBubbleHexBox) SetColorChannel(IncomingBubbleColorBox, IncomingBubbleHexBox, ref incomingBubbleHex, normalized);
+        else if (box == ChatBackgroundHexBox) SetColorChannel(ChatBackgroundColorBox, ChatBackgroundHexBox, ref chatBackgroundHex, normalized);
+        applyingAppearance = false;
+        ApplyLiveThemeOverrides();
+    }
+
+    private void StyleOverride_Changed(object sender, SelectionChangedEventArgs e) => ApplyLiveThemeOverrides();
+    private void Density_Checked(object sender, RoutedEventArgs e) => ApplyLiveThemeOverrides();
+    private void AvatarOption_Changed(object sender, RoutedEventArgs e) => ApplyLiveThemeOverrides();
+    private void UiFont_Changed(object sender, SelectionChangedEventArgs e) => ApplyLiveThemeOverrides();
+
+    private void MessageAnim_Checked(object sender, RoutedEventArgs e)
+    {
+        if (!IsInitialized || closing || applyingAppearance) return;
+        MessageMotion.Configure(SelectedMessageAnimation);
+    }
+
+    private void EffectSpeed_SliderChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (!IsInitialized || closing || applyingAppearance) return;
+        AmbientEffect.SetSpeed(EffectSpeedBox.Value);
+    }
+
+    private void WindowOpacity_SliderChanged(object sender, RoutedPropertyChangedEventArgs<double> e) => ApplyLiveThemeOverrides();
+
+    private void ChatCanvas_Changed(object sender, SelectionChangedEventArgs e) => ApplyChatCanvasPreview();
+    private void ChatCanvas_SliderChanged(object sender, RoutedPropertyChangedEventArgs<double> e) => ApplyChatCanvasPreview();
+    private void ApplyChatCanvasPreview()
+    {
+        if (!IsInitialized || closing || applyingAppearance) return;
+        model.PreviewChatCanvas(ChatCanvasBox.SelectedValue as string, ChatCanvasIntensityBox.Value);
+    }
+
+    private void SeamlessComposer_Changed(object sender, RoutedEventArgs e) => ApplySeamlessComposerPreview();
+    private void ApplySeamlessComposerPreview()
+    {
+        if (!IsInitialized || closing || applyingAppearance) return;
+        model.PreviewSeamlessComposer(SeamlessComposerBox.IsChecked == true);
+    }
+
+    private void BackgroundBlur_SliderChanged(object sender, RoutedPropertyChangedEventArgs<double> e) => ApplyBackgroundBlurPreview();
+    private void ApplyBackgroundBlurPreview()
+    {
+        if (!IsInitialized || closing || applyingAppearance) return;
+        double blur = BackgroundBlurBox.Value;
+        model.PreviewBackgroundBlur(blur);
+        BackgroundPreview.Effect = blur >= .5 ? new BlurEffect { Radius = blur } : null;
+    }
+
+    private void RefreshPresets(string? selectId = null)
+    {
+        PresetBox.ItemsSource = null;
+        PresetBox.ItemsSource = savedPresets.ToList();
+        if (selectId is not null) PresetBox.SelectedValue = selectId;
+        else if (savedPresets.Count > 0) PresetBox.SelectedIndex = 0;
+        bool hasAny = savedPresets.Count > 0;
+        LoadPresetButton.IsEnabled = hasAny;
+        DeletePresetButton.IsEnabled = hasAny;
+    }
+
+    private string EncodeCurrentLook()
+    {
+        var temp = new AppSettings();
+        WriteAppearanceTo(temp);
+        return AppearanceCodec.Encode(temp);
+    }
+
+    private void ApplyLookData(AppearanceCodec.LookData look)
+    {
+        var temp = new AppSettings();
+        AppearanceCodec.Apply(look, temp);
+        applyingAppearance = true;
+        LoadAppearanceControls(temp);
+        applyingAppearance = false;
+        ApplyAllLivePreviews();
+    }
+
+    private void SavePreset_Click(object sender, RoutedEventArgs e)
+    {
+        string name = PresetNameBox.Text.Trim();
+        if (name.Length == 0) name = $"Look {savedPresets.Count + 1}";
+        string code = EncodeCurrentLook();
+        var existing = savedPresets.FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
+        string selectedId;
+        if (existing is not null)
+        {
+            existing.Name = name;
+            existing.Code = code;
+            selectedId = existing.Id;
+        }
+        else
+        {
+            var preset = new AppearancePreset { Name = name, Code = code };
+            savedPresets.Add(preset);
+            selectedId = preset.Id;
+        }
+        PresetNameBox.Text = "";
+        RefreshPresets(selectedId);
+        PresetStatusText.Text = "Saved";
+    }
+
+    private void LoadPreset_Click(object sender, RoutedEventArgs e)
+    {
+        if (PresetBox.SelectedItem is not AppearancePreset preset) return;
+        if (!AppearanceCodec.TryDecode(preset.Code, out var look)) { PresetStatusText.Text = "Invalid code"; return; }
+        ApplyLookData(look);
+        PresetStatusText.Text = "Loaded";
+    }
+
+    private void DeletePreset_Click(object sender, RoutedEventArgs e)
+    {
+        if (PresetBox.SelectedItem is not AppearancePreset preset) return;
+        savedPresets.RemoveAll(p => p.Id == preset.Id);
+        RefreshPresets();
+        PresetStatusText.Text = "Deleted";
+    }
+
+    private void CopyLookCode_Click(object sender, RoutedEventArgs e)
+    {
+        string code = EncodeCurrentLook();
+        LookCodeBox.Text = code;
+        try { System.Windows.Clipboard.SetText(code); } catch (System.Runtime.InteropServices.ExternalException) { }
+        PresetStatusText.Text = "Copied";
+    }
+
+    private void ImportLookCode_Click(object sender, RoutedEventArgs e)
+    {
+        if (!AppearanceCodec.TryDecode(LookCodeBox.Text, out var look)) { PresetStatusText.Text = "Invalid code"; return; }
+        ApplyLookData(look);
+        PresetStatusText.Text = "Imported";
+    }
+
+    private void RandomizeLook_Click(object sender, RoutedEventArgs e)
+    {
+        ApplyLookData(AppearanceCodec.Randomize());
+        PresetStatusText.Text = "Randomized";
+    }
+
+    private void ResetAppearance_Click(object sender, RoutedEventArgs e)
+    {
+        var temp = new AppSettings { Theme = SelectedTheme };
+        AppearanceCodec.ResetDefaults(temp);
+        applyingAppearance = true;
+        LoadAppearanceControls(temp);
+        applyingAppearance = false;
+        ApplyAllLivePreviews();
+        PresetStatusText.Text = "Reset";
+    }
+
     // A picture chosen here is only applied on Save; an unsaved one is deleted when the window closes.
     private string avatarPath = "";
     private readonly List<string> unsavedAvatars = [];
@@ -198,11 +837,11 @@ public partial class SettingsWindow : Window
     private string SelectedTheme => selectedTheme;
     private void Theme_Changed(object sender, SelectionChangedEventArgs e)
     {
-        if (!IsInitialized || updatingThemeFilter) return;
+        if (!IsInitialized || updatingThemeFilter || applyingAppearance || closing) return;
         if (ThemeBox.SelectedValue is string theme)
         {
             selectedTheme = theme;
-            ThemeManager.Apply(theme);
+            ApplyLiveThemeOverrides();
         }
     }
     private void ThemeFilter_Checked(object sender, RoutedEventArgs e)
@@ -212,6 +851,7 @@ public partial class SettingsWindow : Window
     }
     private void FilterThemes(string filter)
     {
+        currentThemeFilter = filter;
         updatingThemeFilter = true;
         IEnumerable<ThemeSwatch> items = filter switch
         {
@@ -228,22 +868,27 @@ public partial class SettingsWindow : Window
         if (!IsInitialized || AppearanceThemesSection is null || sender is not FrameworkElement { Tag: string tab }) return;
         SelectAppearanceTab(tab);
     }
-    /// <summary>Switches the active sub-tab inside Appearance (Themes, Textures, Ambient, Headers, Panels, Aura, or Customize).</summary>
+    /// <summary>Switches the active sub-tab inside Appearance.</summary>
     public void ShowAppearanceTab(string name)
     {
-        SelectAppearanceTab(name);
+        string normalized = NormalizeAppearanceTab(name);
+        SelectAppearanceTab(normalized);
         foreach (var tab in AppearanceTabsPanel.Children.OfType<System.Windows.Controls.RadioButton>())
-            if ((string)tab.Tag == name) tab.IsChecked = true;
+            if ((string)tab.Tag == normalized) tab.IsChecked = true;
     }
     private void SelectAppearanceTab(string name)
     {
-        AppearanceThemesSection.Visibility = name == "Themes" ? Visibility.Visible : Visibility.Collapsed;
-        AppearanceTexturesSection.Visibility = name == "Textures" ? Visibility.Visible : Visibility.Collapsed;
-        AppearanceAmbientSection.Visibility = name == "Ambient" ? Visibility.Visible : Visibility.Collapsed;
-        AppearanceHeadersSection.Visibility = name == "Headers" ? Visibility.Visible : Visibility.Collapsed;
-        AppearancePanelsSection.Visibility = name == "Panels" ? Visibility.Visible : Visibility.Collapsed;
-        AppearanceAuraSection.Visibility = name == "Aura" ? Visibility.Visible : Visibility.Collapsed;
-        AppearanceCustomizeSection.Visibility = name == "Customize" ? Visibility.Visible : Visibility.Collapsed;
+        string normalized = NormalizeAppearanceTab(name);
+        AppearanceThemesSection.Visibility = normalized == "Themes" ? Visibility.Visible : Visibility.Collapsed;
+        AppearanceColorsSection.Visibility = normalized == "Colors" ? Visibility.Visible : Visibility.Collapsed;
+        AppearanceBubblesSection.Visibility = normalized == "Bubbles" ? Visibility.Visible : Visibility.Collapsed;
+        AppearanceTexturesSection.Visibility = normalized == "Textures" ? Visibility.Visible : Visibility.Collapsed;
+        AppearanceAmbientSection.Visibility = normalized == "Ambient" ? Visibility.Visible : Visibility.Collapsed;
+        AppearanceHeadersSection.Visibility = normalized == "Headers" ? Visibility.Visible : Visibility.Collapsed;
+        AppearancePanelsSection.Visibility = normalized == "Panels" ? Visibility.Visible : Visibility.Collapsed;
+        AppearanceAuraSection.Visibility = normalized == "Aura" ? Visibility.Visible : Visibility.Collapsed;
+        AppearanceCustomizeSection.Visibility = normalized == "Customize" ? Visibility.Visible : Visibility.Collapsed;
+        if (!restoringNavigation && !closing) model.LastAppearanceTab = normalized;
         PreferencesScroller.ScrollToTop();
     }
     private void Page_Checked(object sender, RoutedEventArgs e)
@@ -254,21 +899,43 @@ public partial class SettingsWindow : Window
     /// <summary>Shows a page by name (used by tests and screenshots).</summary>
     public void ShowPage(string name)
     {
-        SelectPage(name);
-        foreach (var item in NavPanel.Children.OfType<System.Windows.Controls.RadioButton>()) if ((string)item.Tag == name) item.IsChecked = true;
+        string normalized = NormalizePage(name);
+        SelectPage(normalized);
+        foreach (var item in NavPanel.Children.OfType<System.Windows.Controls.RadioButton>()) if ((string)item.Tag == normalized) item.IsChecked = true;
     }
     private void SelectPage(string name)
     {
+        string normalized = NormalizePage(name);
         foreach (var page in new[] { GeneralPage, AccountPage, MessagesPage, HistoryPage, AlertsPage, NetworkPage, FilesPage, AppearancePage, AboutPage })
-            page.Visibility = page.Name == name ? Visibility.Visible : Visibility.Collapsed;
+            page.Visibility = page.Name == normalized ? Visibility.Visible : Visibility.Collapsed;
+        if (!restoringNavigation && !closing) model.LastSettingsPage = normalized;
         PreferencesScroller.ScrollToTop();
     }
-    private void Font_Changed(object sender, SelectionChangedEventArgs e) => UpdateFontPreview();
+    private void Font_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (!IsInitialized || closing || applyingAppearance) return;
+        if (sender == SizeBox)
+        {
+            customFontPx = null;
+            applyingAppearance = true;
+            MessageFontPxBox.Value = MainViewModel.FontSizeFor(SelectedFontSizeTag);
+            applyingAppearance = false;
+        }
+        UpdateFontPreview();
+    }
+    private void MessageFontPx_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (!IsInitialized || closing || applyingAppearance) return;
+        double px = Math.Round(MessageFontPxBox.Value);
+        double presetPx = MainViewModel.FontSizeFor(SelectedFontSizeTag);
+        customFontPx = Math.Abs(px - presetPx) < .01 ? null : px;
+        UpdateFontPreview();
+    }
     private void UpdateFontPreview()
     {
         if (FontPreview is null || SizeBox is null) return;
         try { FontPreview.FontFamily = new FontFamily((FontBox.SelectedItem as string ?? "Segoe UI") + ", Segoe UI"); } catch (ArgumentException) { }
-        FontPreview.FontSize = MainViewModel.FontSizeFor((SizeBox.SelectedItem as ComboBoxItem)?.Tag as string ?? "medium");
+        FontPreview.FontSize = customFontPx ?? MainViewModel.FontSizeFor(SelectedFontSizeTag);
     }
     private void ClearHistory_Click(object sender, RoutedEventArgs e)
     {
@@ -303,7 +970,7 @@ public partial class SettingsWindow : Window
     private void ChromeTexture_SliderChanged(object sender, RoutedPropertyChangedEventArgs<double> e) => ApplyChromeTexturePreview();
     private void ApplyChromeTexturePreview()
     {
-        if (!IsInitialized) return;
+        if (!IsInitialized || closing || applyingAppearance) return;
         model.PreviewChromeTexture(ChromeTextureBox.SelectedValue as string, ChromeTextureIntensityBox.Value);
     }
     private void TargetAura_Changed(object sender, SelectionChangedEventArgs e) => ApplyTargetAuraPreview();
@@ -311,7 +978,7 @@ public partial class SettingsWindow : Window
     private void TargetAura_SliderChanged(object sender, RoutedPropertyChangedEventArgs<double> e) => ApplyTargetAuraPreview();
     private void ApplyTargetAuraPreview()
     {
-        if (!IsInitialized) return;
+        if (!IsInitialized || closing || applyingAppearance) return;
         string style = TargetAura.Normalize(TargetAuraBox.SelectedValue as string);
         double intensity = TargetAuraIntensityBox.Value;
         bool onModule = AuraModuleBox.IsChecked == true;
@@ -325,12 +992,15 @@ public partial class SettingsWindow : Window
     }
     private void ApplyButtonPreview()
     {
-        if (!IsInitialized) return;
+        if (!IsInitialized || closing || applyingAppearance) return;
         ButtonEffects.Configure(
             ButtonGlowBox.IsChecked == true, ButtonGlowIntensityBox.Value,
             ButtonSheenBox.IsChecked == true, ButtonSheenIntensityBox.Value,
             ButtonBounceBox.IsChecked == true, ButtonBounceIntensityBox.Value,
-            ButtonRingBox.IsChecked == true, ButtonRingIntensityBox.Value);
+            ButtonRingBox.IsChecked == true, ButtonRingIntensityBox.Value,
+            ButtonPulseBox.IsChecked == true, ButtonPulseIntensityBox.Value,
+            ButtonLiftBox.IsChecked == true, ButtonLiftIntensityBox.Value,
+            ButtonSparkBox.IsChecked == true, ButtonSparkIntensityBox.Value);
     }
 
     private async void Save_Click(object sender, RoutedEventArgs e)
@@ -353,16 +1023,18 @@ public partial class SettingsWindow : Window
                 return;
             }
         }
+        CommitHexInput(AccentHexBox);
+        CommitHexInput(EffectHexBox);
+        CommitHexInput(OutgoingBubbleHexBox);
+        CommitHexInput(IncomingBubbleHexBox);
         bool networkChanged = port != model.Settings.Port || multicast != model.Settings.Multicast;
-        string defaultFolder = CydLan.Core.AppSettings.DefaultReceivedFilesFolder;
+        string defaultFolder = AppSettings.DefaultReceivedFilesFolder;
         await model.SavePreferencesAsync(s =>
         {
             s.StartWithWindows = StartWithWindowsBox.IsChecked == true; s.StartMinimized = MinimizedBox.IsChecked == true;
             s.Status = (string)((ComboBoxItem)StatusBox.SelectedItem).Tag;
             s.DisplayName = name; s.FirstName = FirstNameBox.Text.Trim(); s.LastName = LastNameBox.Text.Trim(); s.About = AboutBox.Text.Trim();
             s.AvatarPath = avatarPath;
-            s.MessageFont = FontBox.SelectedItem as string ?? "Segoe UI Variable Text";
-            s.MessageFontSize = (SizeBox.SelectedItem as ComboBoxItem)?.Tag as string ?? "medium";
             s.SendWithCtrlEnter = SendCtrlEnter.IsChecked == true; s.TrimMessages = TrimBox.IsChecked == true;
             s.KeepHistory = KeepHistoryBox.IsChecked == true; s.KeepFileHistory = KeepFileHistoryBox.IsChecked == true;
             s.Notifications = NotificationsBox.IsChecked == true; s.AlertsWhenBusy = AlertsBusyBox.IsChecked == true; s.AlertsWhenDnd = AlertsDndBox.IsChecked == true;
@@ -371,71 +1043,12 @@ public partial class SettingsWindow : Window
             s.Port = port; s.Multicast = multicast;
             s.ReceivedFilesFolder = string.Equals(FolderBox.Text, defaultFolder, StringComparison.OrdinalIgnoreCase) ? "" : FolderBox.Text;
             s.AutoAcceptFiles = AutoAcceptBox.IsChecked == true;
-            s.Theme = SelectedTheme;
             s.ChatBackgroundPath = backgroundPath;
             s.ChatBackgroundOpacity = BackgroundOpacityBox.Value;
-            s.TypingEffect = ChatEffects.Normalize(TypingEffectBox.SelectedValue as string, typing: true);
-            s.ClickEffect = ChatEffects.Normalize(ClickEffectBox.SelectedValue as string);
-            s.SteampunkEngineEnabled = SteampunkEngineBox.IsChecked == true;
-            s.SakuraPetalsEnabled = SakuraPetalsBox.IsChecked == true;
-            s.TypingIntensity = TypingIntensityBox.Value;
-            s.ClickIntensity = ClickIntensityBox.Value;
-            s.ThemeDetailsEnabled = ThemeDetailsBox.IsChecked == true;
-            s.EngineIntensity = EngineIntensityBox.Value;
-            s.PetalIntensity = PetalIntensityBox.Value;
-            s.FirefliesEnabled = FirefliesBox.IsChecked == true;
-            s.FireflyIntensity = FireflyIntensityBox.Value;
-            s.RainEnabled = RainBox.IsChecked == true;
-            s.RainIntensity = RainIntensityBox.Value;
-            s.SnowEnabled = SnowBox.IsChecked == true;
-            s.SnowIntensity = SnowIntensityBox.Value;
-            s.InkBloomIntensity = InkBloomIntensityBox.Value;
-            s.SendPulseEnabled = SendPulseBox.IsChecked == true;
-            s.SendPulseIntensity = SendPulseIntensityBox.Value;
-            s.AmbientOnSidebarEnabled = AmbientOnSidebarBox.IsChecked == true;
-            s.HeaderAuroraEnabled = HeaderAuroraBox.IsChecked == true;
-            s.HeaderAuroraIntensity = HeaderAuroraIntensityBox.Value;
-            s.TitleSparklesEnabled = TitleSparklesBox.IsChecked == true;
-            s.TitleSparklesIntensity = TitleSparklesIntensityBox.Value;
-            s.HeaderPulseEnabled = HeaderPulseBox.IsChecked == true;
-            s.HeaderPulseIntensity = HeaderPulseIntensityBox.Value;
-            s.RailBeaconEnabled = RailBeaconBox.IsChecked == true;
-            s.RailBeaconIntensity = RailBeaconIntensityBox.Value;
-            s.RailStreamEnabled = RailStreamBox.IsChecked == true;
-            s.RailStreamIntensity = RailStreamIntensityBox.Value;
-            s.RailStardustEnabled = RailStardustBox.IsChecked == true;
-            s.RailStardustIntensity = RailStardustIntensityBox.Value;
-            s.RailScanEnabled = RailScanBox.IsChecked == true;
-            s.RailScanIntensity = RailScanIntensityBox.Value;
-            s.SidebarMotesEnabled = SidebarMotesBox.IsChecked == true;
-            s.SidebarMotesIntensity = SidebarMotesIntensityBox.Value;
-            s.SidebarGlowEnabled = SidebarGlowBox.IsChecked == true;
-            s.SidebarGlowIntensity = SidebarGlowIntensityBox.Value;
-            s.SidebarPrismEnabled = SidebarPrismBox.IsChecked == true;
-            s.SidebarPrismIntensity = SidebarPrismIntensityBox.Value;
-            s.SidebarSweepEnabled = SidebarSweepBox.IsChecked == true;
-            s.SidebarSweepIntensity = SidebarSweepIntensityBox.Value;
-            s.StarfieldEnabled = StarfieldBox.IsChecked == true;
-            s.StarfieldIntensity = StarfieldIntensityBox.Value;
-            s.BubblesEnabled = BubblesBox.IsChecked == true;
-            s.BubblesIntensity = BubblesIntensityBox.Value;
-            s.EmbersEnabled = EmbersBox.IsChecked == true;
-            s.EmbersIntensity = EmbersIntensityBox.Value;
-            s.ButtonGlowEnabled = ButtonGlowBox.IsChecked == true;
-            s.ButtonGlowIntensity = ButtonGlowIntensityBox.Value;
-            s.ButtonSheenEnabled = ButtonSheenBox.IsChecked == true;
-            s.ButtonSheenIntensity = ButtonSheenIntensityBox.Value;
-            s.ButtonBounceEnabled = ButtonBounceBox.IsChecked == true;
-            s.ButtonBounceIntensity = ButtonBounceIntensityBox.Value;
-            s.ButtonRingEnabled = ButtonRingBox.IsChecked == true;
-            s.ButtonRingIntensity = ButtonRingIntensityBox.Value;
-            s.ChromeTexture = ChromeTexture.Normalize(ChromeTextureBox.SelectedValue as string);
-            s.ChromeTextureIntensity = ChromeTextureIntensityBox.Value;
-            s.TargetAura = TargetAura.Normalize(TargetAuraBox.SelectedValue as string);
-            s.TargetAuraIntensity = TargetAuraIntensityBox.Value;
-            s.AuraSelectedModuleEnabled = AuraModuleBox.IsChecked == true;
-            s.AuraSelectedPersonEnabled = AuraPersonBox.IsChecked == true;
-            s.AuraHighlightButtonsEnabled = AuraButtonsBox.IsChecked == true;
+            WriteAppearanceTo(s);
+            s.SavedPresets = savedPresets.Select(p => new AppearancePreset { Id = p.Id, Name = p.Name, Code = p.Code }).ToList();
+            s.LastSettingsPage = NormalizePage(model.LastSettingsPage);
+            s.LastAppearanceTab = NormalizeAppearanceTab(model.LastAppearanceTab);
         });
         if (networkChanged) model.Toast = "Restart CydLan to use the new network settings.";
         saved = true; Close();

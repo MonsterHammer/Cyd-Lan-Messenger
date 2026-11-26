@@ -28,29 +28,53 @@ public sealed class SteampunkEngine : FrameworkElement
     private static readonly Geometry Flywheel = Cog(16, 15);
     private static readonly Geometry Pinion = Cog(12, 11.25);
     private Window? host;
+    private bool subscribed;
     private bool running;
+    private double activeSpeed = 1.0;
+    private double accumulatedAngle;
 
     internal double ShaftAngle => (double)GetValue(ShaftAngleProperty);
 
     public SteampunkEngine()
     {
         SetResourceReference(TintProperty, "EffectColor");
-        Loaded += (_, _) =>
-        {
-            host = Window.GetWindow(this);
-            if (host is not null) host.StateChanged += HostStateChanged;
-            SystemParameters.StaticPropertyChanged += SystemPropertyChanged;
-            UpdateAnimation();
-        };
-        Unloaded += (_, _) =>
-        {
-            if (host is not null) host.StateChanged -= HostStateChanged;
-            host = null;
-            SystemParameters.StaticPropertyChanged -= SystemPropertyChanged;
-            UpdateAnimation();
-        };
+        Loaded += (_, _) => Attach();
+        Unloaded += (_, _) => Detach();
         IsVisibleChanged += (_, _) => UpdateAnimation();
     }
+
+    private void Attach()
+    {
+        if (subscribed) { UpdateAnimation(); return; }
+        subscribed = true;
+        host = Window.GetWindow(this);
+        if (host is not null)
+        {
+            host.StateChanged += HostStateChanged;
+            host.Closed += HostClosed;
+        }
+        SystemParameters.StaticPropertyChanged += SystemPropertyChanged;
+        AmbientEffect.SpeedChanged += OnSpeedChanged;
+        UpdateAnimation();
+    }
+
+    private void Detach()
+    {
+        if (!subscribed) return;
+        subscribed = false;
+        if (host is not null)
+        {
+            host.StateChanged -= HostStateChanged;
+            host.Closed -= HostClosed;
+        }
+        host = null;
+        SystemParameters.StaticPropertyChanged -= SystemPropertyChanged;
+        AmbientEffect.SpeedChanged -= OnSpeedChanged;
+        UpdateAnimation();
+    }
+
+    private void HostClosed(object? sender, EventArgs e) => Detach();
+    private void OnSpeedChanged() => UpdateAnimation();
 
     private void HostStateChanged(object? sender, EventArgs e) => UpdateAnimation();
 
@@ -62,10 +86,13 @@ public sealed class SteampunkEngine : FrameworkElement
 
     private void UpdateAnimation()
     {
-        bool shouldRun = host is not null && IsVisible && host.WindowState != WindowState.Minimized
+        bool shouldRun = host is { IsVisible: true, WindowState: not WindowState.Minimized } && IsVisible
             && SystemParameters.ClientAreaAnimation;
-        if (running == shouldRun) return;
+        double speed = AmbientEffect.SpeedMultiplier;
+        if (running == shouldRun && (!shouldRun || Math.Abs(activeSpeed - speed) < .001)) return;
+        if (running) accumulatedAngle = (accumulatedAngle + ShaftAngle) % 1080;
         running = shouldRun;
+        activeSpeed = speed;
         InvalidateVisual();
         if (!running)
         {
@@ -73,8 +100,12 @@ public sealed class SteampunkEngine : FrameworkElement
             return;
         }
 
-        // Three flywheel turns keep the 16:12 gears in step when the timeline repeats.
-        var rotation = new DoubleAnimation(0, 1080, TimeSpan.FromSeconds(7.2)) { RepeatBehavior = RepeatBehavior.Forever };
+        // Three flywheel turns keep the 16:12 gears in step; IsCumulative avoids any repeat hitch.
+        var rotation = new DoubleAnimation(0, 1080, TimeSpan.FromSeconds(7.2 / speed))
+        {
+            RepeatBehavior = RepeatBehavior.Forever,
+            IsCumulative = true
+        };
         Timeline.SetDesiredFrameRate(rotation, 24);
         BeginAnimation(ShaftAngleProperty, rotation);
     }
@@ -83,7 +114,7 @@ public sealed class SteampunkEngine : FrameworkElement
     {
         base.OnRender(dc);
         dc.DrawDrawing(housing ??= BuildHousing());
-        double angle = ShaftAngle;
+        double angle = accumulatedAngle + ShaftAngle;
         DrawCog(dc, new Point(108, 17), Pinion, -angle * 4 / 3 + 15, 7);
         DrawCog(dc, new Point(133, 18), Flywheel, angle, 10);
 

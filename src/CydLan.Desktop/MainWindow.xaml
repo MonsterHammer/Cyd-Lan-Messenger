@@ -30,9 +30,9 @@
       <Setter Property="Visibility" Value="{Binding IsActive, Converter={StaticResource Bool}}"/>
     </Style>
     <DataTemplate x:Key="MessageTemplate">
-      <Grid Margin="0,0,0,16">
+      <Grid Margin="{DynamicResource MessageRowMargin}" local:MessageMotion.Enable="True">
         <Grid.Style><Style TargetType="Grid"><Setter Property="HorizontalAlignment" Value="Left"/><Style.Triggers><DataTrigger Binding="{Binding Outgoing}" Value="True"><Setter Property="HorizontalAlignment" Value="Right"/></DataTrigger></Style.Triggers></Style></Grid.Style>
-        <StackPanel MaxWidth="540">
+        <StackPanel MaxWidth="{DynamicResource MessageMaxWidth}">
           <TextBlock Text="{Binding SenderName}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource Muted}" Margin="4,0,0,5" Visibility="{Binding ShowSender, Converter={StaticResource Bool}}"/>
           <Image Source="{Binding ImagePath, Converter={StaticResource ImageFile}}" MaxWidth="320" MaxHeight="320" Stretch="Uniform" local:Rounded.Radius="14" Cursor="Hand"
                  Visibility="{Binding HasImage, Converter={StaticResource Bool}}" MouseLeftButtonUp="MessageImage_Click" ToolTip="Open image" HorizontalAlignment="{Binding HorizontalAlignment, RelativeSource={RelativeSource AncestorType=Grid}}">
@@ -60,7 +60,18 @@
                 </MenuItem>
               </ContextMenu>
             </Border.ContextMenu>
-            <Border.Style><Style TargetType="Border"><Setter Property="Background" Value="{DynamicResource Surface}"/><Style.Triggers><DataTrigger Binding="{Binding Outgoing}" Value="True"><Setter Property="Background" Value="{DynamicResource AccentSoft}"/></DataTrigger></Style.Triggers></Style></Border.Style>
+            <Border.Style><Style TargetType="Border">
+              <Setter Property="Background" Value="{DynamicResource IncomingBubbleBackground}"/>
+              <Setter Property="BorderBrush" Value="{DynamicResource IncomingBubbleBorder}"/>
+              <Setter Property="BorderThickness" Value="{DynamicResource IncomingBubbleBorderThickness}"/>
+              <Setter Property="TextElement.Foreground" Value="{DynamicResource IncomingBubbleForeground}"/>
+              <Style.Triggers><DataTrigger Binding="{Binding Outgoing}" Value="True">
+                <Setter Property="Background" Value="{DynamicResource OutgoingBubbleBackground}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource OutgoingBubbleBorder}"/>
+                <Setter Property="BorderThickness" Value="{DynamicResource OutgoingBubbleBorderThickness}"/>
+                <Setter Property="TextElement.Foreground" Value="{DynamicResource OutgoingBubbleForeground}"/>
+              </DataTrigger></Style.Triggers>
+            </Style></Border.Style>
             <StackPanel>
               <StackPanel Orientation="Horizontal"><local:Glyph Data="{DynamicResource IconFile}" Size="20" Foreground="{DynamicResource Accent}" Margin="0,0,10,0"/><TextBlock Text="{Binding FileName}" FontSize="14" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="360"/></StackPanel>
               <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0" Visibility="{Binding AwaitingAnswer, Converter={StaticResource Bool}}">
@@ -69,15 +80,28 @@
               </StackPanel>
             </StackPanel>
           </Border>
-          <Border x:Name="TextBubble" Padding="12,8" CornerRadius="{DynamicResource MessageBubbleCorner}" Visibility="{Binding HasText, Converter={StaticResource Bool}}"
+          <Border x:Name="TextBubble" Padding="{DynamicResource MessageBubblePadding}" Visibility="{Binding HasText, Converter={StaticResource Bool}}"
                   HorizontalAlignment="{Binding HorizontalAlignment, RelativeSource={RelativeSource AncestorType=Grid}}">
-            <Border.Style><Style TargetType="Border"><Setter Property="Background" Value="{DynamicResource Surface}"/><Style.Triggers><DataTrigger Binding="{Binding Outgoing}" Value="True"><Setter Property="Background" Value="{DynamicResource AccentSoft}"/></DataTrigger></Style.Triggers></Style></Border.Style>
+            <Border.Style><Style TargetType="Border">
+              <Setter Property="Background" Value="{DynamicResource IncomingBubbleBackground}"/>
+              <Setter Property="BorderBrush" Value="{DynamicResource IncomingBubbleBorder}"/>
+              <Setter Property="BorderThickness" Value="{DynamicResource IncomingBubbleBorderThickness}"/>
+              <Setter Property="CornerRadius" Value="{DynamicResource IncomingBubbleCorner}"/>
+              <Setter Property="TextElement.Foreground" Value="{DynamicResource IncomingBubbleForeground}"/>
+              <Style.Triggers><DataTrigger Binding="{Binding Outgoing}" Value="True">
+                <Setter Property="Background" Value="{DynamicResource OutgoingBubbleBackground}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource OutgoingBubbleBorder}"/>
+                <Setter Property="BorderThickness" Value="{DynamicResource OutgoingBubbleBorderThickness}"/>
+                <Setter Property="CornerRadius" Value="{DynamicResource OutgoingBubbleCorner}"/>
+                <Setter Property="TextElement.Foreground" Value="{DynamicResource OutgoingBubbleForeground}"/>
+              </DataTrigger></Style.Triggers>
+            </Style></Border.Style>
             <StackPanel>
               <TextBlock Text="ANNOUNCEMENT" Foreground="{DynamicResource Accent}" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,6" Visibility="{Binding Broadcast, Converter={StaticResource Bool}}"/>
-              <TextBox Text="{Binding Text, Mode=OneWay}" IsReadOnly="True" ContextMenu="{StaticResource ReadOnlyTextContextMenu}" TextWrapping="Wrap" FontSize="{DynamicResource MessageFontSize}" FontFamily="{DynamicResource MessageFontFamily}" Background="Transparent" BorderThickness="0" Padding="0"
+              <TextBox Text="{Binding Text, Mode=OneWay}" IsReadOnly="True" ContextMenu="{StaticResource ReadOnlyTextContextMenu}" TextWrapping="Wrap" FontSize="{DynamicResource MessageFontSize}" FontFamily="{DynamicResource MessageFontFamily}" Foreground="{Binding (TextElement.Foreground), RelativeSource={RelativeSource AncestorType=Border}}" Background="Transparent" BorderThickness="0" Padding="0"
                        Visibility="{Binding Text, Converter={StaticResource SmileyVisibility}, ConverterParameter=plain}"/>
               <!-- LAN Messenger emoticon codes are drawn as its pictures. -->
-              <TextBlock local:SmileyText.Text="{Binding Text}" TextWrapping="Wrap" FontSize="{DynamicResource MessageFontSize}" FontFamily="{DynamicResource MessageFontFamily}" Foreground="{DynamicResource Ink}"
+              <TextBlock local:SmileyText.Text="{Binding Text}" TextWrapping="Wrap" FontSize="{DynamicResource MessageFontSize}" FontFamily="{DynamicResource MessageFontFamily}" Foreground="{Binding (TextElement.Foreground), RelativeSource={RelativeSource AncestorType=Border}}"
                          Visibility="{Binding Text, Converter={StaticResource SmileyVisibility}}">
                 <TextBlock.ContextMenu><ContextMenu><MenuItem Header="Copy" Click="CopyMessage_Click"/></ContextMenu></TextBlock.ContextMenu>
               </TextBlock>
@@ -102,11 +126,23 @@
       <local:ChromeTexture x:Name="ChromeTextureLayer" Grid.RowSpan="2"
                            Texture="{Binding ChromeTexture}" Intensity="{Binding ChromeTextureIntensity}"
                            Visibility="{Binding ChromeTextureEnabled, Converter={StaticResource Bool}}"/>
-      <Grid Background="Transparent" MouseLeftButtonDown="TitleBar_MouseDown">
-        <local:HeaderEffect x:Name="TitleBarSparkles" Kind="Sparkles" Margin="145,0,142,0" Intensity="{Binding TitleSparklesIntensity}"
+      <Grid Background="Transparent" ClipToBounds="True" MouseLeftButtonDown="TitleBar_MouseDown">
+        <local:HeaderEffect x:Name="TitleBarSparkles" Kind="Sparkles" Intensity="{Binding TitleSparklesIntensity}"
                             Visibility="{Binding TitleSparklesEnabled, Converter={StaticResource Bool}}"/>
+        <local:HeaderEffect x:Name="TitleBarShimmer" Kind="Shimmer" Intensity="{Binding TitleShimmerIntensity}"
+                            Visibility="{Binding TitleShimmerEnabled, Converter={StaticResource Bool}}"/>
+        <local:HeaderEffect x:Name="TitleBarComet" Kind="Comet" Intensity="{Binding TitleCometIntensity}"
+                            Visibility="{Binding TitleCometEnabled, Converter={StaticResource Bool}}"/>
+        <local:HeaderEffect x:Name="TitleBarEqualizer" Kind="Equalizer" Intensity="{Binding TitleEqualizerIntensity}"
+                            Visibility="{Binding TitleEqualizerEnabled, Converter={StaticResource Bool}}"/>
+        <local:HeaderEffect x:Name="TitleBarLaser" Kind="Laser" Intensity="{Binding TitleLaserIntensity}"
+                            Visibility="{Binding TitleLaserEnabled, Converter={StaticResource Bool}}"/>
+        <local:HeaderEffect x:Name="TitleBarAurora" Kind="TitleAurora" Intensity="{Binding TitleAuroraIntensity}"
+                            Visibility="{Binding TitleAuroraEnabled, Converter={StaticResource Bool}}"/>
+        <local:HeaderEffect x:Name="TitleBarWave" Kind="TitleWave" Intensity="{Binding TitleWaveIntensity}"
+                            Visibility="{Binding TitleWaveEnabled, Converter={StaticResource Bool}}"/>
         <local:ThemeDecoration x:Name="TitleDecoration" Zone="Title" Width="116" HorizontalAlignment="Right" Margin="0,0,145,0"
-                               Visibility="{Binding Settings.ThemeDetailsEnabled, Converter={StaticResource Bool}}"/>
+                               Visibility="{Binding ThemeDetailsEnabled, Converter={StaticResource Bool}}"/>
         <StackPanel Orientation="Horizontal" Margin="15,0,0,0" VerticalAlignment="Center">
           <Image Source="{DynamicResource BrandMark}" Width="20" Height="20" Margin="0,0,9,0"/>
           <TextBlock Text="CydLan" FontSize="13" Foreground="{DynamicResource Muted}" VerticalAlignment="Center"/>
@@ -129,7 +165,7 @@
           <Grid.RowDefinitions><RowDefinition Height="10"/><RowDefinition Height="*"/><RowDefinition Height="106"/></Grid.RowDefinitions>
           <Border Grid.RowSpan="3" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,1,0" IsHitTestVisible="False" SnapsToDevicePixels="True"/>
           <local:ThemeDecoration x:Name="RailDecoration" Zone="Rail" Grid.RowSpan="3"
-                                 Visibility="{Binding Settings.ThemeDetailsEnabled, Converter={StaticResource Bool}}"/>
+                                 Visibility="{Binding ThemeDetailsEnabled, Converter={StaticResource Bool}}"/>
           <local:RailEffect x:Name="RailBeaconEffect" Kind="Beacon" Grid.RowSpan="3" Intensity="{Binding RailBeaconIntensity}"
                             Visibility="{Binding RailBeaconEnabled, Converter={StaticResource Bool}}"/>
           <local:RailEffect x:Name="RailStreamEffect" Kind="Stream" Grid.RowSpan="3" Intensity="{Binding RailStreamIntensity}"
@@ -138,6 +174,14 @@
                             Visibility="{Binding RailStardustEnabled, Converter={StaticResource Bool}}"/>
           <local:RailEffect x:Name="RailScanEffect" Kind="Scan" Grid.RowSpan="3" Intensity="{Binding RailScanIntensity}"
                             Visibility="{Binding RailScanEnabled, Converter={StaticResource Bool}}"/>
+          <local:RailEffect x:Name="RailAuroraEffect" Kind="Aurora" Grid.RowSpan="3" Intensity="{Binding RailAuroraIntensity}"
+                            Visibility="{Binding RailAuroraEnabled, Converter={StaticResource Bool}}"/>
+          <local:RailEffect x:Name="RailPulseEffect" Kind="Pulse" Grid.RowSpan="3" Intensity="{Binding RailPulseIntensity}"
+                            Visibility="{Binding RailPulseEnabled, Converter={StaticResource Bool}}"/>
+          <local:RailEffect x:Name="RailPlasmaEffect" Kind="Plasma" Grid.RowSpan="3" Intensity="{Binding RailPlasmaIntensity}"
+                            Visibility="{Binding RailPlasmaEnabled, Converter={StaticResource Bool}}"/>
+          <local:RailEffect x:Name="RailCascadeEffect" Kind="Cascade" Grid.RowSpan="3" Intensity="{Binding RailCascadeIntensity}"
+                            Visibility="{Binding RailCascadeEnabled, Converter={StaticResource Bool}}"/>
           <StackPanel Grid.Row="1" Margin="0,7,0,0">
             <Button x:Name="ChatNav" ToolTip="Chats" Click="Chat_Click" AutomationProperties.Name="Conversations"
                     local:ButtonEffects.IsHighlight="{Binding IsConversationSection}" local:TargetAura.Role="Module">
@@ -162,22 +206,22 @@
           </StackPanel>
           <StackPanel Grid.Row="2" VerticalAlignment="Bottom" Margin="0,0,0,18">
             <Button Style="{StaticResource NavIcon}" ToolTip="Preferences" Click="Settings_Click" AutomationProperties.Name="Preferences"><local:Glyph Data="{DynamicResource IconSettings}" Size="19"/></Button>
-            <Button Width="32" Height="32" Padding="0" Background="{DynamicResource Avatar}" Click="Settings_Click" ToolTip="Your profile"><Grid Width="32" Height="32"><TextBlock Text="{Binding ProfileInitial}" Foreground="{DynamicResource Accent}" FontSize="13" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/><Image Source="{Binding ProfileAvatar, Converter={StaticResource AvatarFile}}" Stretch="UniformToFill" local:Rounded.Radius="8"/></Grid></Button>
+            <Button Width="32" Height="32" Padding="0" Background="{DynamicResource Avatar}" Click="Profile_Click" ToolTip="Your profile" AutomationProperties.Name="Your profile"><Grid Width="32" Height="32"><TextBlock Text="{Binding ProfileInitial}" Foreground="{DynamicResource Accent}" FontSize="13" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/><Image Source="{Binding ProfileAvatar, Converter={StaticResource AvatarFile}}" Stretch="UniformToFill" local:Rounded.Radius="8"/></Grid></Button>
           </StackPanel>
         </Grid>
         <Border x:Name="SidebarPanel" Grid.Column="1" Width="274" ClipToBounds="True" HorizontalAlignment="Left" Background="Transparent">
           <Grid x:Name="SidebarContent" Width="274" HorizontalAlignment="Left">
             <Grid.RowDefinitions><RowDefinition Height="74"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="52"/></Grid.RowDefinitions>
             <local:ThemeDecoration x:Name="SidebarDecoration" Zone="Sidebar" Grid.RowSpan="5"
-                                   Visibility="{Binding Settings.ThemeDetailsEnabled, Converter={StaticResource Bool}}"/>
+                                   Visibility="{Binding ThemeDetailsEnabled, Converter={StaticResource Bool}}"/>
             <Grid Grid.RowSpan="5" Opacity="0.6" IsHitTestVisible="False" ClipToBounds="True">
               <local:SakuraPetals x:Name="SidebarPetals" Intensity="{Binding PetalIntensity}"
                                   Visibility="{Binding SidebarPetalsVisible, Converter={StaticResource Bool}}"/>
-              <local:WeatherEffect x:Name="SidebarFireflies" Kind="Fireflies" Intensity="{Binding Settings.FireflyIntensity}"
+              <local:WeatherEffect x:Name="SidebarFireflies" Kind="Fireflies" Intensity="{Binding FireflyIntensity}"
                                    Visibility="{Binding SidebarFirefliesVisible, Converter={StaticResource Bool}}"/>
-              <local:WeatherEffect x:Name="SidebarRain" Kind="Rain" Intensity="{Binding Settings.RainIntensity}"
+              <local:WeatherEffect x:Name="SidebarRain" Kind="Rain" Intensity="{Binding RainIntensity}"
                                    Visibility="{Binding SidebarRainVisible, Converter={StaticResource Bool}}"/>
-              <local:WeatherEffect x:Name="SidebarSnow" Kind="Snow" Intensity="{Binding Settings.SnowIntensity}"
+              <local:WeatherEffect x:Name="SidebarSnow" Kind="Snow" Intensity="{Binding SnowIntensity}"
                                    Visibility="{Binding SidebarSnowVisible, Converter={StaticResource Bool}}"/>
               <local:WeatherEffect x:Name="SidebarStarfield" Kind="Starfield" Intensity="{Binding StarfieldIntensity}"
                                    Visibility="{Binding SidebarStarfieldVisible, Converter={StaticResource Bool}}"/>
@@ -185,6 +229,12 @@
                                    Visibility="{Binding SidebarBubblesVisible, Converter={StaticResource Bool}}"/>
               <local:WeatherEffect x:Name="SidebarEmbers" Kind="Embers" Intensity="{Binding EmbersIntensity}"
                                    Visibility="{Binding SidebarEmbersVisible, Converter={StaticResource Bool}}"/>
+              <local:WeatherEffect x:Name="SidebarMatrix" Kind="Matrix" Intensity="{Binding MatrixIntensity}"
+                                   Visibility="{Binding SidebarMatrixVisible, Converter={StaticResource Bool}}"/>
+              <local:WeatherEffect x:Name="SidebarConstellation" Kind="Constellation" Intensity="{Binding ConstellationIntensity}"
+                                   Visibility="{Binding SidebarConstellationVisible, Converter={StaticResource Bool}}"/>
+              <local:WeatherEffect x:Name="SidebarBokeh" Kind="Bokeh" Intensity="{Binding BokehIntensity}"
+                                   Visibility="{Binding SidebarBokehVisible, Converter={StaticResource Bool}}"/>
             </Grid>
             <local:SidebarEffect x:Name="SidebarMotesEffect" Kind="Motes" Grid.RowSpan="5" Intensity="{Binding SidebarMotesIntensity}"
                                  Visibility="{Binding SidebarMotesEnabled, Converter={StaticResource Bool}}"/>
@@ -194,6 +244,16 @@
                                  Visibility="{Binding SidebarPrismEnabled, Converter={StaticResource Bool}}"/>
             <local:SidebarEffect x:Name="SidebarSweepEffect" Kind="Sweep" Grid.RowSpan="5" Intensity="{Binding SidebarSweepIntensity}"
                                  Visibility="{Binding SidebarSweepEnabled, Converter={StaticResource Bool}}"/>
+            <local:SidebarEffect x:Name="SidebarAuroraEffect" Kind="Aurora" Grid.RowSpan="5" Intensity="{Binding SidebarAuroraIntensity}"
+                                 Visibility="{Binding SidebarAuroraEnabled, Converter={StaticResource Bool}}"/>
+            <local:SidebarEffect x:Name="SidebarNebulaEffect" Kind="Nebula" Grid.RowSpan="5" Intensity="{Binding SidebarNebulaIntensity}"
+                                 Visibility="{Binding SidebarNebulaEnabled, Converter={StaticResource Bool}}"/>
+            <local:SidebarEffect x:Name="SidebarWavesEffect" Kind="Waves" Grid.RowSpan="5" Intensity="{Binding SidebarWavesIntensity}"
+                                 Visibility="{Binding SidebarWavesEnabled, Converter={StaticResource Bool}}"/>
+            <local:SidebarEffect x:Name="SidebarRipplesEffect" Kind="Ripples" Grid.RowSpan="5" Intensity="{Binding SidebarRipplesIntensity}"
+                                 Visibility="{Binding SidebarRipplesEnabled, Converter={StaticResource Bool}}"/>
+            <local:SidebarEffect x:Name="SidebarCircuitEffect" Kind="Circuit" Grid.RowSpan="5" Intensity="{Binding SidebarCircuitIntensity}"
+                                 Visibility="{Binding SidebarCircuitEnabled, Converter={StaticResource Bool}}"/>
             <Grid Margin="17,0,16,0" VerticalAlignment="Center">
               <StackPanel Orientation="Horizontal"><TextBlock Text="{Binding SectionTitle}" FontSize="20" FontWeight="SemiBold"/><TextBlock Text="{Binding ModeBadge}" FontSize="11" Foreground="{DynamicResource Faint}" Margin="9,7,0,0"/></StackPanel>
               <Button HorizontalAlignment="Right" Click="SidebarPlus_Click" AutomationProperties.Name="New">
@@ -228,10 +288,26 @@
                   <Grid Margin="10,7,8,7" Background="Transparent"><Grid.ContextMenu><ContextMenu><MenuItem Header="Delete chat" Click="DeleteRowChat_Click"/></ContextMenu></Grid.ContextMenu>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="40"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                     <Grid Width="30" Height="30" HorizontalAlignment="Left">
-                      <Border Background="{DynamicResource Avatar}" CornerRadius="{DynamicResource MessageBubbleCorner}"><TextBlock Text="{Binding Initials}" FontSize="12" Foreground="{DynamicResource Accent}" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
-                      <Ellipse>
-                        <Ellipse.Fill><ImageBrush ImageSource="{Binding AvatarPath, Converter={StaticResource AvatarFile}}" Stretch="UniformToFill"/></Ellipse.Fill>
-                      </Ellipse>
+                      <Border CornerRadius="{DynamicResource RowAvatarCorner}" BorderThickness="2" Margin="-2" IsHitTestVisible="False">
+                        <Border.Style><Style TargetType="Border">
+                          <Setter Property="Visibility" Value="Collapsed"/>
+                          <Setter Property="BorderBrush" Value="{DynamicResource Online}"/>
+                          <Style.Triggers>
+                            <MultiDataTrigger>
+                              <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding Online}" Value="True"/>
+                                <Condition Binding="{Binding DataContext.OnlineRingEnabled, RelativeSource={RelativeSource AncestorType=local:MainWindow}}" Value="True"/>
+                              </MultiDataTrigger.Conditions>
+                              <Setter Property="Visibility" Value="Visible"/>
+                            </MultiDataTrigger>
+                            <DataTrigger Binding="{Binding Presence}" Value="Away"><Setter Property="BorderBrush" Value="{DynamicResource Away}"/></DataTrigger>
+                            <DataTrigger Binding="{Binding Presence}" Value="Busy"><Setter Property="BorderBrush" Value="{DynamicResource Away}"/></DataTrigger>
+                            <DataTrigger Binding="{Binding Presence}" Value="Do not disturb"><Setter Property="BorderBrush" Value="{DynamicResource Danger}"/></DataTrigger>
+                          </Style.Triggers>
+                        </Style></Border.Style>
+                      </Border>
+                      <Border Background="{DynamicResource Avatar}" CornerRadius="{DynamicResource RowAvatarCorner}"><TextBlock Text="{Binding Initials}" FontSize="12" Foreground="{DynamicResource Accent}" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                      <Image Source="{Binding AvatarPath, Converter={StaticResource AvatarFile}}" Stretch="UniformToFill" local:Rounded.Radius="{DynamicResource RowAvatarRadius}"/>
                     </Grid>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,5,0">
                       <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
@@ -298,25 +374,58 @@
         <Border Grid.Column="2" Background="Transparent" BorderBrush="{DynamicResource Line}" BorderThickness="1,0,0,0" SnapsToDevicePixels="True">
           <Grid>
             <Grid.RowDefinitions><RowDefinition Height="74"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-            <Border Grid.Row="1" Grid.RowSpan="2" Background="{DynamicResource Canvas}" IsHitTestVisible="False"/>
+            <Border x:Name="ChatSurfaceLayer" Grid.Row="1" Grid.RowSpan="2" Background="{DynamicResource ChatSurfaceBackground}" IsHitTestVisible="False"/>
             <Border Grid.Row="0" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" ClipToBounds="True">
               <Grid>
                 <local:ThemeDecoration x:Name="HeaderDecoration" Zone="Header"
-                                       Visibility="{Binding Settings.ThemeDetailsEnabled, Converter={StaticResource Bool}}"/>
+                                       Visibility="{Binding ThemeDetailsEnabled, Converter={StaticResource Bool}}"/>
                 <local:HeaderEffect x:Name="ConversationHeaderEffect" Kind="Aurora" Intensity="{Binding HeaderAuroraIntensity}"
                                     Visibility="{Binding HeaderAuroraEnabled, Converter={StaticResource Bool}}"/>
                 <local:HeaderEffect x:Name="ConversationHeaderPulse" Kind="PulseWave" Intensity="{Binding HeaderPulseIntensity}"
                                     Visibility="{Binding HeaderPulseEnabled, Converter={StaticResource Bool}}"/>
+                <local:HeaderEffect x:Name="ConversationHeaderPrism" Kind="Prism" Intensity="{Binding HeaderPrismIntensity}"
+                                    Visibility="{Binding HeaderPrismEnabled, Converter={StaticResource Bool}}"/>
+                <local:HeaderEffect x:Name="ConversationHeaderRipples" Kind="Ripples" Intensity="{Binding HeaderRipplesIntensity}"
+                                    Visibility="{Binding HeaderRipplesEnabled, Converter={StaticResource Bool}}"/>
+                <local:HeaderEffect x:Name="ConversationHeaderCircuit" Kind="Circuit" Intensity="{Binding HeaderCircuitIntensity}"
+                                    Visibility="{Binding HeaderCircuitEnabled, Converter={StaticResource Bool}}"/>
+                <local:HeaderEffect x:Name="ConversationHeaderStarlight" Kind="Starlight" Intensity="{Binding HeaderStarlightIntensity}"
+                                    Visibility="{Binding HeaderStarlightEnabled, Converter={StaticResource Bool}}"/>
+                <local:HeaderEffect x:Name="ConversationHeaderNebula" Kind="Nebula" Intensity="{Binding HeaderNebulaIntensity}"
+                                    Visibility="{Binding HeaderNebulaEnabled, Converter={StaticResource Bool}}"/>
+                <local:HeaderEffect x:Name="ConversationHeaderSilk" Kind="Silk" Intensity="{Binding HeaderSilkIntensity}"
+                                    Visibility="{Binding HeaderSilkEnabled, Converter={StaticResource Bool}}"/>
+                <local:HeaderEffect x:Name="ConversationHeaderPlasma" Kind="Plasma" Intensity="{Binding HeaderPlasmaIntensity}"
+                                    Visibility="{Binding HeaderPlasmaEnabled, Converter={StaticResource Bool}}"/>
                 <Grid Margin="26,0,22,0">
                   <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                   <DockPanel VerticalAlignment="Center">
                     <Grid Width="40" Height="40" Margin="0,0,12,0" Visibility="{Binding HasPeer, Converter={StaticResource Bool}}">
-                      <Border Background="{DynamicResource Avatar}" CornerRadius="20">
+                      <Border CornerRadius="{DynamicResource HeaderAvatarCorner}" BorderThickness="2" Margin="-2" IsHitTestVisible="False">
+                        <Border.Style><Style TargetType="Border">
+                          <Setter Property="Visibility" Value="Collapsed"/>
+                          <Setter Property="BorderBrush" Value="{DynamicResource Online}"/>
+                          <Style.Triggers>
+                            <MultiDataTrigger>
+                              <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding SelectedPeer.Online}" Value="True"/>
+                                <Condition Binding="{Binding OnlineRingEnabled}" Value="True"/>
+                              </MultiDataTrigger.Conditions>
+                              <Setter Property="Visibility" Value="Visible"/>
+                            </MultiDataTrigger>
+                            <DataTrigger Binding="{Binding SelectedPeer.Presence}" Value="Away"><Setter Property="BorderBrush" Value="{DynamicResource Away}"/></DataTrigger>
+                            <DataTrigger Binding="{Binding SelectedPeer.Presence}" Value="Busy"><Setter Property="BorderBrush" Value="{DynamicResource Away}"/></DataTrigger>
+                            <DataTrigger Binding="{Binding SelectedPeer.Presence}" Value="Do not disturb"><Setter Property="BorderBrush" Value="{DynamicResource Danger}"/></DataTrigger>
+                          </Style.Triggers>
+                        </Style></Border.Style>
+                      </Border>
+                      <Border Background="{DynamicResource Avatar}" CornerRadius="{DynamicResource HeaderAvatarCorner}">
                         <TextBlock Text="{Binding SelectedPeer.Initials}" FontSize="14" Foreground="{DynamicResource Accent}" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                       </Border>
-                      <Ellipse x:Name="ConversationAvatar">
+                      <Ellipse x:Name="ConversationAvatar" Visibility="{Binding UseCircularHeaderAvatar, Converter={StaticResource Bool}}">
                         <Ellipse.Fill><ImageBrush ImageSource="{Binding SelectedPeer.AvatarPath, Converter={StaticResource AvatarFile}}" Stretch="UniformToFill"/></Ellipse.Fill>
                       </Ellipse>
+                      <Image Source="{Binding SelectedPeer.AvatarPath, Converter={StaticResource AvatarFile}}" Stretch="UniformToFill" local:Rounded.Radius="{DynamicResource HeaderAvatarRadius}" Visibility="{Binding UseCustomAvatarShape, Converter={StaticResource Bool}}"/>
                     </Grid>
                     <StackPanel VerticalAlignment="Center">
                       <TextBlock x:Name="ConversationTitle" Text="{Binding ChatTitle}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
@@ -348,6 +457,33 @@
             <Grid Grid.Row="1" Visibility="{Binding ChatOpen, Converter={StaticResource Bool}}">
               <Grid x:Name="ChatContentGrid">
                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                <Grid x:Name="ChatBackdropLayer" Grid.Row="1" Grid.RowSpan="{Binding ChatBackdropRowSpan}" ClipToBounds="True" IsHitTestVisible="False">
+                  <local:ChatCanvasOverlay x:Name="ChatCanvasGradientLayer" Gradient="{Binding ChatCanvasGradient}" Intensity="{Binding ChatCanvasGradientIntensity}"
+                                           Visibility="{Binding ChatCanvasGradientEnabled, Converter={StaticResource Bool}}"/>
+                  <Image x:Name="ChatBackgroundImage" Source="{Binding ChatBackground}" Opacity="{Binding ChatBackgroundOpacity}"
+                         Effect="{Binding ChatBackgroundBlurEffect}"
+                         Stretch="UniformToFill" IsHitTestVisible="False" Visibility="{Binding HasDetails, Converter={StaticResource Bool}}"/>
+                  <local:SakuraPetals x:Name="ConversationPetals" Intensity="{Binding PetalIntensity}"
+                                      Visibility="{Binding SakuraPetalsEnabled, Converter={StaticResource Bool}}"/>
+                  <local:WeatherEffect x:Name="ConversationFireflies" Kind="Fireflies" Intensity="{Binding FireflyIntensity}"
+                                       Visibility="{Binding FirefliesEnabled, Converter={StaticResource Bool}}"/>
+                  <local:WeatherEffect x:Name="ConversationRain" Kind="Rain" Intensity="{Binding RainIntensity}"
+                                       Visibility="{Binding RainEnabled, Converter={StaticResource Bool}}"/>
+                  <local:WeatherEffect x:Name="ConversationSnow" Kind="Snow" Intensity="{Binding SnowIntensity}"
+                                       Visibility="{Binding SnowEnabled, Converter={StaticResource Bool}}"/>
+                  <local:WeatherEffect x:Name="ConversationStarfield" Kind="Starfield" Intensity="{Binding StarfieldIntensity}"
+                                       Visibility="{Binding StarfieldEnabled, Converter={StaticResource Bool}}"/>
+                  <local:WeatherEffect x:Name="ConversationBubbles" Kind="Bubbles" Intensity="{Binding BubblesIntensity}"
+                                       Visibility="{Binding BubblesEnabled, Converter={StaticResource Bool}}"/>
+                  <local:WeatherEffect x:Name="ConversationEmbers" Kind="Embers" Intensity="{Binding EmbersIntensity}"
+                                       Visibility="{Binding EmbersEnabled, Converter={StaticResource Bool}}"/>
+                  <local:WeatherEffect x:Name="ConversationMatrix" Kind="Matrix" Intensity="{Binding MatrixIntensity}"
+                                       Visibility="{Binding MatrixEnabled, Converter={StaticResource Bool}}"/>
+                  <local:WeatherEffect x:Name="ConversationConstellation" Kind="Constellation" Intensity="{Binding ConstellationIntensity}"
+                                       Visibility="{Binding ConstellationEnabled, Converter={StaticResource Bool}}"/>
+                  <local:WeatherEffect x:Name="ConversationBokeh" Kind="Bokeh" Intensity="{Binding BokehIntensity}"
+                                       Visibility="{Binding BokehEnabled, Converter={StaticResource Bool}}"/>
+                </Grid>
                 <Grid Grid.Row="1" ClipToBounds="True">
                   <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                   <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
@@ -356,22 +492,6 @@
                     <Button Content="Newer messages" Style="{StaticResource Secondary}" Margin="6,4,0,4"
                             Visibility="{Binding HasNewerMessages, Converter={StaticResource Bool}}" Click="PageMessages_Click"/>
                   </StackPanel>
-                  <Image x:Name="ChatBackgroundImage" Grid.Row="1" Source="{Binding ChatBackground}" Opacity="{Binding ChatBackgroundOpacity}"
-                         Stretch="UniformToFill" IsHitTestVisible="False" Visibility="{Binding HasDetails, Converter={StaticResource Bool}}"/>
-                  <local:SakuraPetals x:Name="ConversationPetals" Grid.Row="1" Intensity="{Binding PetalIntensity}"
-                                      Visibility="{Binding SakuraPetalsEnabled, Converter={StaticResource Bool}}"/>
-                  <local:WeatherEffect x:Name="ConversationFireflies" Grid.Row="1" Kind="Fireflies" Intensity="{Binding Settings.FireflyIntensity}"
-                                       Visibility="{Binding Settings.FirefliesEnabled, Converter={StaticResource Bool}}"/>
-                  <local:WeatherEffect x:Name="ConversationRain" Grid.Row="1" Kind="Rain" Intensity="{Binding Settings.RainIntensity}"
-                                       Visibility="{Binding Settings.RainEnabled, Converter={StaticResource Bool}}"/>
-                  <local:WeatherEffect x:Name="ConversationSnow" Grid.Row="1" Kind="Snow" Intensity="{Binding Settings.SnowIntensity}"
-                                       Visibility="{Binding Settings.SnowEnabled, Converter={StaticResource Bool}}"/>
-                  <local:WeatherEffect x:Name="ConversationStarfield" Grid.Row="1" Kind="Starfield" Intensity="{Binding Settings.StarfieldIntensity}"
-                                       Visibility="{Binding Settings.StarfieldEnabled, Converter={StaticResource Bool}}"/>
-                  <local:WeatherEffect x:Name="ConversationBubbles" Grid.Row="1" Kind="Bubbles" Intensity="{Binding Settings.BubblesIntensity}"
-                                       Visibility="{Binding Settings.BubblesEnabled, Converter={StaticResource Bool}}"/>
-                  <local:WeatherEffect x:Name="ConversationEmbers" Grid.Row="1" Kind="Embers" Intensity="{Binding Settings.EmbersIntensity}"
-                                       Visibility="{Binding Settings.EmbersEnabled, Converter={StaticResource Bool}}"/>
                   <ScrollViewer x:Name="MessageScroller" Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="26,12,26,4" PreviewMouseDown="Conversation_Interacted">
                     <ItemsControl x:Name="MessageList" ItemsSource="{Binding Messages}" ItemTemplate="{StaticResource MessageTemplate}" HorizontalContentAlignment="Stretch"/>
                   </ScrollViewer>
@@ -403,10 +523,20 @@
                     </DataTemplate></ItemsControl.ItemTemplate>
                   </ItemsControl>
                 </ScrollViewer>
-                <Border x:Name="ComposerSurface" Grid.Row="4" Background="{DynamicResource Input}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="{DynamicResource ComposerCorner}" Padding="6" Margin="26,0,26,14" HorizontalAlignment="Stretch">
+                <Border x:Name="ComposerSurface" Grid.Row="4" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="{DynamicResource ComposerCorner}" Padding="6" Margin="26,0,26,14" HorizontalAlignment="Stretch">
+                  <Border.Style>
+                    <Style TargetType="Border">
+                      <Setter Property="Background" Value="{DynamicResource Input}"/>
+                      <Style.Triggers>
+                        <DataTrigger Binding="{Binding SeamlessComposerEnabled}" Value="True">
+                          <Setter Property="Background" Value="{DynamicResource ComposerSeamlessBackground}"/>
+                        </DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </Border.Style>
                   <Grid>
                     <local:ThemeDecoration x:Name="ComposerDecoration" Zone="Composer" Margin="-5"
-                                           Visibility="{Binding Settings.ThemeDetailsEnabled, Converter={StaticResource Bool}}"/>
+                                           Visibility="{Binding ThemeDetailsEnabled, Converter={StaticResource Bool}}"/>
                   <StackPanel>
                     <ItemsControl ItemsSource="{Binding Attachments}" Margin="6,6,6,4" Visibility="{Binding HasAttachments, Converter={StaticResource Bool}}" AutomationProperties.Name="Attachments">
                       <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
@@ -473,7 +603,7 @@
               <Border x:Name="DetailsPanel" Width="242" Visibility="Collapsed" HorizontalAlignment="Right" Background="{DynamicResource Sidebar}" BorderBrush="{DynamicResource Line}" BorderThickness="1,0,0,0" ClipToBounds="True">
                 <Grid>
                   <local:ChromeTexture Texture="{Binding ChromeTexture}" Intensity="{Binding ChromeTextureIntensity}" Visibility="{Binding ChromeTextureEnabled, Converter={StaticResource Bool}}"/>
-                  <local:ThemeDecoration Zone="Sidebar" Visibility="{Binding Settings.ThemeDetailsEnabled, Converter={StaticResource Bool}}"/>
+                  <local:ThemeDecoration Zone="Sidebar" Visibility="{Binding ThemeDetailsEnabled, Converter={StaticResource Bool}}"/>
                   <local:SidebarEffect Kind="Motes" Intensity="{Binding SidebarMotesIntensity}" Visibility="{Binding SidebarMotesEnabled, Converter={StaticResource Bool}}"/>
                   <local:SidebarEffect Kind="EdgeGlow" Intensity="{Binding SidebarGlowIntensity}" Visibility="{Binding SidebarGlowEnabled, Converter={StaticResource Bool}}"/>
                   <local:SidebarEffect Kind="Prism" Intensity="{Binding SidebarPrismIntensity}" Visibility="{Binding SidebarPrismEnabled, Converter={StaticResource Bool}}"/>
@@ -493,7 +623,7 @@
               <Border x:Name="FilesPanel" Width="242" Visibility="Collapsed" IsVisibleChanged="FilesPanel_VisibilityChanged" HorizontalAlignment="Right" Background="{DynamicResource Sidebar}" BorderBrush="{DynamicResource Line}" BorderThickness="1,0,0,0" ClipToBounds="True">
                 <Grid>
                   <local:ChromeTexture Texture="{Binding ChromeTexture}" Intensity="{Binding ChromeTextureIntensity}" Visibility="{Binding ChromeTextureEnabled, Converter={StaticResource Bool}}"/>
-                  <local:ThemeDecoration Zone="Sidebar" Visibility="{Binding Settings.ThemeDetailsEnabled, Converter={StaticResource Bool}}"/>
+                  <local:ThemeDecoration Zone="Sidebar" Visibility="{Binding ThemeDetailsEnabled, Converter={StaticResource Bool}}"/>
                   <local:SidebarEffect Kind="Motes" Intensity="{Binding SidebarMotesIntensity}" Visibility="{Binding SidebarMotesEnabled, Converter={StaticResource Bool}}"/>
                   <local:SidebarEffect Kind="EdgeGlow" Intensity="{Binding SidebarGlowIntensity}" Visibility="{Binding SidebarGlowEnabled, Converter={StaticResource Bool}}"/>
                   <local:SidebarEffect Kind="Prism" Intensity="{Binding SidebarPrismIntensity}" Visibility="{Binding SidebarPrismEnabled, Converter={StaticResource Bool}}"/>
@@ -512,7 +642,7 @@
                         <StackPanel>
                           <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="26"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                             <local:Glyph Data="{DynamicResource IconFile}" Size="17" HorizontalAlignment="Left" VerticalAlignment="Top" Foreground="{DynamicResource Accent}"/>
-                            <StackPanel Grid.Column="1"><TextBlock Text="{Binding Name}" ToolTip="{Binding Name}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/><TextBlock FontSize="11" Foreground="{DynamicResource Faint}" Margin="0,3,0,0" TextWrapping="Wrap"><Run Text="{Binding SizeLabel, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding State, Mode=OneWay}"/></TextBlock><TextBlock Text="{Binding TimeLabel}" FontSize="11" Foreground="{DynamicResource Faint}" Margin="0,2,0,0"/></StackPanel>
+                            <StackPanel Grid.Column="1"><TextBlock Text="{Binding Name}" ToolTip="{Binding Name}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/><TextBlock FontSize="11" Foreground="{DynamicResource Faint}" Margin="0,3,0,0" TextWrapping="Wrap"><Run Text="{Binding SizeLabel, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding StatusLabel, Mode=OneWay}"/></TextBlock><TextBlock Text="{Binding TimeLabel}" FontSize="11" Foreground="{DynamicResource Faint}" Margin="0,2,0,0"/></StackPanel>
                           </Grid>
                           <ProgressBar Style="{StaticResource TransferProgress}" AutomationProperties.Name="{Binding ActiveLabel}"/>
                           <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0"><StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding State}" Value="Waiting for approval"/><Condition Binding="{Binding Outgoing}" Value="False"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers></Style></StackPanel.Style><Button Content="Decline" Style="{StaticResource Secondary}" Margin="0,0,6,0" Click="DeclineFile_Click"/><Button Content="Accept" Style="{StaticResource Primary}" Click="AcceptFile_Click"/></StackPanel>
@@ -538,7 +668,7 @@
               <Border x:Name="GroupPanel" Width="242" Visibility="Collapsed" HorizontalAlignment="Right" Background="{DynamicResource Sidebar}" BorderBrush="{DynamicResource Line}" BorderThickness="1,0,0,0" ClipToBounds="True">
                 <Grid>
                   <local:ChromeTexture Texture="{Binding ChromeTexture}" Intensity="{Binding ChromeTextureIntensity}" Visibility="{Binding ChromeTextureEnabled, Converter={StaticResource Bool}}"/>
-                  <local:ThemeDecoration Zone="Sidebar" Visibility="{Binding Settings.ThemeDetailsEnabled, Converter={StaticResource Bool}}"/>
+                  <local:ThemeDecoration Zone="Sidebar" Visibility="{Binding ThemeDetailsEnabled, Converter={StaticResource Bool}}"/>
                   <local:SidebarEffect Kind="Motes" Intensity="{Binding SidebarMotesIntensity}" Visibility="{Binding SidebarMotesEnabled, Converter={StaticResource Bool}}"/>
                   <local:SidebarEffect Kind="EdgeGlow" Intensity="{Binding SidebarGlowIntensity}" Visibility="{Binding SidebarGlowEnabled, Converter={StaticResource Bool}}"/>
                   <local:SidebarEffect Kind="Prism" Intensity="{Binding SidebarPrismIntensity}" Visibility="{Binding SidebarPrismEnabled, Converter={StaticResource Bool}}"/>
@@ -563,16 +693,21 @@
               </Border>
             </Grid>
             <Grid Grid.Row="1" Visibility="{Binding TransfersOpen, Converter={StaticResource Bool}}" Margin="26,12,26,16">
-              <ScrollViewer VerticalScrollBarVisibility="Auto"><ItemsControl ItemsSource="{Binding TransfersView}" MaxWidth="760"><ItemsControl.ItemTemplate><DataTemplate>
-                <Border Background="{DynamicResource Surface}" CornerRadius="{DynamicResource ComposerCorner}" Padding="16,14" Margin="0,0,0,10"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="40"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+              <ItemsControl x:Name="TransfersList" ItemsSource="{Binding TransfersView}"
+                            VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" VirtualizingPanel.ScrollUnit="Pixel"
+                            ScrollViewer.CanContentScroll="True" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                <ItemsControl.ItemsPanel><ItemsPanelTemplate><VirtualizingStackPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                <ItemsControl.Template><ControlTemplate TargetType="ItemsControl"><ScrollViewer Focusable="False" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" CanContentScroll="True"><ItemsPresenter/></ScrollViewer></ControlTemplate></ItemsControl.Template>
+                <ItemsControl.ItemTemplate><DataTemplate>
+                <Border MaxWidth="760" Background="{DynamicResource Surface}" CornerRadius="{DynamicResource ComposerCorner}" Padding="16,14" Margin="0,0,0,10"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="40"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                   <local:Glyph Data="{DynamicResource IconFile}" Size="26" HorizontalAlignment="Left" VerticalAlignment="Top" Foreground="{DynamicResource Accent}"/>
-                  <StackPanel Grid.Column="1"><TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding DirectionLabel}" FontSize="13" Foreground="{DynamicResource Muted}" Margin="0,7,0,0"/><TextBlock FontSize="12" Foreground="{DynamicResource Faint}" Margin="0,5,0,10" TextWrapping="Wrap"><Run Text="{Binding SizeLabel, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding State, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding TimeLabel, Mode=OneWay}"/></TextBlock><ProgressBar Style="{StaticResource TransferProgress}" AutomationProperties.Name="{Binding ActiveLabel}"/>
+                  <StackPanel Grid.Column="1"><TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding DirectionLabel}" FontSize="13" Foreground="{DynamicResource Muted}" Margin="0,7,0,0"/><TextBlock FontSize="12" Foreground="{DynamicResource Faint}" Margin="0,5,0,10" TextWrapping="Wrap"><Run Text="{Binding SizeLabel, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding StatusLabel, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding TimeLabel, Mode=OneWay}"/></TextBlock><ProgressBar Style="{StaticResource TransferProgress}" AutomationProperties.Name="{Binding ActiveLabel}"/>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0"><StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding State}" Value="Waiting for approval"/><Condition Binding="{Binding Outgoing}" Value="False"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers></Style></StackPanel.Style><Button Content="Decline" Style="{StaticResource Secondary}" Margin="0,0,8,0" Click="DeclineFile_Click"/><Button Content="Accept" Style="{StaticResource Primary}" Click="AcceptFile_Click"/></StackPanel>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0"><StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding State}" Value="Waiting for approval"/><Condition Binding="{Binding Outgoing}" Value="True"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers></Style></StackPanel.Style><Button Content="Cancel offer" Style="{StaticResource Secondary}" Click="CancelOffer_Click"/></StackPanel>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0"><StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding State}" Value="Received"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding State}" Value="Sent · receipt unavailable"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></StackPanel.Style><Button Content="Show in folder" Style="{StaticResource Secondary}" Margin="0,0,8,0" Click="ShowFile_Click"/><Button Content="Open" Style="{StaticResource Secondary}" Click="OpenFile_Click"/></StackPanel>
                   </StackPanel>
                 </Grid></Border>
-              </DataTemplate></ItemsControl.ItemTemplate></ItemsControl></ScrollViewer>
+              </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
               <TextBlock Text="No files" Foreground="{DynamicResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding NoTransfersShown}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
             </Grid>
             <StackPanel Grid.Row="2">
