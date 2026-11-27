@@ -89,12 +89,13 @@ public partial class SettingsWindow : Window
         TargetAuraBox.ItemsSource = TargetAura.Catalog;
         ChatCanvasBox.ItemsSource = ChatCanvasOverlay.Catalog;
         BackgroundTransitionBox.ItemsSource = BackgroundSideTransition.Catalog;
-        InitCompanionControls();
+        InitCompanionControls(s);
 
         backgroundPath = s.ChatBackgroundPath;
         BackgroundOpacityBox.Value = model.ChatBackgroundOpacity;
 
         LoadAppearanceControls(s);
+        LoadCompanionControls(s);
         RefreshPresets();
         applyingAppearance = false;
 
@@ -407,7 +408,6 @@ public partial class SettingsWindow : Window
         }).IsChecked = true;
         BackgroundAnchorLabel.Text = BackgroundAnchor.DisplayName(anchor);
         BackgroundGrayscaleBox.IsChecked = s.ChatBackgroundGrayscale;
-        LoadCompanionControls(s);
     }
 
     private static void SelectFontItem(System.Windows.Controls.ComboBox box, string? requested, string fallback)
@@ -457,7 +457,6 @@ public partial class SettingsWindow : Window
         s.ChatBackgroundFit = SelectedBackgroundFit;
         s.ChatBackgroundAnchor = SelectedBackgroundAnchor;
         s.ChatBackgroundGrayscale = IsGrayscaleChecked;
-        WriteCompanionTo(s);
         s.TypingEffect = ChatEffects.Normalize(TypingEffectBox.SelectedValue as string, typing: true);
         s.ClickEffect = ChatEffects.Normalize(ClickEffectBox.SelectedValue as string);
         s.SteampunkEngineEnabled = SteampunkEngineBox.IsChecked == true;
@@ -1311,7 +1310,9 @@ public partial class SettingsWindow : Window
             s.ChatBackgroundPath = backgroundPath;
             s.ChatBackgroundOpacity = double.IsFinite(BackgroundOpacityBox.Value) ? Math.Clamp(BackgroundOpacityBox.Value, .10, 1.0) : .26;
             WriteAppearanceTo(s);
+            WriteCompanionTo(s);
             s.SavedPresets = savedPresets.Select(p => new AppearancePreset { Id = p.Id, Name = p.Name, Code = p.Code }).ToList();
+            s.SavedCompanions = GetSavedCompanionsForSave();
             s.LastSettingsPage = NormalizePage(model.LastSettingsPage);
             s.LastAppearanceTab = NormalizeAppearanceTab(model.LastAppearanceTab);
         });

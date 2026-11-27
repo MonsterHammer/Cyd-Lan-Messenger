@@ -2402,11 +2402,17 @@ internal static class Program
         FloatingPetStyle.Apply(randomPet, randomSettings);
         string petLookCode = AppearanceCodec.Encode(randomSettings);
         Check(AppearanceCodec.TryDecode(petLookCode, out var decodedPetLook),
-            "Look code containing custom companion settings must encode and decode cleanly.");
+            "Look code must encode and decode cleanly without embedding companion traits.");
+        var receiverPet = FloatingPetStyle.Presets.First(p => p.Name == "Shark").Appearance;
         var decodedPetSettings = new AppSettings();
+        FloatingPetStyle.Apply(receiverPet, decodedPetSettings);
         AppearanceCodec.Apply(decodedPetLook, decodedPetSettings);
-        Check(PetAppearance.From(decodedPetSettings) == randomPet,
-            "Applying a Look code must restore all customized companion traits.");
+        Check(PetAppearance.From(decodedPetSettings) == receiverPet && decodedPetSettings.Theme == ThemeManager.Midnight,
+            "Applying an appearance Look code from someone else must preserve the receiver's companion unchanged.");
+        string savedPetCode = randomPet.ToWireCode();
+        Check(PetAppearance.FromWireCode(savedPetCode) == randomPet,
+            "Companion CYDPET1: code must round-trip all customized companion traits independently.");
+        randomSettings.SavedCompanions = [new SavedCompanion { Name = "My Companion", Code = savedPetCode }];
 
         // Verify disk roundtrip via LocalStore.
         string tempStoreDir = Path.Combine(Path.GetTempPath(), "cydlan-pet-store-" + Guid.NewGuid().ToString("N")[..8]);

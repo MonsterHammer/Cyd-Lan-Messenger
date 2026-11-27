@@ -1530,6 +1530,7 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
         Settings.MessageAnimation = MessageMotion.Normalize(Settings.MessageAnimation);
         Settings.MessageFontSizePx = Settings.MessageFontSizePx is { } px && double.IsFinite(px) ? Math.Clamp(Math.Round(px), 11, 22) : null;
         Settings.SavedPresets ??= [];
+        Settings.SavedCompanions ??= [];
         Settings.LastSettingsPage = SettingsWindow.NormalizePage(Settings.LastSettingsPage);
         Settings.LastAppearanceTab = SettingsWindow.NormalizeAppearanceTab(Settings.LastAppearanceTab);
         Settings.TypingEffect = ChatEffects.Normalize(Settings.TypingEffect, typing: true);

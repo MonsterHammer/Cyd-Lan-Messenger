@@ -9,13 +9,15 @@ namespace CydLan.Desktop;
 public partial class SettingsWindow
 {
     private readonly DispatcherTimer petStudioTimer = new(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(33) };
+    private List<SavedCompanion> savedCompanions = [];
     private string petBodyHex = "", petAccentHex = "", petDetailHex = "";
     private double studioBreath, studioBlink, studioBlinkElapsed, studioNextBlink = 2.6, studioHop;
     private bool studioBlinkDown, studioHovered, studioExcited;
     private DateTime studioExcitedUntil = DateTime.MinValue;
 
-    private void InitCompanionControls()
+    private void InitCompanionControls(AppSettings s)
     {
+        savedCompanions = (s.SavedCompanions ?? []).Select(p => new SavedCompanion { Id = p.Id, Name = p.Name, Code = p.Code }).ToList();
         PetPresetBox.ItemsSource = FloatingPetStyle.Presets;
         PetBodyBox.ItemsSource = FloatingPetStyle.Bodies;
         PetPatternBox.ItemsSource = FloatingPetStyle.Patterns;
@@ -38,6 +40,7 @@ public partial class SettingsWindow
 
         PetFloatingBox.IsChecked = model.FloatingLanEnabled;
         PetRoamBox.IsChecked = model.FloatingLanRoam;
+        RefreshSavedCompanions();
 
         petStudioTimer.Tick += (_, _) => StepCompanionStage();
         IsVisibleChanged += (_, _) => UpdateCompanionTimerState();
@@ -46,6 +49,7 @@ public partial class SettingsWindow
     private void DisposeCompanionControls()
     {
         petStudioTimer.Stop();
+        SavedPetBox.ItemsSource = null;
         PetPresetBox.ItemsSource = null;
         PetBodyBox.ItemsSource = null;
         PetPatternBox.ItemsSource = null;
@@ -197,6 +201,88 @@ public partial class SettingsWindow
     private void PetStage_Click(object sender, MouseButtonEventArgs e) => TriggerCompanionHop();
     private void PetStage_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e) { studioHovered = true; RenderCompanionStage(); }
     private void PetStage_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e) { studioHovered = false; RenderCompanionStage(); }
+
+    private void RefreshSavedCompanions(string? selectId = null)
+    {
+        SavedPetBox.ItemsSource = null;
+        SavedPetBox.ItemsSource = savedCompanions.ToList();
+        if (selectId is not null) SavedPetBox.SelectedValue = selectId;
+        else if (savedCompanions.Count > 0) SavedPetBox.SelectedIndex = 0;
+        bool hasAny = savedCompanions.Count > 0;
+        LoadSavedPetButton.IsEnabled = hasAny;
+        DeleteSavedPetButton.IsEnabled = hasAny;
+    }
+
+    private List<SavedCompanion> GetSavedCompanionsForSave() =>
+        savedCompanions.Select(p => new SavedCompanion { Id = p.Id, Name = p.Name, Code = p.Code }).ToList();
+
+    private void SavePet_Click(object sender, RoutedEventArgs e)
+    {
+        CommitCompanionHexInputs();
+        string name = SavedPetNameBox.Text.Trim();
+        if (name.Length == 0) name = $"Companion {savedCompanions.Count + 1}";
+        string code = BuildCurrentPetAppearance().ToWireCode();
+        var existing = savedCompanions.FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
+        string selectedId;
+        if (existing is not null)
+        {
+            existing.Name = name;
+            existing.Code = code;
+            selectedId = existing.Id;
+        }
+        else
+        {
+            var entry = new SavedCompanion { Name = name, Code = code };
+            savedCompanions.Add(entry);
+            selectedId = entry.Id;
+        }
+        SavedPetNameBox.Text = "";
+        RefreshSavedCompanions(selectedId);
+        PetStatusText.Text = "Saved";
+        TriggerCompanionHop();
+    }
+
+    private void LoadSavedPet_Click(object sender, RoutedEventArgs e)
+    {
+        if (SavedPetBox.SelectedItem is not SavedCompanion saved) return;
+        string code = CompanionProfileCodec.SanitizeWireCode(saved.Code);
+        if (PetAppearance.FromWireCode(code) is not { } parsed) { PetStatusText.Text = "Invalid code"; return; }
+        applyingAppearance = true;
+        LoadCompanionAppearance(parsed);
+        applyingAppearance = false;
+        ApplyCompanionPreview();
+        TriggerCompanionHop();
+        PetStatusText.Text = "Loaded";
+    }
+
+    private void DeleteSavedPet_Click(object sender, RoutedEventArgs e)
+    {
+        if (SavedPetBox.SelectedItem is not SavedCompanion saved) return;
+        savedCompanions.RemoveAll(p => p.Id == saved.Id);
+        RefreshSavedCompanions();
+        PetStatusText.Text = "Deleted";
+    }
+
+    private void CopyPetCode_Click(object sender, RoutedEventArgs e)
+    {
+        CommitCompanionHexInputs();
+        string code = BuildCurrentPetAppearance().ToWireCode();
+        PetCodeBox.Text = code;
+        try { System.Windows.Clipboard.SetText(code); } catch (System.Runtime.InteropServices.ExternalException) { }
+        PetStatusText.Text = "Copied";
+    }
+
+    private void ImportPetCode_Click(object sender, RoutedEventArgs e)
+    {
+        string code = CompanionProfileCodec.SanitizeWireCode(PetCodeBox.Text);
+        if (PetAppearance.FromWireCode(code) is not { } parsed) { PetStatusText.Text = "Invalid code"; return; }
+        applyingAppearance = true;
+        LoadCompanionAppearance(parsed);
+        applyingAppearance = false;
+        ApplyCompanionPreview();
+        TriggerCompanionHop();
+        PetStatusText.Text = "Imported";
+    }
 
     private void PetFloating_Changed(object sender, RoutedEventArgs e)
     {

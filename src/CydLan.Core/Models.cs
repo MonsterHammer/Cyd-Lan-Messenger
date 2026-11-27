@@ -386,6 +386,7 @@ public sealed class AppSettings
     public bool SidebarHudEnabled { get; set; }
     public double SidebarHudIntensity { get; set; } = .65;
     public List<AppearancePreset> SavedPresets { get; set; } = [];
+    public List<SavedCompanion> SavedCompanions { get; set; } = [];
     public int Port { get; set; } = 50000;
     public string Multicast { get; set; } = "239.255.100.100";
 
@@ -433,6 +434,16 @@ public sealed class AppearancePreset
     public string Id { get; set; } = Guid.NewGuid().ToString("N")[..12];
     public string Name { get; set; } = "";
     public string Code { get; set; } = "";
+    public override string ToString() => Name;
+}
+
+/// <summary>A user-saved floating companion encoded as a CYDPET1: code.</summary>
+public sealed class SavedCompanion
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N")[..12];
+    public string Name { get; set; } = "";
+    public string Code { get; set; } = "";
+    public override string ToString() => Name;
 }
 
 /// <summary>A LAN Messenger group conversation ("chat room"), identified by its thread ID.</summary>

@@ -1938,6 +1938,29 @@
                           SmallChange=".05" LargeChange=".15" IsSnapToTickEnabled="True" ValueChanged="PetSize_SliderChanged"
                           AutomationProperties.Name="Companion size" Margin="0,0,0,6"/>
                 </StackPanel>
+                <Separator Margin="0,10,0,12" Background="{DynamicResource Line}"/>
+                <DockPanel Margin="0,0,0,6">
+                  <TextBlock x:Name="PetStatusText" DockPanel.Dock="Right" Foreground="{DynamicResource Accent}" FontSize="12" VerticalAlignment="Center"/>
+                  <TextBlock Text="Saved companions" Style="{StaticResource Label}" Margin="0"/>
+                </DockPanel>
+                <Grid Margin="0,0,0,8">
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <ComboBox x:Name="SavedPetBox" DisplayMemberPath="Name" SelectedValuePath="Id" AutomationProperties.Name="Saved companions"/>
+                  <Button x:Name="LoadSavedPetButton" Grid.Column="1" Content="Load" Style="{StaticResource Secondary}" Margin="8,0,0,0" Click="LoadSavedPet_Click"/>
+                  <Button x:Name="DeleteSavedPetButton" Grid.Column="2" Content="Delete" Style="{StaticResource Secondary}" Margin="6,0,0,0" Click="DeleteSavedPet_Click"/>
+                </Grid>
+                <Grid Margin="0,0,0,10">
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <TextBox x:Name="SavedPetNameBox" MaxLength="40" AutomationProperties.Name="Companion name"/>
+                  <Button Grid.Column="1" Content="Save companion" Style="{StaticResource Secondary}" Margin="8,0,0,0" Click="SavePet_Click"/>
+                </Grid>
+                <TextBlock Text="Companion code" Style="{StaticResource Label}"/>
+                <Grid Margin="0,0,0,4">
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                  <TextBox x:Name="PetCodeBox" MaxLength="768" AutomationProperties.Name="Companion code"/>
+                  <Button Grid.Column="1" Content="Copy code" Style="{StaticResource Secondary}" Margin="8,0,0,0" Click="CopyPetCode_Click"/>
+                  <Button Grid.Column="2" Content="Import" Style="{StaticResource Secondary}" Margin="6,0,0,0" Click="ImportPetCode_Click"/>
+                </Grid>
               </StackPanel>
               <StackPanel x:Name="AppearanceCustomizeSection" Visibility="Collapsed">
                 <TextBlock Text="Interface font" Style="{StaticResource Label}"/>

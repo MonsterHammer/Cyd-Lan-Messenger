@@ -400,26 +400,7 @@ public static partial class AppearanceCodec
         ButtonLift = s.ButtonLiftEnabled ? true : null,
         ButtonLiftIntensity = s.ButtonLiftEnabled ? Round2(s.ButtonLiftIntensity) : null,
         ButtonSpark = s.ButtonSparkEnabled ? true : null,
-        ButtonSparkIntensity = s.ButtonSparkEnabled ? Round2(s.ButtonSparkIntensity) : null,
-        PetBody = NonDefault(FloatingPetStyle.NormalizeBody(s.PetBody), PetAppearance.Default.Body),
-        PetEars = NonDefault(FloatingPetStyle.NormalizeEars(s.PetEars), PetAppearance.Default.Ears),
-        PetEyes = NonDefault(FloatingPetStyle.NormalizeEyes(s.PetEyes), PetAppearance.Default.Eyes),
-        PetBrows = NonDefault(FloatingPetStyle.NormalizeBrows(s.PetBrows), PetAppearance.Default.Brows),
-        PetMouth = NonDefault(FloatingPetStyle.NormalizeMouth(s.PetMouth), PetAppearance.Default.Mouth),
-        PetCheeks = NonDefault(FloatingPetStyle.NormalizeCheeks(s.PetCheeks), PetAppearance.Default.Cheeks),
-        PetGlasses = NonDefault(FloatingPetStyle.NormalizeGlasses(s.PetGlasses), PetAppearance.Default.Glasses),
-        PetHat = NonDefault(FloatingPetStyle.NormalizeHat(s.PetHat), PetAppearance.Default.Hat),
-        PetOutfit = NonDefault(FloatingPetStyle.NormalizeOutfit(s.PetOutfit), PetAppearance.Default.Outfit),
-        PetBack = NonDefault(FloatingPetStyle.NormalizeBack(s.PetBack), PetAppearance.Default.Back),
-        PetProp = NonDefault(FloatingPetStyle.NormalizeProp(s.PetProp), PetAppearance.Default.Prop),
-        PetAura = NonDefault(FloatingPetStyle.NormalizeAura(s.PetAura), PetAppearance.Default.Aura),
-        PetFeet = NonDefault(FloatingPetStyle.NormalizeFeet(s.PetFeet), PetAppearance.Default.Feet),
-        PetPattern = NonDefault(FloatingPetStyle.NormalizePattern(s.PetPattern), PetAppearance.Default.Pattern),
-        PetVibe = NonDefault(FloatingPetStyle.NormalizeVibe(s.PetVibe), PetAppearance.Default.Vibe),
-        PetBodyColor = NormalizeHexOrNull(s.PetBodyColor),
-        PetAccentColor = NormalizeHexOrNull(s.PetAccentColor),
-        PetDetailColor = NormalizeHexOrNull(s.PetDetailColor),
-        PetSize = Math.Abs(FloatingPetStyle.ClampSize(s.PetSize) - 1.0) > .01 ? FloatingPetStyle.ClampSize(s.PetSize) : null
+        ButtonSparkIntensity = s.ButtonSparkEnabled ? Round2(s.ButtonSparkIntensity) : null
     };
 
     public static string Encode(LookData data)
@@ -915,25 +896,6 @@ public static partial class AppearanceCodec
         s.ButtonLiftIntensity = ClampUnit(d.ButtonLiftIntensity, .65);
         s.ButtonSparkEnabled = d.ButtonSpark == true;
         s.ButtonSparkIntensity = ClampUnit(d.ButtonSparkIntensity, .65);
-        s.PetBody = FloatingPetStyle.NormalizeBody(d.PetBody);
-        s.PetEars = FloatingPetStyle.NormalizeEars(d.PetEars);
-        s.PetEyes = FloatingPetStyle.NormalizeEyes(d.PetEyes);
-        s.PetBrows = FloatingPetStyle.NormalizeBrows(d.PetBrows);
-        s.PetMouth = FloatingPetStyle.NormalizeMouth(d.PetMouth);
-        s.PetCheeks = FloatingPetStyle.NormalizeCheeks(d.PetCheeks);
-        s.PetGlasses = FloatingPetStyle.NormalizeGlasses(d.PetGlasses);
-        s.PetHat = FloatingPetStyle.NormalizeHat(d.PetHat);
-        s.PetOutfit = FloatingPetStyle.NormalizeOutfit(d.PetOutfit);
-        s.PetBack = FloatingPetStyle.NormalizeBack(d.PetBack);
-        s.PetProp = FloatingPetStyle.NormalizeProp(d.PetProp);
-        s.PetAura = FloatingPetStyle.NormalizeAura(d.PetAura);
-        s.PetFeet = FloatingPetStyle.NormalizeFeet(d.PetFeet);
-        s.PetPattern = FloatingPetStyle.NormalizePattern(d.PetPattern);
-        s.PetVibe = FloatingPetStyle.NormalizeVibe(d.PetVibe);
-        s.PetBodyColor = AppearanceOptions.NormalizeHex(d.PetBodyColor);
-        s.PetAccentColor = AppearanceOptions.NormalizeHex(d.PetAccentColor);
-        s.PetDetailColor = AppearanceOptions.NormalizeHex(d.PetDetailColor);
-        s.PetSize = d.PetSize is { } ps ? FloatingPetStyle.ClampSize(ps) : 1.0;
     }
 
     public static void ResetDefaults(AppSettings s)
@@ -1110,7 +1072,6 @@ public static partial class AppearanceCodec
         s.ButtonLiftIntensity = .65;
         s.ButtonSparkEnabled = false;
         s.ButtonSparkIntensity = .65;
-        FloatingPetStyle.Apply(PetAppearance.Default, s);
     }
 
     public static LookData Randomize(Random? random = null)
