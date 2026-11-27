@@ -434,6 +434,8 @@ public partial class MainWindow : Window
     private async void Composer_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
     {
         if (model is null) return;
+        var targetWrap = Composer.Text.Length > 4096 ? TextWrapping.NoWrap : TextWrapping.Wrap;
+        if (Composer.TextWrapping != targetWrap) Composer.TextWrapping = targetWrap;
         if (Composer.IsKeyboardFocused && e.Changes.Count == 1 && e.Changes.First() is { AddedLength: > 0 and <= 2, RemovedLength: 0 } change &&
             change.Offset + change.AddedLength <= Composer.Text.Length)
         {

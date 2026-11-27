@@ -76,7 +76,7 @@ public static class Images
             var decoder = BitmapDecoder.Create(file, BitmapCreateOptions.DelayCreation | BitmapCreateOptions.IgnoreColorProfile, BitmapCacheOption.None);
             if (decoder.Frames.Count == 0) return null;
             var frame = decoder.Frames[0];
-            const int maxSide = 1600;
+            const int maxSide = 4096;
             if (frame.PixelWidth >= frame.PixelHeight) return Load(path, Math.Min(frame.PixelWidth, maxSide));
             return Load(path, 0, Math.Min(frame.PixelHeight, maxSide));
         }
@@ -95,7 +95,7 @@ public static class Images
             var frame = decoder.Frames[0];
             if (frame.PixelWidth <= 0 || frame.PixelHeight <= 0 || frame.PixelWidth > 4096 || frame.PixelHeight > 4096) return null;
 
-            const int maxSide = 1600;
+            const int maxSide = 4096;
             using var ms = new MemoryStream(bytes, writable: false);
             var image = new BitmapImage();
             image.BeginInit();
@@ -122,6 +122,16 @@ public static class Images
 
     internal static bool HasGifSignature(ReadOnlySpan<byte> data) =>
         data.Length >= 6 && (data[..6].SequenceEqual("GIF87a"u8) || data[..6].SequenceEqual("GIF89a"u8));
+
+    internal static string DetectImageExtension(ReadOnlySpan<byte> data)
+    {
+        if (HasGifSignature(data)) return ".gif";
+        if (data.Length >= 8 && data[..8].SequenceEqual(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A })) return ".png";
+        if (data.Length >= 3 && data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF) return ".jpg";
+        if (data.Length >= 12 && data[..4].SequenceEqual("RIFF"u8) && data[8..12].SequenceEqual("WEBP"u8)) return ".webp";
+        if (data.Length >= 2 && data[0] == (byte)'B' && data[1] == (byte)'M') return ".bmp";
+        return ".png";
+    }
 
     internal static string SaveBytes(byte[] bytes, string extension, string directory)
     {

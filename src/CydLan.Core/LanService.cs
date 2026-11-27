@@ -561,7 +561,7 @@ public sealed partial class LanService : IAsyncDisposable
                 if (message.Type == "message" && received.TryAdd(session.Id + ":" + message.Id, 0))
                 {
                     if (received.Count > 10000) received.Clear();
-                    MessageReceived?.Invoke(new() { Id = message.Id, PeerId = session.Id, Text = Limit(message.Get("message"), 32000) });
+                    MessageReceived?.Invoke(new() { Id = message.Id, PeerId = session.Id, Text = Limit(message.Get("message"), MaxMessageChars) });
                 }
                 break;
             case "acknowledge":
@@ -569,7 +569,7 @@ public sealed partial class LanService : IAsyncDisposable
                 break;
             case "broadcast":
                 if (received.TryAdd(session.Id + ":broadcast:" + message.Id, 0))
-                    MessageReceived?.Invoke(new() { Id = message.Id, PeerId = session.Id, Text = Limit(message.Get("broadcast"), 32000), Broadcast = true });
+                    MessageReceived?.Invoke(new() { Id = message.Id, PeerId = session.Id, Text = Limit(message.Get("broadcast"), MaxMessageChars), Broadcast = true });
                 break;
             case "status":
             case "name":
@@ -586,7 +586,7 @@ public sealed partial class LanService : IAsyncDisposable
                 var thread = message.Get("thread"); var op = message.Get("groupmsgop");
                 if (thread.Length is > 0 and <= 200 && !thread.Any(char.IsControl) && op is "request" or "join" or "message" or "leave"
                     && (op != "message" || received.TryAdd(session.Id + ":group:" + message.Id, 0)))
-                    GroupMessageReceived?.Invoke(session.Id, thread, op, op == "message" ? Limit(message.Get("message"), 32000) : "");
+                    GroupMessageReceived?.Invoke(session.Id, thread, op, op == "message" ? Limit(message.Get("message"), MaxMessageChars) : "");
                 break;
             case "avatar": await HandleAvatarAsync(session, message); break;
             case "folder": await HandleFolderAsync(session, message); break;
@@ -610,9 +610,11 @@ public sealed partial class LanService : IAsyncDisposable
         }
     }
 
+    public const int MaxMessageChars = 14_000_000;
+
     public async Task<bool> SendChatAsync(string peerId, string text, string id)
     {
-        if (string.IsNullOrWhiteSpace(text) || text.Length > 32000) throw new ArgumentException("Messages must contain 1–32,000 characters.");
+        if (string.IsNullOrWhiteSpace(text) || text.Length > MaxMessageChars) throw new ArgumentException("Messages must contain 1–14,000,000 characters.");
         var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var key = peerId + ":" + id;
         if (!pending.TryAdd(key, completion)) throw new InvalidOperationException("Duplicate message identifier.");
@@ -646,7 +648,7 @@ public sealed partial class LanService : IAsyncDisposable
     public Task SendTypingAsync(string peerId, bool composing) => SendAsync(peerId, "chatstate", new() { ["chatstate"] = composing ? "composing" : "paused" });
     public async Task<int> BroadcastAsync(string text)
     {
-        if (string.IsNullOrWhiteSpace(text) || text.Length > 32000) throw new ArgumentException("Announcements must contain 1–32,000 characters.");
+        if (string.IsNullOrWhiteSpace(text) || text.Length > MaxMessageChars) throw new ArgumentException("Announcements must contain 1–14,000,000 characters.");
         int count = 0;
         foreach (var session in sessions.Values.Where(s => s.Cipher is not null))
         {

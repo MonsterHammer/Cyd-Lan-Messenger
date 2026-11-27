@@ -2053,8 +2053,8 @@ internal static class Program
             bgLook.BgFade == BackgroundSideTransition.Horizontal &&
             Math.Abs((bgLook.BgFadeStrength ?? 0) - .80) < .01 &&
             Math.Abs((bgLook.BgOpacity ?? 0) - .42) < .01 &&
-            AppearanceCodec.TryDecodeBackgroundImage(bgLook) is { PixelWidth: > 0, PixelHeight: > 0 },
-            "Look code must embed background image, anchor, opacity, blur, side transitions, and fonts cleanly inside chat message limits.");
+            AppearanceCodec.TryDecodeBackgroundImage(bgLook) is { PixelWidth: 1280, PixelHeight: 720 },
+            "Look code must embed full-resolution background image, anchor, opacity, blur, side transitions, and fonts cleanly.");
 
         // Verify 9-point BackgroundAnchor geometry math + live WPF viewport positioning + visual verification screenshots.
         Check(BackgroundAnchor.Normalize("TL") == BackgroundAnchor.TopLeft &&

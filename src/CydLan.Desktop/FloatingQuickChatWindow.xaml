@@ -59,7 +59,7 @@
               <Image local:AnimatedGifBehavior.FallbackSource="{Binding ChatBackground}"
                      local:AnimatedGifBehavior.Sequence="{Binding ChatBackgroundGif}"
                      Opacity="{Binding ChatBackgroundOpacity}" Effect="{Binding ChatBackgroundBlurEffect}"
-                     Stretch="Fill" IsHitTestVisible="False"/>
+                     Stretch="Fill" RenderOptions.BitmapScalingMode="HighQuality" IsHitTestVisible="False"/>
             </local:BackgroundImageViewport>
             <Border Background="{DynamicResource Canvas}" Opacity="{Binding ChatBackgroundDim}" IsHitTestVisible="False">
               <Border.Style>
@@ -250,7 +250,7 @@
           <Grid VerticalAlignment="Center">
             <TextBox x:Name="QuickComposer" Text="{Binding Draft, UpdateSourceTrigger=PropertyChanged}"
                      Background="Transparent" BorderThickness="0" Padding="4,5" FontSize="12.5" FontFamily="{DynamicResource MessageFontFamily}"
-                     AcceptsReturn="True" TextWrapping="Wrap" MaxLength="32000" MinHeight="28" MaxHeight="74"
+                     AcceptsReturn="True" TextWrapping="Wrap" MaxLength="14000000" MinHeight="28" MaxHeight="74"
                      VerticalScrollBarVisibility="Auto" IsEnabled="{Binding CanCompose}"
                      PreviewKeyDown="QuickComposer_KeyDown" GotKeyboardFocus="QuickComposer_GotFocus"
                      AutomationProperties.Name="Quick message"/>

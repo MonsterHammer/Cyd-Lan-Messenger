@@ -47,6 +47,11 @@ public partial class FloatingQuickChatWindow : Window
         ((INotifyCollectionChanged)model.Messages).CollectionChanged += OnMessagesChanged;
         QuickComposer.PreviewMouseDown += (_, _) => model.Replying = true;
         QuickComposer.PreviewTextInput += (_, _) => model.Replying = true;
+        QuickComposer.TextChanged += (_, _) =>
+        {
+            var targetWrap = QuickComposer.Text.Length > 4096 ? TextWrapping.NoWrap : TextWrapping.Wrap;
+            if (QuickComposer.TextWrapping != targetWrap) QuickComposer.TextWrapping = targetWrap;
+        };
         Closed += (_, _) => ((INotifyCollectionChanged)model.Messages).CollectionChanged -= OnMessagesChanged;
     }
 

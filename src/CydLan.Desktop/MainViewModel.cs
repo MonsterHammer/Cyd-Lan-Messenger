@@ -320,7 +320,7 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
                 var peer = Peers.FirstOrDefault(p => p.Id == message.PeerId);
                 if (peer is null) return;
                 activeSessionChatPeers.Add(peer.Id);
-                AddMessage(message); peer.Preview = message.Text.ReplaceLineEndings(" ");
+                AddMessage(message); peer.Preview = MessagePreview(message.Text);
                 RefreshRecentChats();
                 if (SelectedPeer?.Id != peer.Id || !IsConversationSection || !Replying) peer.Unread++;
                 peer.Typing = "";
@@ -479,7 +479,7 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
         // Legacy peers parse message IDs as signed 64-bit decimal integers.
         message.Id = NextMessageId().ToString();
         activeSessionChatPeers.Add(peer.Id);
-        AddMessage(message); peer.Preview = text.ReplaceLineEndings(" "); RefreshRecentChats(); RefreshQuickChatPeers();
+        AddMessage(message); peer.Preview = MessagePreview(text); RefreshRecentChats(); RefreshQuickChatPeers();
         if (IsConversationSection && SelectedPeer == peer) RefreshMessages(true);
         Save();
         await DeliverAsync(message);
@@ -832,7 +832,7 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
     private async Task<bool> SendGroupMessageAsync(GroupChat group, string text)
     {
         var message = new ChatMessage { GroupId = group.Id, Text = text, Outgoing = true, Delivery = "Sending…", Id = NextMessageId().ToString() };
-        AddMessage(message); Draft = ""; group.Preview = "You: " + text.ReplaceLineEndings(" "); RefreshRecentChats(); RefreshMessages(true);
+        AddMessage(message); Draft = ""; group.Preview = "You: " + MessagePreview(text); RefreshRecentChats(); RefreshMessages(true);
         if (Preview || lan is null) { message.Delivery = "Preview only"; return true; }
         int sent = 0, total = group.Members.Count;
         foreach (var id in group.Members.Where(id => Peers.Any(p => p.Id == id && p.Online)).ToList())
@@ -867,7 +867,7 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
                 if (group is null) return; // like LAN Messenger: messages for rooms we are not in are dropped
                 AddMember(group, senderId);
                 AddMessage(new() { GroupId = thread, PeerId = senderId, SenderName = sender.Name, Text = text, Delivery = "Received" });
-                group.Preview = $"{sender.Name}: {text.ReplaceLineEndings(" ")}";
+                group.Preview = $"{sender.Name}: {MessagePreview(text)}";
                 RefreshRecentChats();
                 if (SelectedGroup != group || !IsGroupsSection || !Replying) group.Unread++;
                 if (SelectedGroup == group && IsGroupsSection) RefreshMessages();
@@ -1022,13 +1022,13 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
     {
         if (!AppearanceCodec.TryDecode(code, out var look)) return false;
         string bgPath = "";
-        var (bgImage, gifBytes) = AppearanceCodec.TryDecodeBackground(look);
-        if (gifBytes is not null || bgImage is not null)
+        var (bgImage, rawBytes, ext, _) = AppearanceCodec.TryDecodeBackgroundRaw(look);
+        if (rawBytes is not null || bgImage is not null)
         {
             try
             {
-                bgPath = gifBytes is not null
-                    ? SaveChatBackgroundBytes(gifBytes, ".gif")
+                bgPath = rawBytes is not null
+                    ? SaveChatBackgroundBytes(rawBytes, ext)
                     : SaveChatBackground(bgImage!);
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException or NotSupportedException)
@@ -1044,6 +1044,19 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
         });
         Toast = "Theme applied";
         return true;
+    }
+
+    private static string MessagePreview(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return "";
+        if (text.Contains(AppearanceCodec.Prefix, StringComparison.Ordinal) &&
+            AppearanceCodec.TryExtractLookCode(text, out _, out var look, out var caption))
+        {
+            string label = caption.Length > 0 ? caption.ReplaceLineEndings(" ") : $"Theme · {ThemeManager.SwatchFor(look.Theme).Name}";
+            return label.Length <= 160 ? label : label[..160];
+        }
+        string single = text.ReplaceLineEndings(" ");
+        return single.Length <= 160 ? single : single[..160];
     }
     public static double FontSizeFor(string size) => size switch { "small" => 13, "large" => 17, _ => 15 };
     public bool SteampunkEngineEnabled => Settings.SteampunkEngineEnabled;

@@ -616,6 +616,7 @@
                                Opacity="{Binding ChatBackgroundOpacity}"
                                Effect="{Binding ChatBackgroundBlurEffect}"
                                Stretch="Fill"
+                               RenderOptions.BitmapScalingMode="HighQuality"
                                IsHitTestVisible="False"/>
                       </local:BackgroundImageViewport>
                       <Border Background="{DynamicResource Canvas}" Opacity="{Binding ChatBackgroundDim}" IsHitTestVisible="False">
@@ -753,7 +754,7 @@
                         </Border>
                       </Popup>
                       <Grid Grid.Column="2" Margin="4,0" VerticalAlignment="Center">
-                        <TextBox x:Name="Composer" Text="{Binding Draft, UpdateSourceTrigger=PropertyChanged}" Background="Transparent" BorderThickness="0" FontSize="{DynamicResource MessageFontSize}" FontFamily="{DynamicResource MessageFontFamily}" Padding="4,7" MinHeight="34" MaxHeight="160" AcceptsReturn="True" TextWrapping="Wrap" MaxLength="32000" VerticalScrollBarVisibility="Auto" IsEnabled="{Binding CanCompose}" PreviewKeyDown="Composer_KeyDown" TextChanged="Composer_TextChanged" PreviewTextInput="Conversation_Interacted" PreviewMouseDown="Conversation_Interacted" ToolTip="Message" AutomationProperties.Name="Message composer"/>
+                        <TextBox x:Name="Composer" Text="{Binding Draft, UpdateSourceTrigger=PropertyChanged}" Background="Transparent" BorderThickness="0" FontSize="{DynamicResource MessageFontSize}" FontFamily="{DynamicResource MessageFontFamily}" Padding="4,7" MinHeight="34" MaxHeight="160" AcceptsReturn="True" TextWrapping="Wrap" MaxLength="14000000" VerticalScrollBarVisibility="Auto" IsEnabled="{Binding CanCompose}" PreviewKeyDown="Composer_KeyDown" TextChanged="Composer_TextChanged" PreviewTextInput="Conversation_Interacted" PreviewMouseDown="Conversation_Interacted" ToolTip="Message" AutomationProperties.Name="Message composer"/>
                         <TextBlock Text="Message…" FontSize="15" Foreground="{DynamicResource Muted}" Margin="6,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Draft}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
                       </Grid>
                       <Button x:Name="SendButton" Grid.Column="3" Style="{StaticResource SendIcon}" VerticalAlignment="Bottom" IsEnabled="{Binding CanSend}" Click="Send_Click" ToolTip="Send" AutomationProperties.Name="Send message">

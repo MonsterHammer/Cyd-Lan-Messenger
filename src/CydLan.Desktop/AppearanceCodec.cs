@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.IO;
 using System.IO.Compression;
 using System.Text.RegularExpressions;
@@ -15,11 +16,13 @@ namespace CydLan.Desktop;
 public static partial class AppearanceCodec
 {
     public const string Prefix = "CYDLAN1:";
-    public const int MaxCodeLength = 32000;
-    private const int ShareableCodeTargetLength = 28000;
-    private const int MaxDecompressedBytes = 65536;
-    private const int MaxBackgroundImageChars = 24000;
+    public const int MaxCodeLength = 13_600_000;
+    private const int ShareableCodeTargetLength = 13_500_000;
+    private const int MaxDecompressedBytes = 256 * 1024;
+    private const int MaxLegacyBackgroundImageChars = 64_000;
+    private const int MaxRawBackgroundBytes = 10_000_000;
     private const int MaxBackgroundPixelDimension = 4096;
+    private static readonly byte[] BinaryEnvelopeMagic = [0x00, (byte)'C', (byte)'L', 0x02];
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -49,6 +52,7 @@ public static partial class AppearanceCodec
         public string? BgFade { get; set; }
         public double? BgFadeStrength { get; set; }
         public string? BgImage { get; set; }
+        [JsonIgnore] public byte[]? BgImageBytes { get; set; }
         public double? BgDim { get; set; }
         public double? BgScale { get; set; }
         public string? BgFit { get; set; }
@@ -421,10 +425,29 @@ public static partial class AppearanceCodec
     public static string Encode(LookData data)
     {
         byte[] json = JsonSerializer.SerializeToUtf8Bytes(data, JsonOptions);
-        using var output = new MemoryStream();
-        using (var deflate = new DeflateStream(output, CompressionLevel.Optimal, leaveOpen: true))
-            deflate.Write(json, 0, json.Length);
-        string b64 = Convert.ToBase64String(output.ToArray()).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        byte[] deflatedJson;
+        using (var output = new MemoryStream())
+        {
+            using (var deflate = new DeflateStream(output, CompressionLevel.Optimal, leaveOpen: true))
+                deflate.Write(json, 0, json.Length);
+            deflatedJson = output.ToArray();
+        }
+
+        byte[] payload;
+        if (data.BgImageBytes is { Length: > 0 and <= MaxRawBackgroundBytes } rawBg)
+        {
+            payload = new byte[BinaryEnvelopeMagic.Length + 4 + deflatedJson.Length + rawBg.Length];
+            BinaryEnvelopeMagic.CopyTo(payload, 0);
+            BinaryPrimitives.WriteInt32LittleEndian(payload.AsSpan(4, 4), deflatedJson.Length);
+            deflatedJson.CopyTo(payload, 8);
+            rawBg.CopyTo(payload, 8 + deflatedJson.Length);
+        }
+        else
+        {
+            payload = deflatedJson;
+        }
+
+        string b64 = Convert.ToBase64String(payload).TrimEnd('=').Replace('+', '-').Replace('/', '_');
         return Prefix + b64;
     }
 
@@ -444,39 +467,38 @@ public static partial class AppearanceCodec
     public static string Encode(AppSettings settings, BitmapSource? backgroundImage, byte[]? backgroundBytes)
     {
         var data = Capture(settings);
-        byte[]? rawGif = backgroundBytes is { Length: > 0 } && Images.HasGifSignature(backgroundBytes)
+        byte[]? rawBytes = backgroundBytes is { Length: > 0 }
             ? backgroundBytes
-            : TryLoadSavedGifBytes(settings.ChatBackgroundPath);
+            : TryLoadSavedBackgroundBytes(settings.ChatBackgroundPath);
 
         BitmapSource? bg = backgroundImage;
-        if (bg is null && rawGif is not null)
-            bg = Images.LoadChatBackgroundFromBytes(rawGif);
+        if (bg is null && rawBytes is not null)
+            bg = Images.LoadChatBackgroundFromBytes(rawBytes);
         if (bg is null && !string.IsNullOrWhiteSpace(settings.ChatBackgroundPath))
             bg = Images.LoadChatBackground(settings.ChatBackgroundPath);
 
-        if (bg is not null || rawGif is not null)
+        if (bg is not null || rawBytes is not null)
         {
             double opacity = double.IsFinite(settings.ChatBackgroundOpacity)
                 ? Math.Clamp(settings.ChatBackgroundOpacity, .10, 1.0)
                 : .26;
             data.BgOpacity = Round2(opacity);
-            if (!(rawGif is not null && TryAttachGifBytes(data, rawGif)) && bg is not null)
+            if (!(rawBytes is not null && TryAttachRawBackgroundBytes(data, rawBytes)) && bg is not null)
                 AttachBackgroundImage(data, bg);
         }
 
         return Encode(data);
     }
 
-    private static byte[]? TryLoadSavedGifBytes(string? path)
+    private static byte[]? TryLoadSavedBackgroundBytes(string? path)
     {
         if (string.IsNullOrWhiteSpace(path)) return null;
         try
         {
             if (!File.Exists(path)) return null;
             var info = new FileInfo(path);
-            if (info.Length == 0 || info.Length > 2 * 1024 * 1024) return null;
-            byte[] bytes = File.ReadAllBytes(path);
-            return Images.HasGifSignature(bytes) ? bytes : null;
+            if (info.Length is <= 0 or > 20 * 1024 * 1024) return null;
+            return File.ReadAllBytes(path);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or NotSupportedException)
         {
@@ -484,14 +506,18 @@ public static partial class AppearanceCodec
         }
     }
 
-    private static bool TryAttachGifBytes(LookData data, byte[] rawGif)
+    private static bool TryAttachRawBackgroundBytes(LookData data, byte[] rawBytes)
     {
-        if (AnimatedGifSequence.TryLoadFromBytes(rawGif) is null) return false;
-        string b64 = Convert.ToBase64String(rawGif);
-        if (b64.Length > MaxBackgroundImageChars) return false;
-        data.BgImage = b64;
-        if (Encode(data).Length <= MaxCodeLength) return true;
+        if (rawBytes.Length is <= 0 or > MaxRawBackgroundBytes) return false;
+        BitmapImage? probe = Images.LoadChatBackgroundFromBytes(rawBytes);
+        if (probe is null || probe.PixelWidth <= 0 || probe.PixelHeight <= 0 ||
+            probe.PixelWidth > MaxBackgroundPixelDimension || probe.PixelHeight > MaxBackgroundPixelDimension)
+            return false;
         data.BgImage = null;
+        data.BgImageBytes = rawBytes;
+        if (Encode(data).Length <= ShareableCodeTargetLength) return true;
+        if (Encode(data).Length <= MaxCodeLength) return true;
+        data.BgImageBytes = null;
         return false;
     }
 
@@ -499,53 +525,56 @@ public static partial class AppearanceCodec
     {
         if (source.PixelWidth <= 0 || source.PixelHeight <= 0) return;
 
-        foreach (string candidate in EncodeBackgroundCandidates(source))
+        foreach (byte[] candidate in EncodeBackgroundCandidates(source))
         {
-            if (candidate.Length > MaxBackgroundImageChars) continue;
-            data.BgImage = candidate;
+            if (candidate.Length is <= 0 or > MaxRawBackgroundBytes) continue;
+            data.BgImage = null;
+            data.BgImageBytes = candidate;
             string encoded = Encode(data);
             if (encoded.Length <= ShareableCodeTargetLength) return;
         }
 
         // Last-chance fit under hard MaxCodeLength if other look properties were exceptionally dense.
-        foreach (string candidate in EncodeBackgroundCandidates(source).Reverse())
+        foreach (byte[] candidate in EncodeBackgroundCandidates(source).Reverse())
         {
-            if (candidate.Length > MaxBackgroundImageChars) continue;
-            data.BgImage = candidate;
+            if (candidate.Length is <= 0 or > MaxRawBackgroundBytes) continue;
+            data.BgImage = null;
+            data.BgImageBytes = candidate;
             if (Encode(data).Length <= MaxCodeLength) return;
         }
 
-        data.BgImage = null;
+        data.BgImageBytes = null;
     }
 
-    private static IEnumerable<string> EncodeBackgroundCandidates(BitmapSource source)
+    private static IEnumerable<byte[]> EncodeBackgroundCandidates(BitmapSource source)
     {
-        // Fast check: simple illustrations / transparent patterns can compress tightly as PNG.
-        if (TryScaleImage(source, 640) is { } pngScaled)
-        {
-            byte[] png = EncodePngBytes(pngScaled);
-            if (png.Length <= 15000)
-                yield return Convert.ToBase64String(png);
-        }
+        // Preserve full-resolution lossless PNG whenever it fits within the raw payload budget.
+        byte[] png = EncodePngBytes(source);
+        if (png.Length <= MaxRawBackgroundBytes)
+            yield return png;
 
         BitmapSource opaque = FlattenToOpaqueBitmap(source);
         foreach (var (maxSide, quality) in new[]
         {
-            (960, 72),
-            (960, 58),
-            (800, 50),
-            (720, 44),
-            (640, 38),
-            (512, 32),
-            (400, 26),
-            (320, 20),
-            (240, 16)
+            (0, 95),
+            (0, 92),
+            (0, 88),
+            (0, 84),
+            (0, 78),
+            (0, 72),
+            (2560, 90),
+            (2048, 88),
+            (1920, 86),
+            (1600, 82),
+            (1280, 76),
+            (960, 70),
+            (800, 62)
         })
         {
-            BitmapSource scaled = TryScaleImage(opaque, maxSide) ?? opaque;
+            BitmapSource scaled = maxSide > 0 ? (TryScaleImage(opaque, maxSide) ?? opaque) : opaque;
             byte[] jpeg = EncodeJpegBytes(scaled, quality);
-            if (jpeg.Length <= 20000)
-                yield return Convert.ToBase64String(jpeg);
+            if (jpeg.Length <= MaxRawBackgroundBytes)
+                yield return jpeg;
         }
     }
 
@@ -602,29 +631,37 @@ public static partial class AppearanceCodec
         return ms.ToArray();
     }
 
-    public static (BitmapImage? StaticBitmap, byte[]? GifBytes) TryDecodeBackground(LookData data)
+    public static (BitmapImage? StaticBitmap, byte[]? RawBytes, string Extension, bool IsAnimatedGif) TryDecodeBackgroundRaw(LookData data)
     {
-        if (string.IsNullOrWhiteSpace(data.BgImage) || data.BgImage.Length > MaxBackgroundImageChars) return (null, null);
-        try
+        byte[]? bytes = null;
+        if (data.BgImageBytes is { Length: > 0 and <= MaxRawBackgroundBytes })
         {
-            byte[] bytes = Convert.FromBase64String(data.BgImage);
-            if (bytes.Length == 0) return (null, null);
-            BitmapImage? image = Images.LoadChatBackgroundFromBytes(bytes);
-            if (image is null || image.PixelWidth <= 0 || image.PixelHeight <= 0 ||
-                image.PixelWidth > MaxBackgroundPixelDimension || image.PixelHeight > MaxBackgroundPixelDimension)
-                return (null, null);
-            byte[]? gif = Images.HasGifSignature(bytes) && AnimatedGifSequence.TryLoadFromBytes(bytes) is not null
-                ? bytes
-                : null;
-            return (image, gif);
+            bytes = data.BgImageBytes;
         }
-        catch (FormatException)
+        else if (!string.IsNullOrWhiteSpace(data.BgImage) && data.BgImage.Length <= MaxLegacyBackgroundImageChars)
         {
-            return (null, null);
+            try { bytes = Convert.FromBase64String(data.BgImage); }
+            catch (FormatException) { return (null, null, ".png", false); }
         }
+        if (bytes is null || bytes.Length == 0 || bytes.Length > MaxRawBackgroundBytes)
+            return (null, null, ".png", false);
+
+        BitmapImage? image = Images.LoadChatBackgroundFromBytes(bytes);
+        if (image is null || image.PixelWidth <= 0 || image.PixelHeight <= 0 ||
+            image.PixelWidth > MaxBackgroundPixelDimension || image.PixelHeight > MaxBackgroundPixelDimension)
+            return (null, null, ".png", false);
+        string ext = Images.DetectImageExtension(bytes);
+        bool isGif = Images.HasGifSignature(bytes) && AnimatedGifSequence.TryLoadFromBytes(bytes) is not null;
+        return (image, bytes, ext, isGif);
     }
 
-    public static BitmapImage? TryDecodeBackgroundImage(LookData data) => TryDecodeBackground(data).StaticBitmap;
+    public static (BitmapImage? StaticBitmap, byte[]? GifBytes) TryDecodeBackground(LookData data)
+    {
+        var (image, raw, _, isGif) = TryDecodeBackgroundRaw(data);
+        return (image, isGif ? raw : null);
+    }
+
+    public static BitmapImage? TryDecodeBackgroundImage(LookData data) => TryDecodeBackgroundRaw(data).StaticBitmap;
 
     [GeneratedRegex(@"CYDLAN1:[A-Za-z0-9\-_]+")]
     private static partial Regex LookCodeRegex();
@@ -662,11 +699,28 @@ public static partial class AppearanceCodec
         if (mod > 0) payload += new string('=', 4 - mod);
         try
         {
-            byte[] compressed = Convert.FromBase64String(payload);
-            using var input = new MemoryStream(compressed);
+            byte[] rawPayload = Convert.FromBase64String(payload);
+            byte[]? bgBytes = null;
+            ReadOnlyMemory<byte> deflateSlice;
+
+            if (rawPayload.Length >= 8 && rawPayload.AsSpan(0, 4).SequenceEqual(BinaryEnvelopeMagic))
+            {
+                int jsonLen = BinaryPrimitives.ReadInt32LittleEndian(rawPayload.AsSpan(4, 4));
+                if (jsonLen <= 0 || 8 + jsonLen > rawPayload.Length) return false;
+                deflateSlice = rawPayload.AsMemory(8, jsonLen);
+                int bgLen = rawPayload.Length - (8 + jsonLen);
+                if (bgLen > MaxRawBackgroundBytes) return false;
+                if (bgLen > 0) bgBytes = rawPayload[(8 + jsonLen)..];
+            }
+            else
+            {
+                deflateSlice = rawPayload;
+            }
+
+            using var input = new MemoryStream(deflateSlice.ToArray(), writable: false);
             using var deflate = new DeflateStream(input, CompressionMode.Decompress);
             using var output = new MemoryStream();
-            byte[] buffer = new byte[1024];
+            byte[] buffer = new byte[4096];
             int read;
             while ((read = deflate.Read(buffer, 0, buffer.Length)) > 0)
             {
@@ -675,6 +729,7 @@ public static partial class AppearanceCodec
             }
             var parsed = JsonSerializer.Deserialize<LookData>(output.ToArray(), JsonOptions);
             if (parsed is null) return false;
+            if (bgBytes is not null) parsed.BgImageBytes = bgBytes;
             data = parsed;
             return true;
         }

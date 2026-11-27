@@ -15,7 +15,7 @@ public sealed record WireMessage(string Type, string From, string To, string Id,
 
 public static class LegacyProtocol
 {
-    public const int MaxFrame = 1024 * 1024;
+    public const int MaxFrame = 16 * 1024 * 1024;
     public static byte[] Encode(string type, string from, string? to, string id, IDictionary<string, string>? body = null)
     {
         var head = new XElement("head", new XElement("from", from), new XElement("messageid", id), new XElement("type", type));

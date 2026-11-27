@@ -887,10 +887,11 @@ public partial class SettingsWindow : Window
     {
         var temp = new AppSettings();
         AppearanceCodec.Apply(look, temp);
-        var (decodedImage, decodedGifBytes) = AppearanceCodec.TryDecodeBackground(look);
+        var (decodedImage, decodedRawBytes, decodedExt, isAnimatedGif) = AppearanceCodec.TryDecodeBackgroundRaw(look);
         chosenBackground = decodedImage;
-        chosenBackgroundBytes = decodedGifBytes;
-        chosenBackgroundGif = decodedGifBytes is not null ? AnimatedGifSequence.TryLoadFromBytes(decodedGifBytes) : null;
+        chosenBackgroundBytes = decodedRawBytes;
+        chosenBackgroundExtension = decodedExt;
+        chosenBackgroundGif = isAnimatedGif && decodedRawBytes is not null ? AnimatedGifSequence.TryLoadFromBytes(decodedRawBytes) : null;
         backgroundPath = "";
         applyingAppearance = true;
         BackgroundOpacityBox.Value = temp.ChatBackgroundOpacity;
@@ -997,6 +998,7 @@ public partial class SettingsWindow : Window
     private string backgroundPath = "";
     private BitmapSource? chosenBackground;
     private byte[]? chosenBackgroundBytes;
+    private string chosenBackgroundExtension = ".png";
     private AnimatedGifSequence? chosenBackgroundGif;
     private void ShowBackground()
     {
@@ -1007,17 +1009,12 @@ public partial class SettingsWindow : Window
         BackgroundAdjustments.Visibility = image is null ? Visibility.Collapsed : Visibility.Visible;
         RemoveBackgroundButton.IsEnabled = image is not null || backgroundPath.Length > 0;
     }
-    private static byte[]? TryReadGifBytes(string path)
+    private static byte[]? TryReadImageBytes(string path)
     {
         try
         {
             var info = new System.IO.FileInfo(path);
             if (!info.Exists || info.Length is < 6 or > 20 * 1024 * 1024) return null;
-            Span<byte> header = stackalloc byte[6];
-            using (var stream = System.IO.File.OpenRead(path))
-            {
-                if (stream.Read(header) < 6 || !Images.HasGifSignature(header)) return null;
-            }
             return System.IO.File.ReadAllBytes(path);
         }
         catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException or NotSupportedException)
@@ -1029,16 +1026,21 @@ public partial class SettingsWindow : Window
     {
         var picker = new Microsoft.Win32.OpenFileDialog { Title = "Chat background", Filter = "Images|*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.webp" };
         if (picker.ShowDialog(this) != true) return;
-        byte[]? gifBytes = TryReadGifBytes(picker.FileName);
-        AnimatedGifSequence? gif = gifBytes is not null ? AnimatedGifSequence.TryLoadFromBytes(gifBytes) : null;
-        BitmapSource? image = Images.LoadChatBackground(picker.FileName) ?? (gif is { Frames.Count: > 0 } ? gif.Frames[0].Bitmap : null);
+        byte[]? rawBytes = TryReadImageBytes(picker.FileName);
+        AnimatedGifSequence? gif = rawBytes is not null && Images.HasGifSignature(rawBytes)
+            ? AnimatedGifSequence.TryLoadFromBytes(rawBytes)
+            : null;
+        BitmapSource? image = (rawBytes is not null ? Images.LoadChatBackgroundFromBytes(rawBytes) : null)
+            ?? Images.LoadChatBackground(picker.FileName)
+            ?? (gif is { Frames.Count: > 0 } ? gif.Frames[0].Bitmap : null);
         if (image is null)
         {
             BackgroundError.Text = "The image couldn't be opened.";
             return;
         }
         chosenBackground = image;
-        chosenBackgroundBytes = gifBytes;
+        chosenBackgroundBytes = rawBytes;
+        chosenBackgroundExtension = rawBytes is not null ? Images.DetectImageExtension(rawBytes) : ".png";
         chosenBackgroundGif = gif;
         backgroundPath = "";
         BackgroundError.Text = "";
@@ -1050,6 +1052,7 @@ public partial class SettingsWindow : Window
     {
         chosenBackground = null;
         chosenBackgroundBytes = null;
+        chosenBackgroundExtension = ".png";
         chosenBackgroundGif = null;
         backgroundPath = "";
         BackgroundError.Text = "";
@@ -1259,9 +1262,9 @@ public partial class SettingsWindow : Window
         var multicast = MulticastBox.Text.Trim();
         if (!IPAddress.TryParse(multicast, out var group) || group.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork || group.GetAddressBytes()[0] is < 224 or > 239)
         { ShowPage("NetworkPage"); MulticastBox.Focus(); return; }
-        if (chosenBackgroundBytes is not null && Images.HasGifSignature(chosenBackgroundBytes))
+        if (chosenBackgroundBytes is { Length: > 0 })
         {
-            try { backgroundPath = model.SaveChatBackgroundBytes(chosenBackgroundBytes, ".gif"); }
+            try { backgroundPath = model.SaveChatBackgroundBytes(chosenBackgroundBytes, chosenBackgroundExtension); }
             catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException or NotSupportedException)
             {
                 ShowPage("AppearancePage");

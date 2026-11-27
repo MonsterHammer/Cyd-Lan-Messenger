@@ -451,7 +451,7 @@
               <TextBlock Text="Look code" Style="{StaticResource Label}"/>
               <Grid Margin="0,0,0,10">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <TextBox x:Name="LookCodeBox" MaxLength="32000" AutomationProperties.Name="Look code"/>
+                <TextBox x:Name="LookCodeBox" MaxLength="14000000" AutomationProperties.Name="Look code"/>
                 <Button Grid.Column="1" Content="Copy code" Style="{StaticResource Secondary}" Margin="8,0,0,0" Click="CopyLookCode_Click"/>
                 <Button Grid.Column="2" Content="Import" Style="{StaticResource Secondary}" Margin="6,0,0,0" Click="ImportLookCode_Click"/>
               </Grid>
@@ -2235,6 +2235,7 @@
                       <Grid x:Name="BackgroundPreviewVerticalMask">
                         <local:BackgroundImageViewport x:Name="BackgroundPreviewViewport">
                           <Image x:Name="BackgroundPreview" Stretch="Fill" Opacity="{Binding Value, ElementName=BackgroundOpacityBox}"
+                                 RenderOptions.BitmapScalingMode="HighQuality"
                                  AutomationProperties.Name="Chat background preview"/>
                         </local:BackgroundImageViewport>
                         <Border x:Name="BackgroundPreviewDimOverlay" Background="{DynamicResource Canvas}" Opacity="{Binding Value, ElementName=BackgroundDimBox}" IsHitTestVisible="False"/>
