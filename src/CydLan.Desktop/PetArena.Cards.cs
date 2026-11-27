@@ -1,143 +1,450 @@
+using System.Globalization;
 using CydLan.Core;
 
 namespace CydLan.Desktop;
 
-/// <summary>A card battle against a practice opponent. The player is always side 0.</summary>
+/// <summary>A card battle against a world enemy or a LAN friend. Side 0 is always the challenger (or the player in world fights).</summary>
 public sealed class CardBattleSession
 {
+    public string Id { get; init; } = "";
+    /// <summary>The friend's peer id, or null for a world fight.</summary>
+    public string? PeerId { get; init; }
+    public int MySide { get; init; }
     public required CardBattle Battle { get; init; }
     public required string OpponentName { get; init; }
     public required PetAppearance MyLook { get; init; }
     public required PetAppearance TheirLook { get; init; }
-    public CardBattle.Side Me => Battle.Sides[0];
-    public CardBattle.Side Them => Battle.Sides[1];
+    public PetWorld.Stage? Stage { get; init; }
+    public PetWorld.Enemy? Enemy { get; init; }
+    public bool IsLan => PeerId is not null;
+    public CardBattle.Side Me => Battle.Sides[MySide];
+    public CardBattle.Side Them => Battle.Sides[1 - MySide];
+    public List<int>? MyPicks { get; internal set; }
+    internal List<int>? TheirPicks { get; set; }
+    internal DateTime TurnDeadlineUtc { get; set; }
+    internal DateTime? WaitingSinceUtc { get; set; }
+    public bool WaitingForThem => MyPicks is not null && TheirPicks is null && !Finished;
+    public int SecondsLeft => Math.Max(0, (int)Math.Ceiling((TurnDeadlineUtc - DateTime.UtcNow).TotalSeconds));
     public bool Finished { get; internal set; }
     /// <summary>1 win, 0 draw, -1 loss.</summary>
     public int Outcome { get; internal set; }
     public string EndReason { get; internal set; } = "";
     public PetGame.BattleReward? Reward { get; internal set; }
-    public PetGearItem? Drop { get; internal set; }
+    public PetCard? Drop { get; internal set; }
+    public bool StageCleared { get; internal set; }
     public IReadOnlyList<string> TheirLastCards { get; internal set; } = [];
+    public IReadOnlyList<string> MyLastCards { get; internal set; } = [];
 
     public event Action<IReadOnlyList<CardEvent>>? RoundPlayed;
     public event Action? Ended;
+    public event Action? StateChanged;
     internal void RaiseRound(IReadOnlyList<CardEvent> events) => RoundPlayed?.Invoke(events);
     internal void RaiseEnded() => Ended?.Invoke();
+    internal void RaiseState() => StateChanged?.Invoke();
 }
 
 public sealed partial class PetArena
 {
-    // ── Gear ─────────────────────────────────────────────────────────────
+    private (string PeerId, string BattleId, string Seed, PetCards.Loadout Loadout, DateTime ExpiresUtc)? cardChallenge;
 
-    /// <summary>Dresses a look in worn gear: head → hat, armor → outfit, back, weapon → prop, charm → aura.</summary>
-    public static PetAppearance Dress(PetAppearance look, IReadOnlyDictionary<string, string> worn)
-    {
-        foreach (var (slot, part) in worn)
-            look = slot switch
-            {
-                PetCards.Head => look with { Hat = part },
-                PetCards.Armor => look with { Outfit = part },
-                PetCards.Back => look with { Back = part },
-                PetCards.Weapon => look with { Prop = part },
-                PetCards.Charm => look with { Aura = part },
-                _ => look
-            };
-        return look;
-    }
+    public string? CardChallengePeerId => cardChallenge?.PeerId;
 
     public PetCards.Loadout MyLoadout => PetCards.LoadoutFor(Progress, model.Settings.DisplayName, PetAppearance.From(model.Settings).ToWireCode());
 
-    /// <summary>The companion wearing its gear, as shown in the arena and in card battles.</summary>
-    public PetAppearance BattleLook => Dress(model.PetAppearance, MyLoadout.Looks);
+    /// <summary>Looks don't change stats; the companion fights as it looks.</summary>
+    public PetAppearance BattleLook => model.PetAppearance;
 
-    public bool Equip(string uid)
+    /// <summary>Gives a new install its seed, starter cards and deck.</summary>
+    public void EnsureStarted()
     {
-        if (CurrentCard is { Finished: false } || !PetCards.Equip(Progress, uid)) return false;
+        bool fresh = Progress.Seed == 0 || Progress.Cards.Count == 0 || Progress.Deck.Count == 0;
+        PetCards.EnsureStarted(Progress, random);
+        if (fresh) Save();
+    }
+
+    private bool InBattle => CurrentCard is { Finished: false };
+
+    // ── Stats ────────────────────────────────────────────────────────────
+
+    public bool Reroll()
+    {
+        if (InBattle || !PetGame.Reroll(Progress, random)) return false;
         Save();
         PetAction?.Invoke("spin", null);
         return true;
     }
 
-    public bool Unequip(string slot)
+    // ── Deck and collection ──────────────────────────────────────────────
+
+    public bool AddToDeck(string id)
     {
-        if (CurrentCard is { Finished: false } || !PetCards.Unequip(Progress, slot)) return false;
+        if (InBattle || !PetCards.AddToDeck(Progress, id)) return false;
         Save();
         return true;
     }
 
-    public int Sell(string uid)
+    public bool RemoveFromDeck(string id)
     {
-        int coins = PetCards.Sell(Progress, uid);
-        if (coins > 0) Save();
-        return coins;
+        if (InBattle || !PetCards.RemoveFromDeck(Progress, id)) return false;
+        Save();
+        return true;
     }
 
-    public PetGearItem? OpenGearPack()
+    // ── Daily shop ───────────────────────────────────────────────────────
+
+    public static string Today => DateTime.Now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+    public IReadOnlyList<PetCards.ShopOffer> ShopOffers => PetCards.Shop(Progress, Today);
+
+    public bool BuyCard(int slot)
     {
-        if (PetCards.OpenPack(Progress, random) is not { } owned) return null;
+        if (!PetCards.BuyFromShop(Progress, Today, slot)) return false;
         Save();
         PetAction?.Invoke("surprise", null);
-        return PetCards.GearOf(owned.Item);
+        return true;
     }
 
-    /// <summary>New pets get a starter set so the deck has gear cards from the first battle.</summary>
-    public void EnsureStarterGear()
+    // ── World ────────────────────────────────────────────────────────────
+
+    public PetWorld.Stage CurrentStage => PetWorld.StageOf(Progress.Seed, Progress.Stage);
+
+    public static PetAppearance EnemyLook(PetWorld.Enemy enemy, out string kind)
     {
-        if (Progress.Gear.Count > 0) return;
-        foreach (var id in new[] { "cap", "hoodie", "wand" })
-            if (PetCards.Give(Progress, id, random) is { } g) PetCards.Equip(Progress, g.Uid);
-        Save();
+        var preset = FloatingPetStyle.Presets[enemy.LookSeed % FloatingPetStyle.Presets.Count];
+        kind = preset.Name;
+        return preset.Appearance;
     }
 
-    // ── Card battles ─────────────────────────────────────────────────────
+    // ── Card battles (World + LAN Duels) ─────────────────────────────────
 
     public CardBattleSession? CurrentCard { get; private set; }
     public event Action<CardBattleSession>? CardBattleStarted;
 
+    /// <summary>Starts the next fight of the current world stage.</summary>
     public void StartCardBattle()
     {
-        if (CurrentCard is { Finished: false } || Current is { Finished: false }) return;
-        EnsureStarterGear();
-        var preset = FloatingPetStyle.Presets[random.Next(FloatingPetStyle.Presets.Count)];
-        var wild = PetCards.Wild(Progress.Level, random, "Wild " + preset.Name, preset.Appearance.ToWireCode());
-        // Hunger dulls a pet: a hungry one starts the fight with less HP.
+        if (InBattle || Current is { Finished: false }) return;
+        EnsureStarted();
+        if (!PetCards.DeckReady(Progress)) { SetStatus($"Deck needs {PetCards.DeckSize} cards"); return; }
+        _ = CancelCardChallengeAsync();
+        SetStatus("");
+        var stage = CurrentStage;
+        var enemy = stage.Fights[Progress.StageFight];
+        var look = EnemyLook(enemy, out string kind);
+        var foe = PetWorld.LoadoutOf(stage, enemy, $"{enemy.Name} {kind}", look.ToWireCode());
         var mine = MyLoadout;
-        if (PetGame.IsHungry(Progress, DateTime.UtcNow)) mine = mine with { MaxHp = mine.MaxHp * 85 / 100 };
         CurrentCard = new CardBattleSession
         {
-            Battle = new CardBattle(mine, wild, (ulong)random.NextInt64()),
-            OpponentName = wild.Name,
-            MyLook = Dress(model.PetAppearance, mine.Looks),
-            TheirLook = Dress(preset.Appearance, wild.Looks)
+            Id = NewId(),
+            MySide = 0,
+            Battle = new CardBattle(mine, foe, (ulong)random.NextInt64()),
+            OpponentName = foe.Name,
+            MyLook = BattleLook,
+            TheirLook = look,
+            Stage = stage,
+            Enemy = enemy
         };
         Changed(nameof(CurrentCard));
         CardBattleStarted?.Invoke(CurrentCard);
         PetAction?.Invoke("fired", null);
     }
 
-    /// <summary>Plays the chosen hand cards (indexes into the hand) against the opponent's picks.</summary>
+    /// <summary>Invites an online CydLan friend to a lockstep card battle duel.</summary>
+    public async Task ChallengeCardDuelAsync(Peer peer)
+    {
+        if (InBattle || Current is { Finished: false }) return;
+        EnsureStarted();
+        if (!PetCards.DeckReady(Progress)) { SetStatus($"Deck needs {PetCards.DeckSize} cards"); return; }
+        if (!peer.Online || !LanService.SupportsPetBattles(peer.Version)) { SetStatus("Unavailable"); return; }
+        await CancelCardChallengeAsync();
+        await CancelChallengeAsync();
+        var loadout = MyLoadout;
+        string id = NewId(), seed = NewSeed();
+        cardChallenge = (peer.Id, id, seed, loadout, DateTime.UtcNow.AddSeconds(InviteSeconds));
+        Changed(nameof(CardChallengePeerId));
+        SetStatus($"Waiting for {peer.Name}…");
+        clock.Start();
+        if (!await SendAsync(peer.Id, "invite", id, new()
+        {
+            ["mode"] = "cards",
+            ["loadout"] = PetCards.EncodeLoadout(loadout),
+            ["seed"] = seed
+        }))
+        {
+            cardChallenge = null;
+            Changed(nameof(CardChallengePeerId));
+            SetStatus("Couldn't reach " + peer.Name);
+        }
+    }
+
+    public async Task CancelCardChallengeAsync()
+    {
+        if (cardChallenge is not { } c) return;
+        cardChallenge = null;
+        Changed(nameof(CardChallengePeerId));
+        SetStatus("");
+        await SendAsync(c.PeerId, "cancel", c.BattleId, new() { ["mode"] = "cards" });
+    }
+
+    public async Task AcceptCardDuelAsync(PetInvite invite)
+    {
+        Invites.Remove(invite);
+        if (invite.CardLoadout is not { } theirLoadout) return;
+        EnsureStarted();
+        if (InBattle || Current is { Finished: false })
+        {
+            await SendAsync(invite.PeerId, "decline", invite.BattleId, new() { ["mode"] = "cards", ["reason"] = "busy" });
+            return;
+        }
+        if (!PetCards.DeckReady(Progress))
+        {
+            SetStatus($"Deck needs {PetCards.DeckSize} cards");
+            await SendAsync(invite.PeerId, "decline", invite.BattleId, new() { ["mode"] = "cards", ["reason"] = "no" });
+            return;
+        }
+        if (DateTime.UtcNow > invite.ExpiresUtc) { SetStatus("Challenge expired"); return; }
+        await CancelCardChallengeAsync();
+        await CancelChallengeAsync();
+        var mine = MyLoadout;
+        string seed = NewSeed();
+        if (!await SendAsync(invite.PeerId, "accept", invite.BattleId, new()
+        {
+            ["mode"] = "cards",
+            ["loadout"] = PetCards.EncodeLoadout(mine),
+            ["seed"] = seed
+        }))
+        {
+            SetStatus("Couldn't reach " + invite.PeerName);
+            return;
+        }
+        StartLanCardDuel(invite.BattleId, invite.PeerId, PeerName(invite.PeerId, theirLoadout.Name), mySide: 1, theirLoadout, mine, CombineSeeds(invite.Seed, seed));
+    }
+
+    public async Task DeclineCardDuelAsync(PetInvite invite)
+    {
+        Invites.Remove(invite);
+        await SendAsync(invite.PeerId, "decline", invite.BattleId, new() { ["mode"] = "cards", ["reason"] = "no" });
+    }
+
+    private void StartLanCardDuel(string bid, string peerId, string opponentName, int mySide, PetCards.Loadout side0, PetCards.Loadout side1, ulong seed)
+    {
+        var theirLoadout = mySide == 0 ? side1 : side0;
+        var session = new CardBattleSession
+        {
+            Id = bid,
+            PeerId = peerId,
+            MySide = mySide,
+            Battle = new CardBattle(side0, side1, seed),
+            OpponentName = opponentName,
+            MyLook = BattleLook,
+            TheirLook = PetAppearance.FromWireCode(theirLoadout.PetCode) ?? PetAppearance.Default,
+            TurnDeadlineUtc = DateTime.UtcNow.AddSeconds(TurnSeconds + 6)
+        };
+        CurrentCard = session;
+        SetStatus("");
+        Changed(nameof(CurrentCard));
+        clock.Start();
+        CardBattleStarted?.Invoke(session);
+        PetAction?.Invoke("fired", null);
+    }
+
+    /// <summary>Plays the chosen hand cards against the AI in a world battle.</summary>
     public IReadOnlyList<CardEvent> PlayCards(IEnumerable<int> handIndexes)
     {
-        if (CurrentCard is not { Finished: false } s) return [];
+        if (CurrentCard is not { Finished: false, IsLan: false } s) return [];
         var mine = s.Battle.Validate(0, handIndexes);
         var theirs = s.Battle.ChooseAi(1, random);
         s.TheirLastCards = theirs.Select(i => s.Them.Hand[i]).ToList();
+        s.MyLastCards = mine.Select(i => s.Me.Hand[i]).ToList();
         var events = s.Battle.PlayRound(mine, theirs);
         s.RaiseRound(events);
         if (s.Battle.Over) FinishCard(s, s.Battle.Winner < 0 ? 0 : s.Battle.Winner == 0 ? 1 : -1, "");
         return events;
     }
 
+    /// <summary>Submits the chosen hand cards for either a world fight or a LAN card duel.</summary>
+    public async Task PlayCardsAsync(IEnumerable<int> handIndexes)
+    {
+        if (CurrentCard is not { Finished: false } s) return;
+        if (!s.IsLan) { PlayCards(handIndexes); return; }
+        if (s.MyPicks is not null) return;
+        string hash = s.Battle.Hash();
+        int round = s.Battle.Round + 1;
+        var mine = s.Battle.Validate(s.MySide, handIndexes);
+        s.MyPicks = mine;
+        s.WaitingSinceUtc = DateTime.UtcNow;
+        string wire = string.Join(',', mine.Select(i => i.ToString(CultureInfo.InvariantCulture)));
+        if (!await SendAsync(s.PeerId!, "move", s.Id, new()
+        {
+            ["mode"] = "cards",
+            ["turn"] = round.ToString(CultureInfo.InvariantCulture),
+            ["picks"] = wire,
+            ["hash"] = hash
+        }))
+        {
+            EndCardNoResult(s, "Connection lost");
+            return;
+        }
+        s.RaiseState();
+        TryResolveCardRound(s);
+    }
+
+    public void RestartCardTurnTimer()
+    {
+        if (CurrentCard is { Finished: false, IsLan: true } s) s.TurnDeadlineUtc = DateTime.UtcNow.AddSeconds(TurnSeconds);
+    }
+
+    private void TryResolveCardRound(CardBattleSession s)
+    {
+        if (s.Finished || s.MyPicks is null || s.TheirPicks is null) return;
+        var mine = s.MyPicks;
+        var theirs = s.TheirPicks;
+        s.MyPicks = null; s.TheirPicks = null; s.WaitingSinceUtc = null;
+        s.MyLastCards = mine.Select(i => s.Me.Hand[i]).ToList();
+        s.TheirLastCards = theirs.Select(i => s.Them.Hand[i]).ToList();
+        var p0 = s.MySide == 0 ? mine : theirs;
+        var p1 = s.MySide == 0 ? theirs : mine;
+        var events = s.Battle.PlayRound(p0, p1);
+        s.TurnDeadlineUtc = DateTime.UtcNow.AddSeconds(TurnSeconds + 8);
+        s.RaiseRound(events);
+        if (s.Battle.Over)
+        {
+            int outcome = s.Battle.Winner < 0 ? 0 : s.Battle.Winner == s.MySide ? 1 : -1;
+            FinishCard(s, outcome, "");
+        }
+        else s.RaiseState();
+    }
+
+    private static List<int> ParsePicks(string? raw)
+    {
+        var list = new List<int>();
+        if (string.IsNullOrWhiteSpace(raw)) return list;
+        foreach (var token in raw.Split(',', StringSplitOptions.RemoveEmptyEntries))
+            if (int.TryParse(token, NumberStyles.None, CultureInfo.InvariantCulture, out int i)) list.Add(i);
+        return list;
+    }
+
+    private bool HandleCardMessage(string peerId, IReadOnlyDictionary<string, string> f)
+    {
+        string op = f.GetValueOrDefault("op", ""), bid = f.GetValueOrDefault("bid", "");
+        bool isCard = f.GetValueOrDefault("mode") == "cards"
+            || (CurrentCard is { IsLan: true } cur && cur.Id == bid && cur.PeerId == peerId)
+            || (cardChallenge is { } ch && ch.BattleId == bid && ch.PeerId == peerId)
+            || Invites.Any(i => i.IsCardDuel && i.BattleId == bid && i.PeerId == peerId);
+        if (!isCard) return false;
+
+        switch (op)
+        {
+            case "invite":
+            {
+                if (PetCards.DecodeLoadout(f.GetValueOrDefault("loadout")) is not { } loadout || f.GetValueOrDefault("seed", "") is not { Length: > 0 } seed) return true;
+                if (InBattle || Current is { Finished: false } || Invites.Count >= 5)
+                {
+                    _ = SendAsync(peerId, "decline", bid, new() { ["mode"] = "cards", ["reason"] = "busy" });
+                    return true;
+                }
+                if (Invites.Any(i => i.BattleId == bid)) return true;
+                foreach (var old in Invites.Where(i => i.PeerId == peerId).ToList()) Invites.Remove(old);
+                var stub = new PetGame.FighterCard { Name = loadout.Name, PetCode = loadout.PetCode, Level = loadout.Level, Element = loadout.Element };
+                var invite = new PetInvite(peerId, PeerName(peerId, loadout.Name), bid, stub, seed, DateTime.UtcNow.AddSeconds(InviteSeconds), loadout);
+                Invites.Add(invite);
+                clock.Start();
+                InviteReceived?.Invoke(invite);
+                return true;
+            }
+            case "cancel":
+                foreach (var i in Invites.Where(i => i.BattleId == bid && i.PeerId == peerId).ToList()) Invites.Remove(i);
+                return true;
+            case "decline":
+                if (cardChallenge is { } pending && pending.BattleId == bid && pending.PeerId == peerId)
+                {
+                    cardChallenge = null;
+                    Changed(nameof(CardChallengePeerId));
+                    SetStatus(f.GetValueOrDefault("reason") == "busy" ? PeerName(peerId, "They") + " is busy" : PeerName(peerId, "They") + " declined");
+                }
+                return true;
+            case "accept":
+            {
+                if (cardChallenge is not { } mine || mine.BattleId != bid || mine.PeerId != peerId) return true;
+                if (PetCards.DecodeLoadout(f.GetValueOrDefault("loadout")) is not { } theirLoadout || f.GetValueOrDefault("seed", "") is not { Length: > 0 } seed) return true;
+                cardChallenge = null;
+                Changed(nameof(CardChallengePeerId));
+                StartLanCardDuel(bid, peerId, PeerName(peerId, theirLoadout.Name), mySide: 0, mine.Loadout, theirLoadout, CombineSeeds(mine.Seed, seed));
+                return true;
+            }
+            case "move":
+            {
+                if (CurrentCard is not { Finished: false, IsLan: true } s || s.Id != bid || s.PeerId != peerId) return true;
+                if (!int.TryParse(f.GetValueOrDefault("turn"), NumberStyles.None, CultureInfo.InvariantCulture, out int round)) return true;
+                if (round <= s.Battle.Round) return true;
+                if (round != s.Battle.Round + 1 || f.GetValueOrDefault("hash") != s.Battle.Hash())
+                {
+                    _ = SendAsync(peerId, "leave", s.Id, new() { ["mode"] = "cards", ["reason"] = "desync" });
+                    EndCardNoResult(s, "Out of sync");
+                    return true;
+                }
+                s.TheirPicks = s.Battle.Validate(1 - s.MySide, ParsePicks(f.GetValueOrDefault("picks")));
+                s.RaiseState();
+                TryResolveCardRound(s);
+                return true;
+            }
+            case "leave":
+            {
+                if (CurrentCard is not { Finished: false, IsLan: true } s || s.Id != bid || s.PeerId != peerId) return true;
+                if (f.GetValueOrDefault("reason") == "desync") EndCardNoResult(s, "Out of sync");
+                else FinishCard(s, 1, s.OpponentName + " left");
+                return true;
+            }
+        }
+        return true;
+    }
+
+    private void OnCardPeerOffline(string peerId)
+    {
+        if (cardChallenge is { } c && c.PeerId == peerId) { cardChallenge = null; Changed(nameof(CardChallengePeerId)); SetStatus(""); }
+        if (CurrentCard is { Finished: false, IsLan: true } s && s.PeerId == peerId) EndCardNoResult(s, "Connection lost");
+    }
+
+    private void TickCardDuel(DateTime now)
+    {
+        if (cardChallenge is { } c && now > c.ExpiresUtc)
+        {
+            cardChallenge = null;
+            Changed(nameof(CardChallengePeerId));
+            SetStatus("No answer");
+            _ = SendAsync(c.PeerId, "cancel", c.BattleId, new() { ["mode"] = "cards" });
+        }
+        if (CurrentCard is { Finished: false, IsLan: true } s)
+        {
+            if (s.MyPicks is null && now > s.TurnDeadlineUtc) _ = PlayCardsAsync([]);
+            else if (s.WaitingSinceUtc is { } since && (now - since).TotalSeconds > SilenceSeconds) EndCardNoResult(s, "Connection lost");
+            s.RaiseState();
+        }
+    }
+
     public void LeaveCardBattle()
     {
-        if (CurrentCard is { Finished: false } s) FinishCard(s, -1, "You left");
+        if (CurrentCard is not { Finished: false } s) return;
+        if (s.IsLan) _ = SendAsync(s.PeerId!, "leave", s.Id, new() { ["mode"] = "cards" });
+        FinishCard(s, -1, "You left");
     }
 
     public void DismissCardBattle()
     {
-        if (CurrentCard is { Finished: false }) return;
+        if (InBattle) return;
         CurrentCard = null;
         Changed(nameof(CurrentCard));
+    }
+
+    private void EndCardNoResult(CardBattleSession s, string reason)
+    {
+        if (s.Finished) return;
+        s.Finished = true;
+        s.Outcome = 0;
+        s.EndReason = reason;
+        s.RaiseEnded();
+        s.RaiseState();
+        PetAction?.Invoke("nervous", null);
     }
 
     private void FinishCard(CardBattleSession s, int outcome, string reason)
@@ -146,12 +453,21 @@ public sealed partial class PetArena
         s.Finished = true;
         s.Outcome = outcome;
         s.EndReason = reason;
-        s.Reward = PetGame.Reward(Progress, outcome, s.Them.Loadout.Level, friend: false, DateTime.UtcNow);
+        // Leaving pays nothing; a fought loss still pays a little.
+        int opponentLevel = s.Stage?.Number ?? s.Them.Loadout.Level;
+        bool boss = s.Enemy?.Boss == true;
+        Progress.Fullness = 100; Progress.FullnessAtUtc = DateTime.UtcNow;
+        s.Reward = reason == "You left" ? new PetGame.BattleReward(0, 0, 0) : PetGame.Reward(Progress, outcome, opponentLevel, friend: true, DateTime.UtcNow, boss);
         if (outcome > 0) Progress.CardWins++; else if (outcome < 0) Progress.CardLosses++;
-        if (reason.Length == 0 && PetCards.RollDrop(random, s.Them.Loadout.Level, outcome > 0) is { } drop && PetCards.Give(Progress, drop.Id, random) is not null)
-            s.Drop = drop;
+        if (!s.IsLan && reason.Length == 0 && s.Stage is { } st && s.Enemy is { } en)
+        {
+            if (PetCards.RollDrop(Progress, random, st.Number, en.Boss, outcome > 0) is { } drop && PetCards.AddCard(Progress, drop.Id))
+                s.Drop = drop;
+            if (st.Number == Progress.Stage && en.Index == Progress.StageFight) s.StageCleared = PetWorld.Advance(Progress, outcome > 0);
+        }
         Save();
         s.RaiseEnded();
+        s.RaiseState();
         PetAction?.Invoke(outcome > 0 ? "laugh" : outcome < 0 ? "cry" : "surprise", null);
         if (s.Reward.LevelsGained > 0) PetLine?.Invoke($"Level {Progress.Level}!");
     }

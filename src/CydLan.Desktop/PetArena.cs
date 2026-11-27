@@ -10,16 +10,20 @@ using CydLan.Core;
 namespace CydLan.Desktop;
 
 /// <summary>An incoming battle challenge from a LAN friend.</summary>
-public sealed class PetInvite(string peerId, string peerName, string battleId, PetGame.FighterCard card, string seed, DateTime expiresUtc)
+public sealed class PetInvite(string peerId, string peerName, string battleId, PetGame.FighterCard card, string seed, DateTime expiresUtc, PetCards.Loadout? cardLoadout = null)
 {
     public string PeerId { get; } = peerId;
     public string PeerName { get; } = peerName;
     public string BattleId { get; } = battleId;
     public PetGame.FighterCard Card { get; } = card;
+    public PetCards.Loadout? CardLoadout { get; } = cardLoadout;
+    public bool IsCardDuel => CardLoadout is not null;
     public string Seed { get; } = seed;
     public DateTime ExpiresUtc { get; } = expiresUtc;
-    public PetAppearance Appearance { get; } = PetAppearance.FromWireCode(card.PetCode) ?? PetAppearance.Default;
-    public string Summary => $"Lv {Card.Level} · {PetGame.ElementOf(Card.Element).Name}";
+    public PetAppearance Appearance { get; } = PetAppearance.FromWireCode(cardLoadout?.PetCode ?? card.PetCode) ?? PetAppearance.Default;
+    public string Summary => IsCardDuel
+        ? $"Card duel · Lv {CardLoadout!.Level} · {PetGame.ElementOf(CardLoadout.Element).Name}"
+        : $"Lv {Card.Level} · {PetGame.ElementOf(Card.Element).Name}";
 }
 
 /// <summary>One battle, against a LAN friend or a practice opponent. Side 0 is always the challenger.</summary>
@@ -229,10 +233,12 @@ public sealed partial class PetArena : INotifyPropertyChanged
 
     public async Task AcceptAsync(PetInvite invite)
     {
+        if (invite.IsCardDuel) { await AcceptCardDuelAsync(invite); return; }
         Invites.Remove(invite);
-        if (Current is { Finished: false }) { await SendAsync(invite.PeerId, "decline", invite.BattleId, new() { ["reason"] = "busy" }); return; }
+        if (Current is { Finished: false } || CurrentCard is { Finished: false }) { await SendAsync(invite.PeerId, "decline", invite.BattleId, new() { ["reason"] = "busy" }); return; }
         if (DateTime.UtcNow > invite.ExpiresUtc) { SetStatus("Challenge expired"); return; }
         await CancelChallengeAsync();
+        await CancelCardChallengeAsync();
         var card = MyCard();
         string seed = NewSeed();
         if (!await SendAsync(invite.PeerId, "accept", invite.BattleId, new() { ["card"] = PetGame.EncodeCard(card), ["seed"] = seed }))
@@ -249,6 +255,7 @@ public sealed partial class PetArena : INotifyPropertyChanged
 
     public async Task DeclineAsync(PetInvite invite)
     {
+        if (invite.IsCardDuel) { await DeclineCardDuelAsync(invite); return; }
         Invites.Remove(invite);
         await SendAsync(invite.PeerId, "decline", invite.BattleId, new() { ["reason"] = "no" });
     }
@@ -369,6 +376,7 @@ public sealed partial class PetArena : INotifyPropertyChanged
 
     public void OnMessage(string peerId, IReadOnlyDictionary<string, string> f)
     {
+        if (HandleCardMessage(peerId, f)) return;
         string op = f.GetValueOrDefault("op", ""), bid = f.GetValueOrDefault("bid", "");
         switch (op)
         {
@@ -443,6 +451,7 @@ public sealed partial class PetArena : INotifyPropertyChanged
         foreach (var i in Invites.Where(i => i.PeerId == peerId).ToList()) Invites.Remove(i);
         if (challenge is { } c && c.PeerId == peerId) { challenge = null; Changed(nameof(ChallengePeerId)); SetStatus(""); }
         if (Current is { Finished: false } s && s.PeerId == peerId) End(s, "Connection lost", reward: false);
+        OnCardPeerOffline(peerId);
     }
 
     private void Tick()
@@ -463,6 +472,7 @@ public sealed partial class PetArena : INotifyPropertyChanged
             else if (s.WaitingSinceUtc is { } since && (now - since).TotalSeconds > SilenceSeconds) End(s, "Connection lost", reward: false);
             s.RaiseState();
         }
-        if (Invites.Count == 0 && challenge is null && Current is not { Finished: false }) clock.Stop();
+        TickCardDuel(now);
+        if (Invites.Count == 0 && challenge is null && cardChallenge is null && Current is not { Finished: false } && CurrentCard is not { Finished: false }) clock.Stop();
     }
 }

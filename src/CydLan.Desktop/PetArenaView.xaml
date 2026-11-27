@@ -34,227 +34,292 @@
       <Setter Property="Margin" Value="0,0,8,0"/>
       <Setter Property="MinWidth" Value="104"/>
     </Style>
+    <Style x:Key="LobbyTab" TargetType="RadioButton">
+      <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="FontSize" Value="12.5"/>
+      <Setter Property="Margin" Value="0,0,6,0"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="RadioButton">
+            <Border x:Name="Chip" Background="Transparent" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="14" Padding="14,5">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Chip" Property="Background" Value="{DynamicResource Surface}"/></Trigger>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="Chip" Property="Background" Value="{DynamicResource Accent}"/>
+                <Setter TargetName="Chip" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                <Setter Property="Foreground" Value="{DynamicResource AccentInk}"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
   </UserControl.Resources>
 
   <Grid>
-      <!-- Lobby -->
+      <!-- Lobby: an account strip, then one tab at a time so every tab gets the full width even in the smallest window. -->
       <Grid x:Name="LobbyPanel">
-        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="16"/><ColumnDefinition Width="300"/></Grid.ColumnDefinitions>
-
-        <ScrollViewer VerticalScrollBarVisibility="Auto">
-          <StackPanel>
-            <Border Style="{StaticResource Card}" Padding="0">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+        <Grid>
+            <!-- Account: level and XP belong to the player, not the pet. -->
+            <Border Style="{StaticResource Card}" Padding="14,10">
               <Grid>
-                <Grid.ColumnDefinitions><ColumnDefinition Width="190"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                <Border CornerRadius="{DynamicResource PanelCorner}" Background="{DynamicResource ChatColorFinishBrush}" Margin="6" Height="170" ClipToBounds="True"
-                        Cursor="Hand" MouseLeftButtonDown="MyPet_Click">
-                  <local:FloatingPetVisual x:Name="MyPetVisual" Width="170" Height="150" VerticalAlignment="Bottom"/>
-                </Border>
-                <StackPanel Grid.Column="1" Margin="8,14,16,12">
-                  <DockPanel>
-                    <Border x:Name="ElementBadge" DockPanel.Dock="Right" Padding="8,2" CornerRadius="9" VerticalAlignment="Center">
-                      <TextBlock x:Name="ElementBadgeText" FontSize="11" FontWeight="SemiBold" Foreground="#1D2326"/>
-                    </Border>
-                    <TextBlock x:Name="MyNameText" FontSize="17" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                  </DockPanel>
-                  <TextBlock x:Name="LevelText" FontSize="12.5" Foreground="{DynamicResource Muted}" Margin="0,2,0,8"/>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <TextBlock x:Name="MyNameText" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxWidth="180" VerticalAlignment="Center" Margin="0,0,16,0"/>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
                   <DockPanel Margin="0,0,0,3">
                     <TextBlock x:Name="XpText" DockPanel.Dock="Right" FontSize="11" Foreground="{DynamicResource Faint}"/>
-                    <TextBlock Text="XP" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Muted}"/>
+                    <TextBlock x:Name="NextPointText" FontSize="11" Foreground="{DynamicResource Muted}"/>
                   </DockPanel>
                   <Border x:Name="XpTrack" Style="{StaticResource Track}">
                     <Border x:Name="XpFill" Style="{StaticResource Fill}" Background="{DynamicResource Accent}"/>
                   </Border>
-                  <DockPanel Margin="0,8,0,3">
-                    <TextBlock x:Name="FullText" DockPanel.Dock="Right" FontSize="11" Foreground="{DynamicResource Faint}"/>
-                    <TextBlock Text="Fullness" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Muted}"/>
-                  </DockPanel>
-                  <Border x:Name="FullTrack" Style="{StaticResource Track}">
-                    <Border x:Name="FullFill" Style="{StaticResource Fill}" Background="#F59E0B"/>
+                </StackPanel>
+                <TextBlock Grid.Column="2" x:Name="RecordText" FontSize="11" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="16,0,0,0"/>
+              </Grid>
+            </Border>
+
+            
+        </Grid>
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,10,0,10">
+          <RadioButton x:Name="WorldTabButton" Content="World" GroupName="LobbyTab" Style="{StaticResource LobbyTab}" IsChecked="True" Checked="LobbyTab_Checked"/>
+          <RadioButton x:Name="PetTabButton" Content="Pet" GroupName="LobbyTab" Style="{StaticResource LobbyTab}" Checked="LobbyTab_Checked"/>
+          <RadioButton x:Name="DeckTabButton" GroupName="LobbyTab" Style="{StaticResource LobbyTab}" Checked="LobbyTab_Checked" AutomationProperties.Name="Deck"/>
+          <RadioButton x:Name="ShopTabButton" Content="Shop" GroupName="LobbyTab" Style="{StaticResource LobbyTab}" Checked="LobbyTab_Checked"/>
+        </StackPanel>
+        <Grid Grid.Row="2">
+          <ScrollViewer x:Name="WorldTab" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+            <!-- World -->
+            <Border Style="{StaticResource Card}" Padding="12,10">
+              <StackPanel>
+                <DockPanel>
+                  <Border x:Name="StageBadge" DockPanel.Dock="Right" Padding="8,2" CornerRadius="9" VerticalAlignment="Center">
+                    <TextBlock x:Name="StageBadgeText" FontSize="11" FontWeight="SemiBold" Foreground="#1D2326"/>
                   </Border>
-                  <TextBlock x:Name="RecordText" FontSize="11.5" Foreground="{DynamicResource Muted}" Margin="0,9,0,0"/>
-                  <TextBlock x:Name="BoostText" FontSize="11.5" Foreground="{DynamicResource Accent}" FontWeight="SemiBold" Margin="0,3,0,0"/>
+                  <StackPanel>
+                    <TextBlock x:Name="StageNumberText" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Muted}"/>
+                    <TextBlock x:Name="StageNameText" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                  </StackPanel>
+                </DockPanel>
+                <ItemsControl x:Name="StageFights" Margin="0,8,0,0">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Border CornerRadius="8" Padding="6,4" Margin="0,0,0,4" BorderThickness="1.5" BorderBrush="{Binding Edge}" Opacity="{Binding Fade}">
+                        <DockPanel>
+                          <local:FloatingPetVisual DockPanel.Dock="Left" Width="40" Height="36" PetStyle="{Binding Look}" Margin="0,0,8,0"/>
+                          <TextBlock DockPanel.Dock="Right" Text="{Binding Tag}" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource Accent}" VerticalAlignment="Center"/>
+                          <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Text="{Binding Detail}" FontSize="10.5" Foreground="{DynamicResource Muted}"/>
+                          </StackPanel>
+                        </DockPanel>
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Button x:Name="PracticeButton" Content="Fight" Style="{StaticResource Primary}" Padding="0,9" Click="CardBattle_Click" Margin="0,6,0,0"/>
+                <Button x:Name="DeckNeededButton" Style="{StaticResource Secondary}" Margin="0,6,0,0" Padding="8,5" Click="DeckNeeded_Click" Visibility="Collapsed" BorderBrush="#EF4444" BorderThickness="1">
+                  <TextBlock x:Name="DeckNeededText" Foreground="#EF4444" FontWeight="SemiBold" FontSize="11.5"/>
+                </Button>
+                <TextBlock x:Name="StatusText" FontSize="11.5" Foreground="{DynamicResource Accent}" FontWeight="SemiBold" Margin="2,6,0,0" TextWrapping="Wrap" HorizontalAlignment="Center"/>
+              </StackPanel>
+            </Border>
+
+            
+            <StackPanel x:Name="InvitesSection" Margin="0,12,0,0" Visibility="Collapsed">
+              <TextBlock Text="Challenges" Style="{StaticResource SectionTitle}"/>
+              <ItemsControl x:Name="InviteList">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Border Style="{StaticResource Card}" Padding="10,8" Margin="0,0,0,8" BorderBrush="{DynamicResource Accent}">
+                      <DockPanel>
+                        <local:FloatingPetVisual DockPanel.Dock="Left" Width="48" Height="44" PetStyle="{Binding Appearance}" Margin="0,0,8,0"/>
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                          <Button Content="Decline" Style="{StaticResource Secondary}" Padding="8,3" FontSize="11" Margin="0,0,6,0" Tag="{Binding}" Click="DeclineInvite_Click"/>
+                          <Button Content="Duel" Style="{StaticResource Primary}" Padding="10,3" FontSize="11" Tag="{Binding}" Click="AcceptInvite_Click"/>
+                        </StackPanel>
+                        <StackPanel VerticalAlignment="Center">
+                          <TextBlock Text="{Binding PeerName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                          <TextBlock Text="{Binding Summary}" FontSize="11" Foreground="{DynamicResource Muted}"/>
+                        </StackPanel>
+                      </DockPanel>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+            <StackPanel x:Name="FriendsArea" Margin="0,12,0,0">
+              <TextBlock Text="Duel online" Style="{StaticResource SectionTitle}"/>
+              <TextBlock x:Name="NoFriendsText" Text="No CydLan users online" FontSize="12" Foreground="{DynamicResource Faint}" Margin="2,2,0,0"/>
+              <ItemsControl x:Name="FriendList">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Border Style="{StaticResource Card}" Padding="10,6" Margin="0,0,0,6">
+                      <DockPanel>
+                        <local:FloatingPetVisual DockPanel.Dock="Left" Width="44" Height="40" PetStyle="{Binding Appearance}" Margin="0,0,8,0"/>
+                        <Button DockPanel.Dock="Right" Content="{Binding ActionText}" Style="{StaticResource Secondary}" Padding="10,3" FontSize="11" VerticalAlignment="Center"
+                                Tag="{Binding}" Click="Challenge_Click" AutomationProperties.Name="{Binding ActionName}"/>
+                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                      </DockPanel>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+
+            </StackPanel>
+          </ScrollViewer>
+          <ScrollViewer x:Name="PetTab" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+            <StackPanel>
+            <!-- Pet: element, rolled stats and bonus points. -->
+            <Border Style="{StaticResource Card}" Padding="0">
+              <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition Width="170"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                <Border CornerRadius="{DynamicResource PanelCorner}" Background="{DynamicResource ChatColorFinishBrush}" Margin="8" MinHeight="160" ClipToBounds="True"
+                        Cursor="Hand" MouseLeftButtonDown="MyPet_Click">
+                  <local:FloatingPetVisual x:Name="MyPetVisual" Width="160" Height="140" VerticalAlignment="Center"/>
+                </Border>
+                <StackPanel Grid.Column="1" Margin="8,12,14,12">
+                  <Border x:Name="ElementBadge" HorizontalAlignment="Left" Padding="12,3" CornerRadius="11" AutomationProperties.Name="Element">
+                    <TextBlock x:Name="ElementBadgeText" FontSize="13" FontWeight="Bold" Foreground="#1D2326"/>
+                  </Border>
+                  <TextBlock x:Name="MatchupText" FontSize="11" Foreground="{DynamicResource Muted}" Margin="2,5,0,8" TextWrapping="Wrap"/>
+                  <DockPanel Margin="0,0,0,4">
+                    <Button x:Name="RerollButton" DockPanel.Dock="Right" Style="{StaticResource Secondary}" Padding="8,1" FontSize="11" Click="Reroll_Click" Margin="6,0,0,0" AutomationProperties.Name="Re-roll element and base stats"/>
+                    <Button x:Name="ResetPointsButton" DockPanel.Dock="Right" Content="Reset" Style="{StaticResource Secondary}" Padding="8,1" FontSize="11" Click="ResetPoints_Click" AutomationProperties.Name="Reset bonus points"/>
+                    <TextBlock x:Name="PointsTitle" Style="{StaticResource SectionTitle}" Margin="2,0,0,0" VerticalAlignment="Center"/>
+                  </DockPanel>
+                  <ItemsControl x:Name="StatRows">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                        <DockPanel Margin="0,0,0,4">
+                          <Button DockPanel.Dock="Right" Style="{StaticResource Secondary}" Width="26" Height="22" Padding="0" Content="+" Tag="{Binding Key}"
+                                  Click="AddPoint_Click" IsEnabled="{Binding CanAdd}" AutomationProperties.Name="{Binding AddName}"/>
+                          <TextBlock DockPanel.Dock="Right" Text="{Binding BonusText}" Width="30" TextAlignment="Right" Margin="0,0,8,0" VerticalAlignment="Center" FontSize="11.5" Foreground="{DynamicResource Accent}" FontWeight="SemiBold"/>
+                          <TextBlock DockPanel.Dock="Right" Text="{Binding Total}" Width="28" TextAlignment="Right" Margin="0,0,4,0" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                          <TextBlock Text="{Binding Label}" VerticalAlignment="Center"/>
+                        </DockPanel>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                  <TextBlock x:Name="StatsLine" FontSize="11.5" Foreground="{DynamicResource Muted}" Margin="2,4,0,0" TextWrapping="Wrap"/>
+                  <TextBlock x:Name="BoostText" FontSize="11.5" Foreground="{DynamicResource Accent}" FontWeight="SemiBold" Margin="2,3,0,0"/>
                 </StackPanel>
               </Grid>
             </Border>
 
-            <TextBlock Text="Gear" Style="{StaticResource SectionTitle}" Margin="2,14,0,6"/>
-            <ItemsControl x:Name="GearSlots">
-              <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="5"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+            
+            </StackPanel>
+          </ScrollViewer>
+          <ScrollViewer x:Name="DeckTab" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+            <StackPanel>
+            <!-- Deck -->
+            <TextBlock x:Name="DeckTitle" Style="{StaticResource SectionTitle}" Margin="2,0,0,6"/>
+            <ItemsControl x:Name="DeckList">
+              <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
-                  <Border Style="{StaticResource Card}" Margin="0,0,8,0" Padding="8,7" BorderBrush="{Binding RarityBrush}" BorderThickness="1.5">
-                    <StackPanel>
-                      <TextBlock Text="{Binding SlotName}" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource Faint}"/>
-                      <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/>
-                      <TextBlock Text="{Binding CardName}" FontSize="10.5" Foreground="{DynamicResource Accent}" TextTrimming="CharacterEllipsis"/>
-                      <Button Content="Remove" Style="{StaticResource Secondary}" Padding="0,2" FontSize="10.5" Margin="0,6,0,0" Tag="{Binding Slot}"
-                              Click="Unequip_Click" Visibility="{Binding RemoveVisibility}" AutomationProperties.Name="{Binding RemoveName}"/>
-                    </StackPanel>
-                  </Border>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-
-            <DockPanel Margin="0,14,0,6">
-              <Button x:Name="GearPackButton" DockPanel.Dock="Right" Style="{StaticResource Primary}" Padding="10,3" FontSize="11.5" Click="GearPack_Click"/>
-              <TextBlock x:Name="BagTitle" Style="{StaticResource SectionTitle}" VerticalAlignment="Bottom" Margin="2,0,0,0"/>
-            </DockPanel>
-            <TextBlock x:Name="PackResultText" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource Accent}" Margin="2,0,0,6" Visibility="Collapsed"/>
-            <ItemsControl x:Name="BagList">
-              <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="3"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-              <ItemsControl.ItemTemplate>
-                <DataTemplate>
-                  <Border Style="{StaticResource Card}" Margin="0,0,8,8" Padding="10,8" BorderBrush="{Binding RarityBrush}" BorderThickness="1.5">
-                    <StackPanel>
-                      <DockPanel>
-                        <TextBlock DockPanel.Dock="Right" Text="{Binding SlotName}" FontSize="10.5" Foreground="{DynamicResource Faint}" VerticalAlignment="Center"/>
-                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                      </DockPanel>
-                      <TextBlock Text="{Binding StatText}" FontSize="10.5" Foreground="{DynamicResource Muted}" TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/>
-                      <TextBlock Text="{Binding CardLine}" FontSize="10.5" Foreground="{DynamicResource Accent}" TextWrapping="Wrap" Margin="0,2,0,0"/>
-                      <Grid Margin="0,7,0,0">
-                        <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="4"/><ColumnDefinition/></Grid.ColumnDefinitions>
-                        <Button Content="{Binding EquipText}" Style="{StaticResource Primary}" Padding="0,3" FontSize="11" Tag="{Binding Uid}" Click="Equip_Click" IsEnabled="{Binding CanEquip}" AutomationProperties.Name="{Binding EquipName}"/>
-                        <Button Grid.Column="2" Content="{Binding SellText}" Style="{StaticResource Secondary}" Padding="0,3" FontSize="11" Tag="{Binding Uid}" Click="Sell_Click" IsEnabled="{Binding CanSell}" AutomationProperties.Name="{Binding SellName}"/>
-                      </Grid>
-                    </StackPanel>
-                  </Border>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-
-            <Grid Margin="0,14,0,0">
-              <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="12"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-              <StackPanel>
-                <TextBlock Text="Element" Style="{StaticResource SectionTitle}"/>
-                <ComboBox x:Name="ElementBox" DisplayMemberPath="Name" SelectedValuePath="Id" SelectionChanged="ElementBox_SelectionChanged" AutomationProperties.Name="Element"/>
-                <TextBlock x:Name="StatsLine" FontSize="11.5" Foreground="{DynamicResource Muted}" Margin="2,10,0,0" TextWrapping="Wrap"/>
-              </StackPanel>
-              <StackPanel Grid.Column="2">
-                <DockPanel>
-                  <Button x:Name="ResetPointsButton" DockPanel.Dock="Right" Content="Reset" Style="{StaticResource Secondary}" Padding="8,1" FontSize="11" Click="ResetPoints_Click" Margin="0,0,0,4"/>
-                  <TextBlock x:Name="PointsTitle" Style="{StaticResource SectionTitle}"/>
-                </DockPanel>
-                <ItemsControl x:Name="StatRows">
-                  <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                      <DockPanel Margin="0,0,0,4">
-                        <Button DockPanel.Dock="Right" Style="{StaticResource Secondary}" Width="26" Height="22" Padding="0" Content="+" Tag="{Binding Key}"
-                                Click="AddPoint_Click" IsEnabled="{Binding CanAdd}" AutomationProperties.Name="{Binding AddName}"/>
-                        <TextBlock DockPanel.Dock="Right" Text="{Binding Value}" Width="28" TextAlignment="Right" Margin="0,0,8,0" VerticalAlignment="Center" FontWeight="SemiBold"/>
-                        <TextBlock Text="{Binding Label}" VerticalAlignment="Center"/>
-                      </DockPanel>
-                    </DataTemplate>
-                  </ItemsControl.ItemTemplate>
-                </ItemsControl>
-              </StackPanel>
-            </Grid>
-
-            <DockPanel Margin="0,14,0,0">
-              <Button x:Name="DailyButton" DockPanel.Dock="Right" Content="Daily bonus" Style="{StaticResource Primary}" Padding="10,3" FontSize="11.5" Click="Daily_Click" Margin="0,0,0,6"/>
-              <TextBlock Text="Food" Style="{StaticResource SectionTitle}" VerticalAlignment="Bottom"/>
-            </DockPanel>
-            <ItemsControl x:Name="FoodList">
-              <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="4"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-              <ItemsControl.ItemTemplate>
-                <DataTemplate>
-                  <Border Style="{StaticResource Card}" Margin="0,0,8,8" Padding="8,8,8,8">
-                    <StackPanel>
-                      <Grid Height="40">
-                        <local:FoodIcon Food="{Binding Id}" Width="40" Height="40" HorizontalAlignment="Center"/>
-                        <Border HorizontalAlignment="Right" VerticalAlignment="Top" MinWidth="20" Padding="5,0" CornerRadius="8" Background="{DynamicResource AccentSoft}">
-                          <TextBlock Text="{Binding CountText}" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource Accent}" HorizontalAlignment="Center"/>
+                  <Button Style="{StaticResource Secondary}" Padding="0" Margin="0,0,6,6" Width="62" Tag="{Binding Id}" Click="DeckCard_Click"
+                          MouseRightButtonUp="CardTile_RightClick" ToolTip="{Binding Tip}" AutomationProperties.Name="{Binding RemoveName}" BorderBrush="{Binding RarityBrush}" BorderThickness="1.5">
+                    <StackPanel Margin="3,4,3,3">
+                      <Grid Width="40" Height="40">
+                        <Border CornerRadius="8" Background="{Binding KindBrush}" Opacity=".35"/>
+                        <Image Source="{Binding Art}" Width="40" Height="40" RenderOptions.BitmapScalingMode="NearestNeighbor">
+                          <Image.Clip><RectangleGeometry Rect="0,0,40,40" RadiusX="8" RadiusY="8"/></Image.Clip>
+                        </Image>
+                        <Border HorizontalAlignment="Left" VerticalAlignment="Top" Width="16" Height="16" CornerRadius="8" Background="{DynamicResource Accent}" Margin="-4,-4,0,0">
+                          <TextBlock Text="{Binding Cost}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AccentInk}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                       </Grid>
-                      <TextBlock Text="{Binding Name}" FontSize="11.5" FontWeight="SemiBold" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,4,0,0"/>
-                      <TextBlock Text="{Binding Effect}" FontSize="10.5" Foreground="{DynamicResource Faint}" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                      <Grid Margin="0,6,0,0">
-                        <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="4"/><ColumnDefinition/></Grid.ColumnDefinitions>
-                        <Button Content="Feed" Style="{StaticResource Primary}" Padding="0,3" FontSize="11" Tag="{Binding Id}" Click="Feed_Click" IsEnabled="{Binding CanFeed}" AutomationProperties.Name="{Binding FeedName}"/>
-                        <Button Grid.Column="2" Content="{Binding PriceText}" Style="{StaticResource Secondary}" Padding="0,3" FontSize="11" Tag="{Binding Id}" Click="Buy_Click" IsEnabled="{Binding CanBuy}" AutomationProperties.Name="{Binding BuyName}"/>
-                      </Grid>
+                      <TextBlock Text="{Binding Name}" FontSize="9.5" TextTrimming="CharacterEllipsis" HorizontalAlignment="Center" Margin="0,2,0,0"/>
                     </StackPanel>
-                  </Border>
+                  </Button>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
-          </StackPanel>
-        </ScrollViewer>
 
-        <DockPanel Grid.Column="2">
-          <Border DockPanel.Dock="Top" Padding="10,3" CornerRadius="10" Background="{DynamicResource AccentSoft}" HorizontalAlignment="Right" Margin="0,0,0,8" Visibility="Collapsed">
-            <TextBlock x:Name="CoinsText" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource Accent}" AutomationProperties.Name="Coins"/>
-          </Border>
-          <Button DockPanel.Dock="Top" x:Name="PracticeButton" Content="Card battle" Style="{StaticResource Primary}" Padding="0,9" Click="CardBattle_Click" Margin="0,0,0,6"/>
-          <TextBlock DockPanel.Dock="Top" x:Name="CardRecordText" FontSize="11.5" Foreground="{DynamicResource Muted}" HorizontalAlignment="Center" Margin="0,0,0,14"/>
-          <StackPanel DockPanel.Dock="Top" x:Name="InvitesSection" Margin="0,0,0,14" Visibility="Collapsed">
-            <TextBlock Text="Challenges" Style="{StaticResource SectionTitle}"/>
-            <ItemsControl x:Name="InviteList">
+            <!-- Collection -->
+            <DockPanel Margin="0,12,0,6">
+              <ComboBox x:Name="CollectionFilter" DockPanel.Dock="Right" Width="120" SelectionChanged="CollectionFilter_SelectionChanged" AutomationProperties.Name="Collection filter" FontSize="11.5"/>
+              <TextBlock x:Name="CollectionTitle" Style="{StaticResource SectionTitle}" VerticalAlignment="Bottom" Margin="2,0,0,0"/>
+            </DockPanel>
+            <ItemsControl x:Name="CollectionList">
+              <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
-                  <Border Style="{StaticResource Card}" Padding="10,8" Margin="0,0,0,8" BorderBrush="{DynamicResource Accent}">
+                  <Border Style="{StaticResource Card}" Width="214" Margin="0,0,8,8" Padding="8,6" BorderBrush="{Binding RarityBrush}" BorderThickness="1.5"
+                          Tag="{Binding Id}" MouseRightButtonUp="CardTile_RightClick">
                     <DockPanel>
-                      <local:FloatingPetVisual DockPanel.Dock="Left" Width="48" Height="44" PetStyle="{Binding Appearance}" Margin="0,0,8,0"/>
-                      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Button Content="Decline" Style="{StaticResource Secondary}" Padding="8,3" FontSize="11" Margin="0,0,6,0" Tag="{Binding}" Click="DeclineInvite_Click"/>
-                        <Button Content="Battle" Style="{StaticResource Primary}" Padding="8,3" FontSize="11" Tag="{Binding}" Click="AcceptInvite_Click"/>
-                      </StackPanel>
-                      <StackPanel VerticalAlignment="Center">
-                        <TextBlock Text="{Binding PeerName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                        <TextBlock Text="{Binding Summary}" FontSize="11" Foreground="{DynamicResource Muted}"/>
-                      </StackPanel>
-                    </DockPanel>
-                  </Border>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-          </StackPanel>
-          <StackPanel DockPanel.Dock="Top" x:Name="FriendsArea" Visibility="Collapsed">
-          <TextBlock Text="Friends" Style="{StaticResource SectionTitle}"/>
-          <TextBlock x:Name="StatusText" FontSize="11.5" Foreground="{DynamicResource Accent}" FontWeight="SemiBold" Margin="2,0,0,6" TextWrapping="Wrap"/>
-          <TextBlock x:Name="NoFriendsText" Text="No friends online" FontSize="12" Foreground="{DynamicResource Faint}" Margin="2,4,0,0"/>
-            <ItemsControl x:Name="FriendList">
-              <ItemsControl.ItemTemplate>
-                <DataTemplate>
-                  <Border Style="{StaticResource Card}" Padding="10,6" Margin="0,0,0,8">
-                    <DockPanel>
-                      <local:FloatingPetVisual DockPanel.Dock="Left" Width="44" Height="40" PetStyle="{Binding Appearance}" Margin="0,0,8,0"/>
-                      <Button DockPanel.Dock="Right" Content="{Binding ActionText}" Style="{StaticResource Secondary}" Padding="10,3" FontSize="11" VerticalAlignment="Center"
-                              Tag="{Binding}" Click="Challenge_Click" AutomationProperties.Name="{Binding ActionName}"/>
-                      <TextBlock Text="{Binding Name}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                    </DockPanel>
-                  </Border>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-          </StackPanel>
-          <TextBlock DockPanel.Dock="Top" x:Name="DeckTitle" Style="{StaticResource SectionTitle}"/>
-          <ScrollViewer VerticalScrollBarVisibility="Auto">
-            <ItemsControl x:Name="DeckList">
-              <ItemsControl.ItemTemplate>
-                <DataTemplate>
-                  <Border Style="{StaticResource Card}" Padding="8,6" Margin="0,0,0,6" BorderBrush="{Binding KindBrush}" BorderThickness="1.5">
-                    <DockPanel>
-                      <Border DockPanel.Dock="Left" Width="24" Height="24" CornerRadius="12" Background="{DynamicResource Accent}" Margin="0,0,8,0" VerticalAlignment="Top">
-                        <TextBlock Text="{Binding Cost}" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource AccentInk}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                      </Border>
-                      <TextBlock DockPanel.Dock="Right" Text="{Binding CountText}" FontWeight="SemiBold" Foreground="{DynamicResource Muted}" VerticalAlignment="Top" Margin="6,2,0,0"/>
+                      <Grid DockPanel.Dock="Left" Width="40" Height="40" Margin="0,0,8,0" VerticalAlignment="Top">
+                        <Border CornerRadius="8" Background="{Binding KindBrush}" Opacity=".35"/>
+                        <Image Source="{Binding Art}" Width="40" Height="40" RenderOptions.BitmapScalingMode="NearestNeighbor">
+                          <Image.Clip><RectangleGeometry Rect="0,0,40,40" RadiusX="8" RadiusY="8"/></Image.Clip>
+                        </Image>
+                      </Grid>
+                      <Button DockPanel.Dock="Right" Content="Add" Style="{StaticResource Primary}" Padding="8,2" FontSize="11" VerticalAlignment="Center" Margin="6,0,0,0"
+                              Tag="{Binding Id}" Click="AddToDeck_Click" IsEnabled="{Binding CanAdd}" AutomationProperties.Name="{Binding AddName}"/>
                       <StackPanel>
-                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12"/>
-                        <TextBlock Text="{Binding Text}" FontSize="10.5" Foreground="{DynamicResource Muted}" TextWrapping="Wrap"/>
+                        <DockPanel>
+                          <TextBlock DockPanel.Dock="Right" Text="{Binding CountText}" FontSize="10.5" Foreground="{DynamicResource Faint}" Margin="4,0,0,0"/>
+                          <Border DockPanel.Dock="Left" Width="16" Height="16" CornerRadius="8" Background="{DynamicResource Accent}" Margin="0,0,5,0">
+                            <TextBlock Text="{Binding Cost}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AccentInk}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                          </Border>
+                          <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                        </DockPanel>
+                        <TextBlock Text="{Binding Text}" FontSize="10.5" Foreground="{DynamicResource Muted}" TextWrapping="Wrap" Margin="0,2,0,0"/>
                       </StackPanel>
                     </DockPanel>
                   </Border>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
+
+            
+            </StackPanel>
           </ScrollViewer>
-        </DockPanel>
+          <ScrollViewer x:Name="ShopTab" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+            <StackPanel>
+            <!-- Daily shop -->
+            <DockPanel Margin="0,0,0,6">
+              <Button x:Name="DailyButton" DockPanel.Dock="Right" Content="Daily bonus" Style="{StaticResource Primary}" Padding="10,3" FontSize="11.5" Click="Daily_Click"/>
+              <TextBlock x:Name="ShopTitle" Text="Daily shop" Style="{StaticResource SectionTitle}" VerticalAlignment="Bottom" Margin="2,0,0,0"/>
+            </DockPanel>
+            <ItemsControl x:Name="ShopList">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Border Style="{StaticResource Card}" Padding="8,6" Margin="0,0,0,6" BorderBrush="{Binding RarityBrush}" BorderThickness="1.5"
+                          Tag="{Binding CardId}" MouseRightButtonUp="CardTile_RightClick">
+                    <DockPanel>
+                      <Grid DockPanel.Dock="Left" Width="40" Height="40" Margin="0,0,8,0">
+                        <Border CornerRadius="8" Background="{Binding KindBrush}" Opacity=".35"/>
+                        <Image Source="{Binding Art}" Width="40" Height="40" RenderOptions.BitmapScalingMode="NearestNeighbor">
+                          <Image.Clip><RectangleGeometry Rect="0,0,40,40" RadiusX="8" RadiusY="8"/></Image.Clip>
+                        </Image>
+                      </Grid>
+                      <Button DockPanel.Dock="Right" Content="{Binding PriceText}" Style="{StaticResource Primary}" Padding="8,3" FontSize="11" VerticalAlignment="Center" Margin="6,0,0,0"
+                              Tag="{Binding Slot}" Click="BuyCard_Click" IsEnabled="{Binding CanBuy}" AutomationProperties.Name="{Binding BuyName}"/>
+                      <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Text="{Binding Detail}" FontSize="10.5" Foreground="{DynamicResource Muted}" TextTrimming="CharacterEllipsis"/>
+                      </StackPanel>
+                    </DockPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            </StackPanel>
+          </ScrollViewer>
+        </Grid>
       </Grid>
 
       <!-- Battle -->
-      <Grid x:Name="BattlePanel" Visibility="Collapsed">
+      <Grid x:Name="BattlePanel" Visibility="Collapsed" SizeChanged="BattlePanel_SizeChanged">
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
         <Grid>
           <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="20"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -265,11 +330,14 @@
                 <TextBlock x:Name="LeftName" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
               </DockPanel>
               <Border Style="{StaticResource Track}" Height="12" Margin="0,6,0,0" x:Name="LeftHpTrack">
-                <Border x:Name="LeftHpFill" Style="{StaticResource Fill}" Background="#22C55E"/>
+                <Grid>
+                  <Border x:Name="LeftHpTrail" Style="{StaticResource Fill}" Background="#FFFFFF"/>
+                  <Border x:Name="LeftHpFill" Style="{StaticResource Fill}" Background="#22C55E"/>
+                </Grid>
               </Border>
               <DockPanel Margin="0,3,0,0">
                 <TextBlock x:Name="LeftHpText" DockPanel.Dock="Right" FontSize="11" Foreground="{DynamicResource Muted}"/>
-                <TextBlock x:Name="LeftStatus" FontSize="11" Foreground="{DynamicResource Accent}"/>
+                <TextBlock x:Name="LeftStatus" FontSize="11" Foreground="{DynamicResource Accent}" TextWrapping="Wrap" Margin="0,0,8,0"/>
               </DockPanel>
               <Border Style="{StaticResource Track}" Height="5" Margin="0,3,0,0" x:Name="LeftChargeTrack">
                 <Border x:Name="LeftChargeFill" Style="{StaticResource Fill}" CornerRadius="2" Background="#A855F7"/>
@@ -283,11 +351,14 @@
                 <TextBlock x:Name="RightName" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
               </DockPanel>
               <Border Style="{StaticResource Track}" Height="12" Margin="0,6,0,0" x:Name="RightHpTrack">
-                <Border x:Name="RightHpFill" Style="{StaticResource Fill}" Background="#22C55E"/>
+                <Grid>
+                  <Border x:Name="RightHpTrail" Style="{StaticResource Fill}" Background="#FFFFFF"/>
+                  <Border x:Name="RightHpFill" Style="{StaticResource Fill}" Background="#EF4444"/>
+                </Grid>
               </Border>
               <DockPanel Margin="0,3,0,0">
                 <TextBlock x:Name="RightHpText" DockPanel.Dock="Right" FontSize="11" Foreground="{DynamicResource Muted}"/>
-                <TextBlock x:Name="RightStatus" FontSize="11" Foreground="{DynamicResource Accent}"/>
+                <TextBlock x:Name="RightStatus" FontSize="11" Foreground="{DynamicResource Accent}" TextWrapping="Wrap" Margin="0,0,8,0"/>
               </DockPanel>
               <Border Style="{StaticResource Track}" Height="5" Margin="0,3,0,0" x:Name="RightChargeTrack">
                 <Border x:Name="RightChargeFill" Style="{StaticResource Fill}" CornerRadius="2" Background="#A855F7"/>
@@ -296,7 +367,7 @@
           </Border>
         </Grid>
 
-        <Border x:Name="StageBorder" Grid.Row="1" Margin="0,12,0,12" CornerRadius="{DynamicResource PanelCorner}" ClipToBounds="True"
+        <Border x:Name="StageBorder" Grid.Row="1" Margin="0,10,0,10" MinHeight="120" CornerRadius="{DynamicResource PanelCorner}" ClipToBounds="True"
                 BorderBrush="{DynamicResource Line}" BorderThickness="1">
           <Border.Background>
             <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
@@ -306,7 +377,11 @@
               <GradientStop x:Name="GroundBottom" Color="#9FD196" Offset="1"/>
             </LinearGradientBrush>
           </Border.Background>
+          <Grid>
           <Canvas x:Name="Stage" SizeChanged="Stage_SizeChanged">
+            <Canvas x:Name="World">
+            <Canvas.RenderTransform><ScaleTransform x:Name="WorldScale"/></Canvas.RenderTransform>
+            <Canvas x:Name="TerrainLayer" IsHitTestVisible="False"/>
             <local:FloatingPetVisual x:Name="LeftPet" Width="250" Height="224">
               <local:FloatingPetVisual.RenderTransform><TranslateTransform x:Name="LeftMove"/></local:FloatingPetVisual.RenderTransform>
             </local:FloatingPetVisual>
@@ -314,6 +389,7 @@
               <local:FloatingPetVisual.RenderTransform><TranslateTransform x:Name="RightMove"/></local:FloatingPetVisual.RenderTransform>
             </local:FloatingPetVisual>
             <Canvas x:Name="FxLayer" IsHitTestVisible="False"/>
+            </Canvas>
             <Border x:Name="ResultCard" Visibility="Collapsed" Style="{StaticResource Card}" Padding="22,16" MinWidth="260">
               <StackPanel HorizontalAlignment="Center">
                 <TextBlock x:Name="ResultTitle" FontSize="24" FontWeight="Bold" HorizontalAlignment="Center"/>
@@ -326,23 +402,29 @@
               </StackPanel>
             </Border>
           </Canvas>
+          <Border x:Name="QueueTray" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="8,8,8,0"
+                  CornerRadius="12" Padding="6,5" BorderThickness="1.5" BorderBrush="{DynamicResource Line}"
+                  Background="{DynamicResource Surface}" AutomationProperties.Name="Queued cards">
+            <StackPanel x:Name="QueuePanel" Orientation="Horizontal" HorizontalAlignment="Center"/>
+          </Border>
+          </Grid>
         </Border>
 
-        <TextBlock x:Name="LogText" Grid.Row="2" FontSize="12.5" Foreground="{DynamicResource Ink}" TextWrapping="Wrap" Margin="2,0,0,10" MinHeight="18"/>
+        <TextBlock x:Name="LogText" Grid.Row="2" FontSize="12.5" Foreground="{DynamicResource Ink}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="36" Margin="2,0,0,8" MinHeight="18"/>
 
-        <DockPanel Grid.Row="3" x:Name="CardBar" Visibility="Collapsed">
-          <StackPanel DockPanel.Dock="Right" VerticalAlignment="Bottom">
+        <DockPanel Grid.Row="3" x:Name="CardBar" Visibility="Collapsed" SizeChanged="HandPanel_SizeChanged">
+          <StackPanel x:Name="CardActions" DockPanel.Dock="Right" VerticalAlignment="Bottom" Margin="8,0,0,0">
             <Button x:Name="FightButton" Content="Fight" Style="{StaticResource Primary}" Padding="22,10" FontSize="13" Click="Fight_Click" Margin="0,0,0,8" AutomationProperties.Name="Play chosen cards"/>
             <Button x:Name="CardLeaveButton" Content="Leave" Style="{StaticResource Secondary}" Padding="12,5" Click="CardLeave_Click" AutomationProperties.Name="Leave battle"/>
           </StackPanel>
-          <Border DockPanel.Dock="Left" Width="58" Height="58" CornerRadius="29" Background="{DynamicResource Accent}" VerticalAlignment="Center" Margin="0,0,12,0"
+          <Border x:Name="EnergyBadge" DockPanel.Dock="Left" Width="58" Height="58" CornerRadius="29" Background="{DynamicResource Accent}" VerticalAlignment="Center" Margin="0,0,12,0"
                   AutomationProperties.Name="Energy">
             <StackPanel VerticalAlignment="Center">
               <TextBlock x:Name="EnergyText" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource AccentInk}" HorizontalAlignment="Center"/>
               <TextBlock Text="energy" FontSize="9.5" Foreground="{DynamicResource AccentInk}" HorizontalAlignment="Center" Margin="0,-3,0,0"/>
             </StackPanel>
           </Border>
-          <StackPanel x:Name="HandPanel" Orientation="Horizontal" VerticalAlignment="Bottom" Margin="0,16,0,0"/>
+          <StackPanel x:Name="HandPanel" Orientation="Horizontal" VerticalAlignment="Bottom" Margin="0,4,0,0"/>
         </DockPanel>
 
         <DockPanel Grid.Row="3" x:Name="MoveRow">
@@ -356,6 +438,7 @@
             <Button x:Name="UltimateButton" Style="{StaticResource MoveButton}" Tag="ultimate" Click="Move_Click"/>
           </StackPanel>
         </DockPanel>
+        <Canvas x:Name="DragLayer" Grid.RowSpan="4" IsHitTestVisible="False" Panel.ZIndex="200"/>
       </Grid>
   </Grid>
 </UserControl>

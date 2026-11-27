@@ -233,7 +233,7 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
     public bool HasAttachments => HasPeer && Attachments.Count > 0;
     public bool CanAttach => HasPeer && SelectedPeer?.Online == true;
     public string ChatTitle => PetsOpen ? "Pets" : RemindersOpen ? "Reminders" : MediaOpen ? (CurrentMedia?.Title ?? "Media") : TransfersOpen ? "Files" : Broadcasting ? "Broadcast" : GroupsOpen ? SelectedGroup?.Name ?? "Groups" : SelectedPeer?.Name ?? "Conversations";
-    public string ChatSubtitle => PetsOpen ? $"Level {Arena.Progress.Level} · {Arena.Progress.Coins:N0} coins" : RemindersOpen ? ReminderSubtitle : MediaOpen ? (CurrentMedia?.MetaLabel ?? "") : TransfersOpen ? "" : Broadcasting ? $"{OnlineCount} online" : GroupsOpen ? (SelectedGroup is { } g ? GroupPeopleLabel(g) : "") : SelectedPeer is { } p ? p.Presence : "";
+    public string ChatSubtitle => PetsOpen ? "" : RemindersOpen ? ReminderSubtitle : MediaOpen ? (CurrentMedia?.MetaLabel ?? "") : TransfersOpen ? "" : Broadcasting ? $"{OnlineCount} online" : GroupsOpen ? (SelectedGroup is { } g ? GroupPeopleLabel(g) : "") : SelectedPeer is { } p ? p.Presence : "";
     private string GroupPeopleLabel(GroupChat g) => g.Left ? "You left this group" : string.Join(", ", g.Members.Select(NameOf).Append("you"));
     private string NameOf(string peerId) => Peers.FirstOrDefault(p => p.Id == peerId)?.Name ?? "Someone";
     private void SectionChanged()
@@ -260,6 +260,11 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
     public event Action? PetHopRequested;
     /// <summary>The companion mini-game: feeding, levelling and battles.</summary>
     public PetArena Arena { get; }
+    // Header chips for the Pets section.
+    public string PetLevelText => $"Level {Arena.Progress.Level}";
+    public string PetCoinsText => $"{Arena.Progress.Coins:N0} coins";
+    public string PetDeckText => $"Deck {Arena.Progress.Deck.Count}/{PetCards.DeckSize}";
+    public bool PetDeckReady => PetCards.DeckReady(Arena.Progress);
     internal void SavePetGame() { if (!Preview) store?.SaveSettings(Settings); }
     internal void RequestPetHop() => PetHopRequested?.Invoke();
     public string ProfileName => Settings.DisplayName;
@@ -365,7 +370,7 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
             lan.Diagnostic += message => UI(() => { Diagnostics.Insert(0, $"{DateTime.Now:HH:mm:ss}  {message}"); while (Diagnostics.Count > 100) Diagnostics.RemoveAt(100); });
         }
         Arena = new PetArena(this, lan);
-        Arena.PropertyChanged += (_, _) => { if (PetsOpen) Changed(nameof(ChatSubtitle)); };
+        Arena.PropertyChanged += (_, _) => { foreach (var name in new[] { nameof(PetLevelText), nameof(PetCoinsText), nameof(PetDeckText), nameof(PetDeckReady) }) Changed(name); };
         TransfersView = new ListCollectionView(Transfers) { Filter = item => item is FileTransfer t && (TransferFilter == "all" || (TransferFilter == "received") != t.Outgoing) };
         ActiveConversationTransfers = new ListCollectionView(activeConversationTransfers);
         void IndexTransfers() => filesByChat = Transfers.ToLookup(t => (t.PeerId, t.Outgoing));

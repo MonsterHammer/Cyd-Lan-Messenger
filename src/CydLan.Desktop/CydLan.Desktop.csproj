@@ -7,7 +7,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>../../assets/brand/cydlan.ico</ApplicationIcon>
     <AssemblyName>CydLan</AssemblyName>
-    <Version>0.1.28</Version>
+    <Version>0.1.30</Version>
     <Product>CydLan</Product>
     <!-- WPF owns the window DPI policy; WinForms is used only for NotifyIcon. -->
     <NoWarn>$(NoWarn);WFO0003</NoWarn>
@@ -18,4 +18,6 @@
   <ItemGroup><Resource Include="../../assets/support/bdo-qr.png" Link="Assets/support/bdo-qr.png" /></ItemGroup>
   <!-- LAN Messenger 1.2.39 emoticon pictures (GPL-3.0-or-later); see THIRD-PARTY-NOTICES.md. -->
   <ItemGroup><Resource Include="../../assets/smileys/*.png" LinkBase="Assets/smileys" /></ItemGroup>
+  <!-- Card icons are licensed art kept out of git (see .gitignore); builds without them show cards without art. -->
+  <ItemGroup><Resource Include="../../assets/cardart/*.png" LinkBase="Assets/cardart" /></ItemGroup>
 </Project>

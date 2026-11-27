@@ -26,7 +26,7 @@ internal static class PetGameTests
 
         int need = PetGame.XpToNext(1);
         Check(PetGame.AddXp(p, need + 5) == 1 && p.Level == 2 && p.Xp == 5, "XP past the threshold levels up and carries over.");
-        Check(PetGame.FreePoints(p) == PetGame.PointsPerLevel, "Each level grants stat points.");
+        Check(PetGame.FreePoints(p) == 1, "Level 2 pays the first bonus point.");
 
         // Hunger drains with time and food refills it.
         Check(PetGame.CurrentFullness(p, now.AddHours(2)) == 70, "Fullness drops one point every 12 minutes.");
@@ -64,13 +64,11 @@ internal static class PetGameTests
         Check(fed.Wins == 1 && PetGame.CurrentFullness(fed, now) == 90 - PetGame.BattleHunger, "Battles are recorded and make the pet hungrier.");
 
         // Normalize repairs hand-edited saves.
-        var bad = new PetProgress { Level = 999, Xp = -4, Element = "lava", Power = 500, Boost = "god", Food = new() { ["berry"] = 2, ["rock"] = 9 } };
+        var bad = new PetProgress { Level = 5000, Xp = -4, BasePower = 30, Element = "lava", Power = 500, Boost = "god", Food = new() { ["berry"] = 2, ["rock"] = 9 } };
         PetGame.Normalize(bad);
-        Check(bad.Level == PetGame.MaxLevel && bad.Xp == 0 && bad.Element == "blaze" && bad.Power == 0 && bad.Boost == "" && !bad.Food.ContainsKey("rock"),
+        Check(bad.Level == PetGame.MaxLevel && bad.Xp == 0 && bad.Element == "blaze" && bad.Power == 0 && bad.BasePower == PetGame.EvenStat && bad.Boost == "" && !bad.Food.ContainsKey("rock"),
             "Invalid saved values are clamped.");
 
-        Check(PetGame.TypePercent("tide", "blaze") == 150 && PetGame.TypePercent("blaze", "tide") == 70 && PetGame.TypePercent("shadow", "light") == 150
-            && PetGame.TypePercent("light", "shadow") == 150 && PetGame.TypePercent("volt", "volt") == 100, "Element chart is consistent.");
     }
 
     private static void Cards()
@@ -79,8 +77,8 @@ internal static class PetGameTests
         var clean = PetGame.Sanitize(card);
         Check(clean.Name.Length == 40 && !clean.Name.Any(char.IsControl), "Names are trimmed and stripped of control characters.");
         Check(clean.PetCode == "" && clean.Element == "volt" && clean.Power == 0 && clean.Boost == "", "Unknown codes, boosts and over-budget points are dropped.");
-        var round = PetGame.DecodeCard(PetGame.EncodeCard(new PetGame.FighterCard { Name = "Jamie", Level = 7, Element = "frost", Power = 4, Speed = 8 }));
-        Check(round is { Name: "Jamie", Level: 7, Element: "frost", Power: 4, Speed: 8 }, "Cards survive the wire round trip.");
+        var round = PetGame.DecodeCard(PetGame.EncodeCard(new PetGame.FighterCard { Name = "Jamie", Level = 7, Element = "frost", Power = 1, Speed = 2 }));
+        Check(round is { Name: "Jamie", Level: 7, Element: "frost", Power: 1, Speed: 2 }, "Cards survive the wire round trip.");
         Check(PetGame.DecodeCard("{oops") is null && PetGame.DecodeCard(new string('a', PetGame.MaxCardChars + 1)) is null, "Broken or oversized cards are rejected.");
         var boosted = PetGame.StatsFor(new PetGame.FighterCard { Level = 5, Boost = "power" });
         var plain = PetGame.StatsFor(new PetGame.FighterCard { Level = 5 });
@@ -139,42 +137,147 @@ internal static class PetGameTests
 
     private static void CardGame()
     {
-        // Every gear card and look exists; every slot has commons to start with.
-        foreach (var g in PetCards.Gear) Check(PetCards.CardOf(g.Card).Id == g.Card, $"{g.Name} gives a real card.");
-        foreach (var (slot, _) in PetCards.Slots) Check(PetCards.Gear.Any(g => g.Slot == slot && g.Rarity == "common"), $"{slot} has common gear.");
-        Check(PetCards.Cards.Select(c => c.Id).Distinct().Count() == PetCards.Cards.Count && PetCards.Gear.Select(g => g.Id).Distinct().Count() == PetCards.Gear.Count, "Ids are unique.");
-        Check(PetCards.CardOf("plunder").Text.Contains("Deal 5") && PetCards.CardOf("hoodup").Text == "Block 5 · Thorns 2", "Card text is built from its numbers.");
+        // The catalog: unique ids, art for every card, 20 per element, all four rarities in each element.
+        Check(PetCards.Cards.Select(c => c.Id).Distinct().Count() == PetCards.Cards.Count, "Card ids are unique.");
+        Check(PetCards.Cards.All(c => c.ArtCell.Index is >= 0 and < 48 && c.ArtCell.Sheet.Length > 0), "Every card has an icon.");
+        Check(PetCards.Cards.Select(c => c.Art).Distinct().Count() == PetCards.Cards.Count, "No two cards share an icon.");
+        foreach (var e in PetGame.Wheel)
+        {
+            var mine = PetCards.Cards.Where(c => c.Element == e).ToList();
+            Check(mine.Count == 25 && PetCards.CardRarities.All(r => mine.Any(c => c.Rarity == r)), $"{e} has 25 cards across every rarity.");
+            Check(mine.Any(c => c.Parry > 0) && mine.Any(c => c.Interrupt) && mine.Any(c => c.Stun || c.Feint || c.Punish > 0), $"{e} has parry, interrupt and counter-attack cards.");
+        }
+        Check(PetCards.CardOf("hoodup").Id == "strike" && PetCards.CardOf("thornhide").Text == "Block 10 · Thorns 8", "Unknown ids fall back; text is built from numbers.");
 
-        // Equip, swap, unequip, sell.
+        // The element wheel: every element beats two, loses to two, and is even with two.
+        foreach (var e in PetGame.Wheel)
+        {
+            Check(PetGame.BeatenBy(e).Count() == 2 && PetGame.WeakTo(e).Count() == 2 && !PetGame.Beats(e, e), $"{e} has two counters and two prey.");
+            foreach (var prey in PetGame.BeatenBy(e)) Check(!PetGame.Beats(prey, e), "No element beats its own counter.");
+            foreach (var counter in PetGame.WeakTo(e)) Check(PetGame.WeakTo(counter).Any(), "Every counter has its own counter.");
+        }
+        Check(PetGame.TypePercent("tide", "blaze") == PetGame.AdvantagePercent && PetGame.TypePercent("blaze", "tide") == PetGame.DisadvantagePercent
+            && PetGame.TypePercent("tide", "light") == 100, "The wheel sets the damage multiplier.");
+
+        // Account level: up to 999, bonus points stop at 15.
+        Check(PetGame.PointBudget(1) == 0 && PetGame.PointBudget(2) == 1 && PetGame.PointBudget(PetGame.MaxLevel) == PetGame.MaxBonusPoints
+            && PetGame.BonusLevels.Count == PetGame.MaxBonusPoints, "Levels pay at most 15 bonus points, the last at level 999.");
+        var lvl = new PetProgress { Level = PetGame.MaxLevel - 1 };
+        PetGame.AddXp(lvl, 1_000_000);
+        Check(lvl.Level == PetGame.MaxLevel && PetGame.FreePoints(lvl) == PetGame.MaxBonusPoints, "Level 999 is the cap.");
+
+        // Base stats start even; re-rolling costs coins, keeps the total and leaves bonus points alone.
         var rnd = new Random(5);
-        var p = new PetProgress { Level = 4, Element = "volt" };
-        var sword = PetCards.Give(p, "sword", rnd)!;
-        var wand = PetCards.Give(p, "wand", rnd)!;
-        var hoodie = PetCards.Give(p, "hoodie", rnd)!;
-        var bare = PetCards.LoadoutFor(p, "A", "");
-        Check(bare.Deck.Count == 7 && bare.Deck.Count(c => c == "volt") == 2, "A bare pet has the basic deck with its element move.");
-        Check(PetCards.Equip(p, sword.Uid) && PetCards.Equip(p, hoodie.Uid), "Gear equips.");
-        var geared = PetCards.LoadoutFor(p, "A", "");
-        Check(geared.Deck.Count(c => c == "slash") == 2 && geared.Deck.Count(c => c == "hoodup") == 2 && geared.Power == bare.Power + 4 && geared.Guard == bare.Guard + 2,
-            "Worn gear adds its cards and stats.");
-        Check(geared.Looks[PetCards.Weapon] == "sword" && geared.Looks[PetCards.Armor] == "hoodie", "Worn gear shows on the pet.");
-        Check(PetCards.Equip(p, wand.Uid) && PetCards.Worn(p, PetCards.Weapon)!.Id == "wand" && p.Equipped.Count == 2, "Equipping into a full slot swaps.");
-        Check(PetCards.Sell(p, wand.Uid) == 0, "Worn gear can't be sold.");
-        Check(PetCards.Unequip(p, PetCards.Weapon) && PetCards.Worn(p, PetCards.Weapon) is null, "Gear unequips.");
-        int coins = p.Coins;
-        Check(PetCards.Sell(p, wand.Uid) == 15 && p.Coins == coins + 15 && p.Gear.Count == 2, "Spare gear sells for coins.");
-        p.Equipped["head"] = sword.Uid; p.Equipped["back"] = "missing";
-        PetCards.Normalize(p);
-        Check(!p.Equipped.ContainsKey("head") && !p.Equipped.ContainsKey("back") && p.Equipped.ContainsKey("armor"), "Broken saves drop gear in the wrong slot.");
-        p.Coins = 1000;
-        Check(PetCards.OpenPack(p, rnd) is not null && p.Coins == 1000 - PetCards.GearPackPrice, "Gear packs cost coins and give gear.");
+        var p = new PetProgress { Level = 10, Power = 2, Coins = PetGame.RerollPrice * 40 };
+        PetGame.Normalize(p);
+        Check(p.BasePower == PetGame.EvenStat && PetGame.ValidBase(p.BasePower, p.BaseGuard, p.BaseSpeed, p.BaseVitality), "Every pet starts with even stats.");
+        var spreads = new HashSet<(int, int, int, int)>();
+        var elements = new HashSet<string>();
+        for (int i = 0; i < 40; i++)
+        {
+            Check(PetGame.Reroll(p, rnd) && PetGame.ValidBase(p.BasePower, p.BaseGuard, p.BaseSpeed, p.BaseVitality) && p.Power == 2 && PetGame.Wheel.Contains(p.Element),
+                "Re-rolls stay valid and keep bonus points.");
+            spreads.Add((p.BasePower, p.BaseGuard, p.BaseSpeed, p.BaseVitality));
+            elements.Add(p.Element);
+        }
+        Check(spreads.Count > 20 && elements.Count == PetGame.Wheel.Count && p.Coins == 0 && !PetGame.Reroll(p, rnd),
+            "Re-rolls vary the element and stats, cost coins, and stop when broke.");
+        var installs = Enumerable.Range(0, 60).Select(i => { var n = new PetProgress(); PetCards.EnsureStarted(n, new Random(i)); return n.Element; }).Distinct().Count();
+        Check(installs >= 5, "New installs start with a random element.");
+        var looks = new PetProgress { BasePower = 9, BaseGuard = 1, BaseSpeed = 5, BaseVitality = 5, Power = 3 };
+        var lo = PetCards.LoadoutFor(looks, "A", "");
+        Check(lo.Power == 12 && lo.Guard == 1 && lo.MaxHp == PetCards.MaxHpFor(5), "Stats are base plus bonus; level adds nothing.");
+        Check(PetCards.LoadoutFor(new PetProgress { Level = 900 }, "A", "").Power == PetCards.LoadoutFor(new PetProgress { Level = 1 }, "A", "").Power,
+            "A high level alone doesn't make a pet stronger.");
+
+        // Starter cards: random per install, fixed per seed, always a legal 20-card deck.
+        var s1 = PetCards.Starter(11); var s2 = PetCards.Starter(11); var s3 = PetCards.Starter(12);
+        Check(s1.SequenceEqual(s2) && !s1.SequenceEqual(s3), "The starter set is random per install and stable for one.");
+        for (long seed = 1; seed < 60; seed++)
+        {
+            var st = PetCards.Starter(seed);
+            Check(st.Count == PetCards.DeckSize && st.GroupBy(c => c).All(g => g.Count() <= PetCards.CopyLimit(PetCards.CardOf(g.Key)))
+                && st.Count(c => PetCards.CardOf(c).Damage > 0) >= 9, "Starters are legal decks with enough attacks.");
+        }
+        var fresh = new PetProgress();
+        PetCards.EnsureStarted(fresh, rnd);
+        Check(fresh.Seed != 0 && fresh.Deck.Count == PetCards.DeckSize && PetCards.DeckReady(fresh) && fresh.Cards.Values.Sum() == PetCards.DeckSize,
+            "A new install owns its starter cards and has them as its deck.");
+
+        // Deck building respects ownership and copy limits.
+        string any = fresh.Deck[0];
+        Check(!PetCards.AddToDeck(fresh, any), "A full deck takes no more cards.");
+        Check(PetCards.RemoveFromDeck(fresh, any) && !PetCards.DeckReady(fresh) && PetCards.AddToDeck(fresh, any) && PetCards.DeckReady(fresh), "Cards come out and go back in.");
+        PetCards.RemoveFromDeck(fresh, any);
+        Check(!PetCards.AddToDeck(fresh, "hellfire"), "Unowned cards can't go in the deck.");
+        PetCards.AddCard(fresh, "hellfire"); PetCards.AddCard(fresh, "hellfire");
+        Check(PetCards.AddToDeck(fresh, "hellfire") && PetCards.InDeck(fresh, "hellfire") == 1, "Owned cards go in.");
+        PetCards.RemoveFromDeck(fresh, fresh.Deck.First(c => c != "hellfire"));
+        Check(!PetCards.AddToDeck(fresh, "hellfire"), "Legendaries are one per deck.");
+        fresh.Deck.Add("tsunami"); fresh.Deck.Add("tsunami");
+        PetCards.Normalize(fresh);
+        Check(!fresh.Deck.Contains("tsunami"), "A hand-edited deck loses cards it doesn't own.");
+
+        // Some cards never drop for an install; the shop never offers them; the shop is fixed for the day.
+        var shopper = new PetProgress { Seed = 77, Coins = 100_000, Level = 50 };
+        PetCards.EnsureStarted(shopper, rnd);
+        int never = PetCards.Cards.Count(c => PetCards.NeverDrops(shopper, c.Id));
+        int rarePlus = PetCards.Cards.Count(c => c.Rarity != PetCards.Common);
+        Check(never > rarePlus / 10 && never < rarePlus * 3 / 10 && PetCards.Cards.Where(c => c.Rarity == PetCards.Common).All(c => !PetCards.NeverDrops(shopper, c.Id)),
+            $"About a fifth of rare-and-up cards are never obtainable for an install ({never} of {rarePlus}); commons always are.");
+        Check(PetCards.Cards.Count(c => PetCards.NeverDrops(new PetProgress { Seed = 78 }, c.Id)) > 0
+            && PetCards.Cards.Any(c => PetCards.NeverDrops(shopper, c.Id) != PetCards.NeverDrops(new PetProgress { Seed = 78 }, c.Id)), "Installs miss different cards.");
+        for (int d = 1; d <= 60; d++)
+        {
+            string day = $"2026-12-{d % 28 + 1:00}";
+            var offers = PetCards.Shop(shopper, day);
+            Check(offers.Count == PetCards.ShopSlots && offers.Select(o => o.Card.Id).Distinct().Count() == offers.Count, "Six different offers a day.");
+            Check(offers.All(o => !PetCards.NeverDrops(shopper, o.Card.Id)), "The shop never sells a card this install can't get.");
+            Check(PetCards.Shop(shopper, day).Select(o => o.Card.Id).SequenceEqual(offers.Select(o => o.Card.Id)), "The shop is the same all day.");
+        }
+        var today = PetCards.Shop(shopper, "2026-12-01");
+        int before = shopper.Coins, owned = PetCards.Owned(shopper, today[0].Card.Id);
+        Check(PetCards.BuyFromShop(shopper, "2026-12-01", 0) && shopper.Coins == before - today[0].Price && PetCards.Owned(shopper, today[0].Card.Id) == owned + 1,
+            "Buying spends coins and adds the card.");
+        Check(!PetCards.BuyFromShop(shopper, "2026-12-01", 0) && PetCards.Shop(shopper, "2026-12-01")[0].Bought, "Each offer sells once a day.");
+        Check(!PetCards.BuyFromShop(new PetProgress { Seed = 77, Coins = 0 }, "2026-12-01", 1), "No coins, no card.");
+        for (int i = 0; i < 300; i++)
+            if (PetCards.RollDrop(shopper, rnd, 30, true, true) is { } drop) Check(!PetCards.NeverDrops(shopper, drop.Id), "Drops never give a card this install can't get.");
+
+        // The world: stages are random per install, fixed per seed, three fights with a boss last, enemies within the same caps.
+        var w1 = PetWorld.StageOf(5, 3); var w2 = PetWorld.StageOf(5, 3);
+        Check(w1.Name == w2.Name && w1.Fights.Select(f => f.Deck.Count).SequenceEqual(w2.Fights.Select(f => f.Deck.Count)) && w1.Fights[0].Deck.SequenceEqual(w2.Fights[0].Deck),
+            "A stage is the same every time it is retried.");
+        Check(Enumerable.Range(1, 30).Select(n => PetWorld.StageOf(5, n).Name).Distinct().Count() > 10, "Stages vary.");
+        foreach (int n in new[] { 1, 2, 10, 50, 400, PetWorld.MaxStage })
+        {
+            var st = PetWorld.StageOf(9, n);
+            Check(st.Fights.Count == PetWorld.FightsPerStage && st.Fights[^1].Boss && st.Fights.Count(f => f.Boss) == 1, "Three fights, the last one a boss.");
+            foreach (var f in st.Fights)
+            {
+                int total = f.Power + f.Guard + f.Speed + f.Vitality;
+                Check(total <= PetGame.BaseTotal + PetGame.MaxBonusPoints && f.Deck.Count == PetCards.DeckSize
+                    && f.Deck.All(c => PetCards.RarityRank(PetCards.CardOf(c).Rarity) <= PetWorld.RarityCap(n, f.Boss)), $"Stage {n} enemies follow the player caps.");
+            }
+        }
+        var walker = new PetProgress();
+        Check(!PetWorld.Advance(walker, false) && walker.StageFight == 0, "A loss stays on the same fight.");
+        Check(!PetWorld.Advance(walker, true) && !PetWorld.Advance(walker, true) && walker.StageFight == 2, "Wins move through the stage.");
+        Check(PetWorld.Advance(walker, true) && walker.Stage == 2 && walker.StageFight == 0, "Beating the boss opens the next stage.");
+        var loser = new PetProgress { FullnessAtUtc = DateTime.UtcNow, Fullness = 90 };
+        var lossReward = PetGame.Reward(loser, -1, 4, friend: true, DateTime.UtcNow);
+        Check(lossReward.Xp > 0 && lossReward.Coins > 0, "Losing in the world still pays XP and coins.");
+        var bossWin = PetGame.Reward(new PetProgress { Fullness = 90, FullnessAtUtc = DateTime.UtcNow }, 1, 4, friend: true, DateTime.UtcNow, boss: true);
+        var plainWin = PetGame.Reward(new PetProgress { Fullness = 90, FullnessAtUtc = DateTime.UtcNow }, 1, 4, friend: true, DateTime.UtcNow);
+        Check(bossWin.Coins == plainWin.Coins * 2, "Bosses pay double.");
 
         // Deterministic rounds; valid picks only; battles end; balance.
         int totalRounds = 0, games = 0;
         for (int game = 0; game < 200; game++)
         {
-            int level = 1 + game % 25;
-            var a = PetCards.Wild(level, rnd, "A", ""); var b = PetCards.Wild(level, rnd, "B", "");
+            int n = 1 + game % 40;
+            var stA = PetWorld.StageOf(game, n); var stB = PetWorld.StageOf(game + 1000, n);
+            var a = PetWorld.LoadoutOf(stA, stA.Fights[game % 3], "A", ""); var b = PetWorld.LoadoutOf(stB, stB.Fights[(game + 1) % 3], "B", "");
             ulong seed = (ulong)rnd.NextInt64();
             var one = new CardBattle(a, b, seed); var two = new CardBattle(a, b, seed);
             var ai = new Random(game);
@@ -195,19 +298,173 @@ internal static class PetGameTests
         Console.WriteLine($"      card balance: {avg:0.0} rounds on average");
         Check(avg is >= 4 and <= 14, $"Card battles last a few rounds ({avg:0.0}).");
 
+        // Counters matter more than levels: a countered element loses most fights against equal stats.
+        int counterWins = 0;
+        for (int game = 0; game < 200; game++)
+        {
+            var deckOf = (string e) => PetCards.Cards.Where(c => c.Element == e && c.Rarity is PetCards.Common or PetCards.Rare).SelectMany(c => new[] { c.Id, c.Id }).Take(PetCards.DeckSize).ToList();
+            var tide = new PetCards.Loadout("T", "", 1, "tide", PetCards.MaxHpFor(5), 5, 5, 5, deckOf("tide"));
+            var blaze = new PetCards.Loadout("B", "", 999, "blaze", PetCards.MaxHpFor(5), 5, 5, 5, deckOf("blaze"));
+            var fight = new CardBattle(tide, blaze, (ulong)rnd.NextInt64());
+            var ai = new Random(game);
+            while (!fight.Over) fight.PlayRound(fight.ChooseAi(0, ai), fight.ChooseAi(1, ai));
+            if (fight.Winner == 0) counterWins++;
+        }
+        Console.WriteLine($"      counter wins: {counterWins}/200");
+        Check(counterWins > 110, $"The counter element wins most even fights ({counterWins}/200).");
+
         // Cheating picks are ignored: cards not in hand, duplicates, more than the energy allows.
-        var t = new CardBattle(PetCards.Build("X", "", 1, "blaze", 0, 0, 0, 0, []), PetCards.Build("Y", "", 1, "leaf", 0, 0, 0, 0, []), 9);
+        PetCards.Loadout Plain(string name, string element) => new(name, "", 1, element, PetCards.MaxHpFor(5), 0, 0, 0, PetCards.Starter(3));
+        var t = new CardBattle(Plain("X", "blaze"), Plain("Y", "leaf"), 9);
         var picks = t.Validate(0, [0, 0, 1, 2, 3, 4, 99, -1]);
         Check(picks.Distinct().Count() == picks.Count && picks.Sum(i => PetCards.CardOf(t.Sides[0].Hand[i]).Cost) <= PetCards.StartEnergy, "Invalid picks are dropped.");
 
         // Thorns hit back, block absorbs, pierce ignores block.
-        var thorny = new CardBattle(PetCards.Build("T", "", 1, "leaf", 0, 0, 0, 0, []), PetCards.Build("S", "", 1, "shadow", 0, 0, 0, 0, []), 3);
-        thorny.Sides[0].Hand.Clear(); thorny.Sides[0].Hand.AddRange(["spikeshell"]);
-        thorny.Sides[1].Hand.Clear(); thorny.Sides[1].Hand.AddRange(["strike", "shadow"]);
+        var thorny = new CardBattle(Plain("T", "leaf"), Plain("S", "shadow"), 3);
+        thorny.Sides[0].Hand.Clear(); thorny.Sides[0].Hand.AddRange(["barkskin"]);
+        thorny.Sides[1].Hand.Clear(); thorny.Sides[1].Hand.AddRange(["strike", "sneak"]);
         int hp1 = thorny.Sides[1].Hp;
         var ev = thorny.PlayRound([0], [0, 1]);
-        Check(ev.Any(e => e.Kind == "blocked" && e.Actor == 0) && ev.Count(e => e.Kind == "thornhit" && e.Actor == 1) == 2 && thorny.Sides[1].Hp == hp1 - 8, "Block absorbs and thorns hit back each time.");
-        Check(ev.Any(e => e.Kind == "hit" && e.Card == "shadow" && e.Amount > 0), "Pierce goes through block.");
+        Check(ev.Any(e => e.Kind == "blocked" && e.Actor == 0) && ev.Count(e => e.Kind == "thornhit" && e.Actor == 1) == 2 && thorny.Sides[1].Hp == hp1 - 4, "Block absorbs and thorns hit back each time.");
+        Check(ev.Any(e => e.Kind == "hit" && e.Card == "sneak" && e.Amount > 0), "Pierce goes through block.");
+
+        // Counters: parry beats an attack, feint beats parry, interrupt beats defence and parry, punish beats block, stun beats slow attacks.
+        CardBattle Duel(string[] mine, string[] theirs, int mySpeed = 0, int theirSpeed = 0)
+        {
+            var b = new CardBattle(Plain("A", "leaf") with { Speed = mySpeed }, Plain("B", "leaf") with { Speed = theirSpeed }, 21);
+            b.Sides[0].Hand.Clear(); b.Sides[0].Hand.AddRange(mine);
+            b.Sides[1].Hand.Clear(); b.Sides[1].Hand.AddRange(theirs);
+            b.Sides[0].Energy = b.Sides[1].Energy = PetCards.MaxEnergy;
+            return b;
+        }
+        var parry = Duel(["parry"], ["strike"]);
+        int pa = parry.Sides[0].Hp;
+        ev = parry.PlayRound([0], [0]);
+        Check(ev.Any(e => e.Kind == "parried" && e.Actor == 1) && parry.Sides[0].Hp == pa && ev.Any(e => e.Kind == "hit" && e.Actor == 1 && e.Card == "parry"),
+            "A parry cancels the attack and hits back.");
+        var feint = Duel(["parry"], ["feint"]);
+        ev = feint.PlayRound([0], [0]);
+        Check(!ev.Any(e => e.Kind == "parried") && ev.Any(e => e.Kind == "hit" && e.Actor == 0 && e.Card == "feint"), "A feint can't be parried.");
+        var interrupt = Duel(["guard", "parry"], ["disrupt", "strike"]);
+        ev = interrupt.PlayRound([0, 1], [0, 1]);
+        Check(ev.Count(e => e.Kind == "interrupted" && e.Actor == 0) == 2 && !ev.Any(e => e.Kind == "block") && !ev.Any(e => e.Kind == "parried"),
+            "An interrupt cancels the foe's block and parry.");
+        var both = Duel(["disrupt"], ["disrupt"]);
+        ev = both.PlayRound([0], [0]);
+        Check(!ev.Any(e => e.Kind == "interrupted"), "Interrupts never cancel each other.");
+        var punish = Duel(["guard"], ["shieldbash"]);
+        ev = punish.PlayRound([0], [0]);
+        var plain = Duel([], ["shieldbash"]);
+        var ev2 = plain.PlayRound([], [0]);
+        Check(ev.Any(e => e.Kind == "punish" && e.Actor == 0) && !ev2.Any(e => e.Kind == "punish"), "Punish only adds damage against a guarding foe.");
+        var stun = Duel(["shieldbash"], ["strike", "jab"], mySpeed: 9, theirSpeed: 1);
+        int sb = stun.Sides[0].Hp;
+        ev = stun.PlayRound([0], [0, 1]);
+        Check(ev.Any(e => e.Kind == "stun" && e.Actor == 1) && ev.Count(e => e.Kind == "fizzle" && e.Actor == 1) == 2 && stun.Sides[0].Hp == sb,
+            "A faster stun stops the foe's attacks this round.");
+        var slow = Duel(["shieldbash"], ["strike"], mySpeed: 1, theirSpeed: 9);
+        ev = slow.PlayRound([0], [0]);
+        Check(!ev.Any(e => e.Kind == "fizzle"), "A slower stun is too late.");
+
+        // Statuses: poison ticks and fades, sleep skips attacks until a hit wakes it, fear misses, slow goes last, regen heals, rage hits harder, cleanse clears.
+        var pois = Duel(["toxicspores"], []);
+        int ph = pois.Sides[1].Hp;
+        ev = pois.PlayRound([0], []);
+        Check(ev.Any(e => e.Kind == "poison" && e.Actor == 1 && e.Amount == 4) && pois.Sides[1].Hp == ph - 4 && pois.Sides[1].Poison == 3, "Poison ticks at the end of the round and fades.");
+        var nap = Duel(["lullaby"], ["strike"]);
+        ev = nap.PlayRound([0], [0]);
+        Check(ev.Any(e => e.Kind == "snooze" && e.Actor == 1) && nap.Sides[1].Sleep == 1, "A sleeping pet's attacks do nothing, and the sleep lasts into the next round.");
+        nap.Sides[0].Hand.Clear(); nap.Sides[0].Hand.Add("strike");
+        nap.Sides[1].Hand.Clear(); nap.Sides[1].Hand.Add("strike");
+        ev = nap.PlayRound([0], [0]);
+        Check(ev.Any(e => e.Kind == "snooze") || ev.Any(e => e.Kind == "wake"), "Sleep holds the next round unless a hit lands first.");
+        var wake = Duel(["sleepdart", "strike"], ["guard"], mySpeed: 9);
+        ev = wake.PlayRound([0, 1], [0]);
+        Check(ev.Any(e => e.Kind == "sleep" && e.Actor == 1), "A sleep dart puts the foe to sleep.");
+        var fear = Duel(["blinding"], ["strike", "jab", "jab"]);
+        ev = fear.PlayRound([0], [0, 1, 2]);
+        Check(ev.Count(e => e.Kind == "miss" && e.Actor == 1) == 2 && ev.Count(e => e.Kind == "hit" && e.Actor == 0) == 1, "Fear makes the next attacks miss.");
+        var slowed = Duel(["frostbind", "strike"], ["strike"], mySpeed: 1, theirSpeed: 9);
+        ev = slowed.PlayRound([0, 1], [0]);
+        int firstHit = ev.FindIndex(e => e.Kind == "hit");
+        Check(firstHit >= 0 && ev[firstHit].Actor == 1, "A slowed pet acts after a slower foe.");
+        var regen = Duel(["renewal"], ["strike"]);
+        ev = regen.PlayRound([0], [0]);
+        Check(ev.Any(e => e.Kind == "heal" && e.Actor == 0 && e.Card == "") && regen.Sides[0].Regen == 4, "Regen heals at the end of the round.");
+        int Hit(string[] mine) { var d = Duel(mine, []); d.PlayRound(Enumerable.Range(0, mine.Length), []); return d.Sides[1].Loadout.MaxHp - d.Sides[1].Hp; }
+        Check(Hit(["ragepill", "whirlwind"]) > Hit(["whirlwind"]), "Rage hits harder.");
+        var clean = Duel(["rinse"], []);
+        clean.Sides[0].Poison = 5; clean.Sides[0].Fear = 2; clean.Sides[0].Slow = 2;
+        clean.PlayRound([0], []);
+        Check(clean.Sides[0].Poison == 0 && clean.Sides[0].Fear == 0 && clean.Sides[0].Slow == 0, "Cleanse clears poison, fear and slow.");
+
+        // Axie-style tricks: next-round energy, on-hit reactive traps, energy steal, combo bonus.
+        var battery = Duel(["lantern"], []);
+        battery.Sides[0].Energy = 1;
+        ev = battery.PlayRound([0], []);
+        Check(ev.Any(e => e.Kind == "nextenergy" && e.Actor == 0 && e.Amount == 1) && battery.Sides[0].Energy == PetCards.EnergyPerRound + 1,
+            "Next-round energy cards add bonus energy to the next refill.");
+
+        var trap = Duel(["leafshield"], ["strike"]);
+        ev = trap.PlayRound([0], [0]);
+        Check(ev.Any(e => e.Kind == "trap" && e.Actor == 0) && ev.Any(e => e.Kind == "poisoned" && e.Actor == 1 && e.Amount == 2),
+            "An on-hit trap afflicts the attacker when struck.");
+
+        var carrot = Duel(["bubblewrap"], ["strike"]);
+        carrot.Sides[0].Energy = 1;
+        ev = carrot.PlayRound([0], [0]);
+        Check(ev.Any(e => e.Kind == "nextenergy" && e.Actor == 0) && carrot.Sides[0].Energy == PetCards.EnergyPerRound + 1,
+            "An on-hit energy trap pays bonus energy next round when hit.");
+
+        var thief = Duel(["sap"], []);
+        thief.Sides[0].Energy = 1; thief.Sides[1].Energy = 1;
+        ev = thief.PlayRound([0], []);
+        Check(ev.Any(e => e.Kind == "stealenergy" && e.Actor == 0) && thief.Sides[0].Energy == PetCards.EnergyPerRound + 1 && thief.Sides[1].Energy == PetCards.EnergyPerRound,
+            "Energy steal drains the foe and adds energy next round.");
+
+        var comboDuel = Duel(["focus", "sparkleshot"], []);
+        ev = comboDuel.PlayRound([0, 1], []);
+        Check(ev.Any(e => e.Kind == "combo" && e.Actor == 0 && e.Amount == 3), "Playing 2+ cards triggers combo bonus.");
+
+        // Every skill scales with its matching stat: Power -> Damage/Burn/Poison, Guard -> Block/Thorns/Traps, Vitality -> Heal/Regen, Speed -> Combo/Punish.
+        var powerBattle = new CardBattle(Plain("P", "blaze") with { Power = 15 }, Plain("T", "leaf"), 11);
+        powerBattle.Sides[0].Hand.Clear(); powerBattle.Sides[0].Hand.AddRange(["smolder", "toxicspores"]);
+        powerBattle.Sides[0].Energy = PetCards.MaxEnergy;
+        ev = powerBattle.PlayRound([0, 1], []);
+        Check(ev.First(e => e.Kind == "burned").Amount == PetCards.Scale(5, 15) && ev.First(e => e.Kind == "poisoned").Amount == PetCards.Scale(4, 15),
+            "Power scales Burn and Poison stacks.");
+
+        var guardBattle = new CardBattle(Plain("G", "leaf") with { Guard = 15 }, Plain("A", "leaf"), 11);
+        guardBattle.Sides[0].Hand.Clear(); guardBattle.Sides[0].Hand.AddRange(["bramble"]);
+        guardBattle.Sides[1].Hand.Clear(); guardBattle.Sides[1].Hand.AddRange(["strike"]);
+        guardBattle.Sides[0].Energy = guardBattle.Sides[1].Energy = PetCards.MaxEnergy;
+        ev = guardBattle.PlayRound([0], [0]);
+        Check(ev.First(e => e.Kind == "block").Amount == PetCards.Scale(9, 15) && ev.First(e => e.Kind == "thorns").Amount == PetCards.Scale(5, 15)
+            && ev.First(e => e.Kind == "poisoned").Amount == PetCards.Scale(3, 15), "Guard scales Block, Thorns and reactive trap stacks.");
+
+        var vitBattle = new CardBattle(Plain("V", "light") with { Vitality = 15, MaxHp = PetCards.MaxHpFor(15) }, Plain("A", "leaf"), 11);
+        vitBattle.Sides[0].Hp = 30;
+        vitBattle.Sides[0].Hand.Clear(); vitBattle.Sides[0].Hand.AddRange(["prayer", "renewal"]);
+        vitBattle.Sides[0].Energy = PetCards.MaxEnergy;
+        ev = vitBattle.PlayRound([0, 1], []);
+        Check(ev.First(e => e.Kind == "heal" && e.Card == "prayer").Amount == PetCards.Scale(7, 15)
+            && ev.First(e => e.Kind == "regen").Amount == PetCards.Scale(5, 15), "Vitality scales Heal and Regen.");
+
+        var speedBattle = new CardBattle(Plain("S", "light") with { Speed = 15 }, Plain("G", "leaf"), 11);
+        speedBattle.Sides[0].Hand.Clear(); speedBattle.Sides[0].Hand.AddRange(["focus", "sparkleshot", "shieldbash"]);
+        speedBattle.Sides[1].Hand.Clear(); speedBattle.Sides[1].Hand.AddRange(["guard"]);
+        speedBattle.Sides[0].Energy = speedBattle.Sides[1].Energy = PetCards.MaxEnergy;
+        ev = speedBattle.PlayRound([0, 1, 2], [0]);
+        Check(ev.First(e => e.Kind == "combo").Amount == PetCards.Scale(3, 15)
+            && ev.First(e => e.Kind == "punish").Amount == PetCards.Scale(4, 15), "Speed scales Combo and Punish bonuses.");
+
+        // Loadout wire encoding round-trips and clamps forged values.
+        var encoded = PetCards.EncodeLoadout(PetCards.LoadoutFor(fresh, "Alex", "pet1:cat"));
+        var decoded = PetCards.DecodeLoadout(encoded);
+        Check(decoded is { Name: "Alex", Deck.Count: PetCards.DeckSize } && decoded.Vitality == PetCards.TotalVitality(fresh), "Card duel loadouts survive wire encoding.");
+        var forged = PetCards.SanitizeLoadout(new("Cheater", "bad", 9999, "lava", 9999, 99, 99, 99, ["hellfire", "hellfire", "hellfire"], 99));
+        Check(forged.Level == PetGame.MaxLevel && forged.Power == PetGame.EvenStat && forged.Deck.Count == PetCards.DeckSize && forged.Deck.Count(c => c == "hellfire") == 1,
+            "Forged duel loadouts are clamped to legal stats and copy limits.");
     }
 
     private static AppSettings Settings(string name) => new() { DisplayName = name, Port = 0, UserId = AppSettings.NewUserId() };

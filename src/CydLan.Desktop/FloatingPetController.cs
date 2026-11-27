@@ -35,6 +35,7 @@ public sealed class FloatingPetController : IDisposable
         model.Arena.PetLine += OnArenaLine;
         model.Arena.InviteReceived += OnInvite;
         model.Arena.BattleStarted += OnBattleStarted;
+        model.Arena.CardBattleStarted += OnCardBattleStarted;
     }
 
     private void OpenArena()
@@ -68,6 +69,12 @@ public sealed class FloatingPetController : IDisposable
     private void OnBattleStarted(PetBattleSession session)
     {
         if (disposed) return;
+        OpenArena();
+    }
+
+    private void OnCardBattleStarted(CardBattleSession session)
+    {
+        if (disposed || !session.IsLan) return;
         OpenArena();
     }
 
@@ -180,6 +187,7 @@ public sealed class FloatingPetController : IDisposable
         model.Arena.PetLine -= OnArenaLine;
         model.Arena.InviteReceived -= OnInvite;
         model.Arena.BattleStarted -= OnBattleStarted;
+        model.Arena.CardBattleStarted -= OnCardBattleStarted;
         PetInviteToast.CloseAll();
         reminderToast?.Close();
         quickChatWindow?.Close();

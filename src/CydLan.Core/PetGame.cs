@@ -5,15 +5,27 @@ using System.Text.Json.Serialization;
 
 namespace CydLan.Core;
 
-/// <summary>Saved progress for the companion mini-game: level, coins, food and battle record.</summary>
+/// <summary>
+/// Saved progress for the companion mini-game. Level and XP belong to the account; the pet's strength comes from its
+/// rolled stats, at most <see cref="PetGame.MaxBonusPoints"/> bonus points, and the deck.
+/// </summary>
 public sealed class PetProgress
 {
+    /// <summary>Per-install seed: decides the starter cards, the cards this install can never get, and the daily shop.</summary>
+    public long Seed { get; set; }
     public int Level { get; set; } = 1;
     public int Xp { get; set; }
     public int Coins { get; set; } = PetGame.StartingCoins;
     public int Fullness { get; set; } = 80;
     public DateTime? FullnessAtUtc { get; set; }
     public string Element { get; set; } = "blaze";
+    /// <summary>Rolled base stats. Every pet starts even; coins re-roll the spread.</summary>
+    public int BasePower { get; set; } = PetGame.EvenStat;
+    public int BaseGuard { get; set; } = PetGame.EvenStat;
+    public int BaseSpeed { get; set; } = PetGame.EvenStat;
+    public int BaseVitality { get; set; } = PetGame.EvenStat;
+    public int Rerolls { get; set; }
+    /// <summary>Bonus points placed from levelling (at most <see cref="PetGame.MaxBonusPoints"/>).</summary>
     public int Power { get; set; }
     public int Guard { get; set; }
     public int Speed { get; set; }
@@ -26,18 +38,18 @@ public sealed class PetProgress
     public string LastDailyDay { get; set; } = "";
     public string ChatXpDay { get; set; } = "";
     public int ChatXpToday { get; set; }
-    /// <summary>Gear the pet owns. Each entry has its own id so duplicates can be told apart.</summary>
-    public List<OwnedGear> Gear { get; set; } = [];
-    /// <summary>Slot → owned gear id.</summary>
-    public Dictionary<string, string> Equipped { get; set; } = [];
+    /// <summary>Card id → copies owned.</summary>
+    public Dictionary<string, int> Cards { get; set; } = [];
+    /// <summary>The battle deck: exactly <see cref="PetCards.DeckSize"/> card ids, drawn from the collection.</summary>
+    public List<string> Deck { get; set; } = [];
+    public string ShopDay { get; set; } = "";
+    /// <summary>Daily shop slots already bought today.</summary>
+    public List<int> ShopBought { get; set; } = [];
+    /// <summary>The world stage being played and the fight within it.</summary>
+    public int Stage { get; set; } = 1;
+    public int StageFight { get; set; }
     public int CardWins { get; set; }
     public int CardLosses { get; set; }
-}
-
-public sealed class OwnedGear
-{
-    public string Uid { get; set; } = "";
-    public string Item { get; set; } = "";
 }
 
 public sealed record PetFood(string Id, string Name, int Price, int Fullness, int Xp, string Boost);
@@ -47,11 +59,17 @@ public sealed record PetMoveInfo(string Id, string Name, int Cooldown, int Unloc
 /// <summary>Rules for feeding, levelling and battling companions. Pure integer logic so every peer computes the same results.</summary>
 public static class PetGame
 {
-    public const int MaxLevel = 50;
+    public const int MaxLevel = 999;
+    /// <summary>Levelling stops paying stat points here so a higher level never outweighs a good counter.</summary>
+    public const int MaxBonusPoints = 15;
+    /// <summary>Levels that each grant one bonus point: quick at first, the last one at the level cap.</summary>
+    public static IReadOnlyList<int> BonusLevels { get; } = [2, 4, 7, 10, 15, 20, 30, 45, 60, 80, 100, 150, 250, 500, 999];
+    /// <summary>Rolled base stats: four stats sharing <see cref="BaseTotal"/> points, each between the min and max.</summary>
+    public const int EvenStat = 5, BaseTotal = 20, BaseStatMin = 1, BaseStatMax = 10;
+    public const int RerollPrice = 150;
     public const int StartingCoins = 120;
     public const int MaxCharge = 100;
     public const int MaxTurns = 40;
-    public const int PointsPerLevel = 2;
     public const int BattleHunger = 8;
     public const int HungryBelow = 20;
 
@@ -87,16 +105,29 @@ public static class PetGame
         new("ultimate", "Ultimate", 0, 6)
     ];
 
-    private static readonly Dictionary<string, string[]> Strong = new()
+    /// <summary>
+    /// The element wheel. Each element beats the next two and loses to the two before it, so every pick has a counter
+    /// and every counter has its own counter.
+    /// </summary>
+    public static IReadOnlyList<string> Wheel { get; } = ["tide", "blaze", "frost", "leaf", "light", "shadow", "volt"];
+    public const int AdvantagePercent = 125, DisadvantagePercent = 80, SameElementPercent = 110;
+
+    public static bool Beats(string attacker, string defender)
     {
-        ["blaze"] = ["leaf", "frost"],
-        ["tide"] = ["blaze"],
-        ["leaf"] = ["tide", "volt"],
-        ["volt"] = ["tide", "frost"],
-        ["frost"] = ["leaf"],
-        ["shadow"] = ["light"],
-        ["light"] = ["shadow"]
-    };
+        int a = IndexOf(attacker), d = IndexOf(defender);
+        if (a < 0 || d < 0) return false;
+        int step = (d - a + Wheel.Count) % Wheel.Count;
+        return step is 1 or 2;
+    }
+
+    private static int IndexOf(string element)
+    {
+        for (int i = 0; i < Wheel.Count; i++) if (Wheel[i] == element) return i;
+        return -1;
+    }
+
+    public static IEnumerable<string> BeatenBy(string element) => Wheel.Where(e => Beats(element, e));
+    public static IEnumerable<string> WeakTo(string element) => Wheel.Where(e => Beats(e, element));
 
     public static PetElement ElementOf(string? id) => Elements.FirstOrDefault(e => e.Id == id) ?? Elements[0];
     public static string NormalizeElement(string? id) => ElementOf((id ?? "").Trim().ToLowerInvariant()).Id;
@@ -104,14 +135,45 @@ public static class PetGame
 
     /// <summary>Damage multiplier in percent for an attack of <paramref name="attacker"/> into <paramref name="defender"/>.</summary>
     public static int TypePercent(string attacker, string defender) =>
-        Strong.TryGetValue(attacker, out var a) && a.Contains(defender) ? 150
-        : Strong.TryGetValue(defender, out var d) && d.Contains(attacker) && !(Strong.TryGetValue(attacker, out var b) && b.Contains(defender)) ? 70
-        : 100;
+        Beats(attacker, defender) ? AdvantagePercent : Beats(defender, attacker) ? DisadvantagePercent : 100;
 
-    public static int XpToNext(int level) => 40 + Math.Clamp(level, 1, MaxLevel) * 25;
-    public static int PointBudget(int level) => (Math.Clamp(level, 1, MaxLevel) - 1) * PointsPerLevel;
+    public static int XpToNext(int level) => 30 + Math.Clamp(level, 1, MaxLevel) * 10;
+    /// <summary>Bonus points earned by a level: one per milestone in <see cref="BonusLevels"/>, never more than 15.</summary>
+    public static int PointBudget(int level) => BonusLevels.Count(l => l <= Math.Clamp(level, 1, MaxLevel));
     public static int SpentPoints(PetProgress p) => p.Power + p.Guard + p.Speed + p.Vitality;
     public static int FreePoints(PetProgress p) => Math.Max(0, PointBudget(p.Level) - SpentPoints(p));
+    /// <summary>The next level that pays a bonus point, or 0 when all 15 are earned.</summary>
+    public static int NextBonusLevel(int level) => BonusLevels.FirstOrDefault(l => l > level);
+
+    public static bool ValidBase(int power, int guard, int speed, int vitality) =>
+        power + guard + speed + vitality == BaseTotal
+        && new[] { power, guard, speed, vitality }.All(v => v is >= BaseStatMin and <= BaseStatMax);
+
+    /// <summary>A random spread of <see cref="BaseTotal"/> points over the four stats, each within the limits.</summary>
+    public static (int Power, int Guard, int Speed, int Vitality) RollBase(Random random)
+    {
+        int[] v = [BaseStatMin, BaseStatMin, BaseStatMin, BaseStatMin];
+        for (int left = BaseTotal - 4 * BaseStatMin; left > 0;)
+        {
+            int i = random.Next(4);
+            if (v[i] >= BaseStatMax) continue;
+            v[i]++; left--;
+        }
+        return (v[0], v[1], v[2], v[3]);
+    }
+
+    public static string RollElement(Random random) => Wheel[random.Next(Wheel.Count)];
+
+    /// <summary>Pays coins to re-roll the pet's element and base stats together. Bonus points stay where they are.</summary>
+    public static bool Reroll(PetProgress p, Random random)
+    {
+        if (p.Coins < RerollPrice) return false;
+        p.Coins -= RerollPrice;
+        p.Element = RollElement(random);
+        (p.BasePower, p.BaseGuard, p.BaseSpeed, p.BaseVitality) = RollBase(random);
+        p.Rerolls++;
+        return true;
+    }
 
     /// <summary>Clamps saved values so hand-edited or old files stay valid.</summary>
     public static void Normalize(PetProgress p)
@@ -122,6 +184,10 @@ public static class PetGame
         p.Fullness = Math.Clamp(p.Fullness, 0, 100);
         p.Element = NormalizeElement(p.Element);
         p.Power = Math.Max(0, p.Power); p.Guard = Math.Max(0, p.Guard); p.Speed = Math.Max(0, p.Speed); p.Vitality = Math.Max(0, p.Vitality);
+        if (!ValidBase(p.BasePower, p.BaseGuard, p.BaseSpeed, p.BaseVitality)) p.BasePower = p.BaseGuard = p.BaseSpeed = p.BaseVitality = EvenStat;
+        p.Rerolls = Math.Max(0, p.Rerolls);
+        p.Stage = Math.Clamp(p.Stage, 1, PetWorld.MaxStage);
+        p.StageFight = Math.Clamp(p.StageFight, 0, PetWorld.FightsPerStage - 1);
         if (SpentPoints(p) > PointBudget(p.Level)) p.Power = p.Guard = p.Speed = p.Vitality = 0;
         p.Wins = Math.Max(0, p.Wins); p.Losses = Math.Max(0, p.Losses); p.Draws = Math.Max(0, p.Draws);
         if (p.Boost is not ("" or "power" or "guard" or "speed")) p.Boost = "";
@@ -218,12 +284,17 @@ public static class PetGame
 
     public sealed record BattleReward(int Xp, int Coins, int LevelsGained);
 
-    /// <summary>Applies a finished battle to the saved progress. <paramref name="outcome"/> is 1 win, 0 draw, -1 loss.</summary>
-    public static BattleReward Reward(PetProgress p, int outcome, int opponentLevel, bool friend, DateTime nowUtc)
+    /// <summary>
+    /// Applies a finished battle to the saved progress. <paramref name="outcome"/> is 1 win, 0 draw, -1 loss; losing still
+    /// pays a little so grinding always moves the account forward. <paramref name="stage"/> is the world stage (or the
+    /// opponent's level for old LAN battles).
+    /// </summary>
+    public static BattleReward Reward(PetProgress p, int outcome, int stage, bool friend, DateTime nowUtc, bool boss = false)
     {
-        opponentLevel = Math.Clamp(opponentLevel, 1, MaxLevel);
-        int xp = outcome > 0 ? 30 + opponentLevel * 6 : outcome == 0 ? 20 + opponentLevel * 3 : 12 + opponentLevel * 2;
-        int coins = outcome > 0 ? 25 + opponentLevel * 3 : outcome == 0 ? 14 : 8;
+        stage = Math.Clamp(stage, 1, PetWorld.MaxStage);
+        int xp = outcome > 0 ? 24 + stage * 6 : outcome == 0 ? 14 + stage * 3 : 8 + stage * 2;
+        int coins = outcome > 0 ? 18 + stage * 3 : outcome == 0 ? 10 + stage : 6 + stage;
+        if (boss && outcome > 0) { xp *= 2; coins *= 2; }
         if (!friend) { xp = xp * 6 / 10; coins = coins * 6 / 10; }
         if (IsHungry(p, nowUtc)) xp /= 2;
         if (outcome > 0) p.Wins++; else if (outcome < 0) p.Losses++; else p.Draws++;

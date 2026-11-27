@@ -8,7 +8,8 @@ public sealed partial class LanService
 
     private static readonly Dictionary<string, int> GameFieldLimits = new(StringComparer.Ordinal)
     {
-        ["op"] = 12, ["bid"] = 40, ["card"] = PetGame.MaxCardChars, ["seed"] = 24, ["turn"] = 6, ["move"] = 12, ["hash"] = 24, ["reason"] = 24
+        ["op"] = 12, ["bid"] = 40, ["mode"] = 12, ["card"] = PetGame.MaxCardChars, ["loadout"] = PetCards.MaxLoadoutChars,
+        ["seed"] = 24, ["turn"] = 6, ["move"] = 12, ["picks"] = 48, ["hash"] = 24, ["reason"] = 24
     };
 
     private void HandleGame(Session session, WireMessage message)

@@ -34,7 +34,11 @@ public sealed class FoodIcon : FrameworkElement
 /// <summary>The Pets module: care, shop, gear, deck and the animated battle stage.</summary>
 public partial class PetArenaView : System.Windows.Controls.UserControl
 {
-    private sealed record StatRow(string Key, string Label, int Value, bool CanAdd) { public string AddName => "Add point to " + Label; }
+    private sealed record StatRow(string Key, string Label, int Total, int Bonus, bool CanAdd)
+    {
+        public string AddName => "Add point to " + Label;
+        public string BonusText => Bonus > 0 ? $"+{Bonus}" : "";
+    }
     private sealed record FoodRow(string Id, string Name, string Effect, int Count, int Price, bool CanFeed, bool CanBuy)
     {
         public string CountText => Count.ToString();
@@ -44,8 +48,8 @@ public partial class PetArenaView : System.Windows.Controls.UserControl
     }
     private sealed record FriendRow(Peer Peer, string Name, PetAppearance Appearance, bool Pending)
     {
-        public string ActionText => Pending ? "Cancel" : "Battle";
-        public string ActionName => (Pending ? "Cancel challenge to " : "Battle ") + Name;
+        public string ActionText => Pending ? "Cancel" : "Duel";
+        public string ActionName => (Pending ? "Cancel duel challenge to " : "Invite ") + Name + (Pending ? "" : " to a duel");
     }
 
     private sealed class StagePet
@@ -72,7 +76,6 @@ public partial class PetArenaView : System.Windows.Controls.UserControl
     private PetBattleSession? session;
     private readonly Queue<IReadOnlyList<BattleEvent>> pending = new();
     private bool playing;
-    private bool loadingElement;
     private string? lastOpponentPeer;
 
     public PetArenaView(MainViewModel model)
@@ -81,11 +84,12 @@ public partial class PetArenaView : System.Windows.Controls.UserControl
         this.model = model;
         arena = model.Arena;
         DataContext = model;
-        arena.EnsureStarterGear();
+        arena.EnsureStarted();
 
         left = new StagePet { Visual = LeftPet, Move = LeftMove, Facing = 1 };
         right = new StagePet { Visual = RightPet, Move = RightMove, Facing = -1 };
-        ElementBox.ItemsSource = PetGame.Elements;
+        CollectionFilter.ItemsSource = CollectionFilters.Select(f => f.Name).ToList();
+        CollectionFilter.SelectedIndex = 0;
         InviteList.ItemsSource = arena.Invites;
 
         arena.PropertyChanged += ArenaChanged;
@@ -95,7 +99,7 @@ public partial class PetArenaView : System.Windows.Controls.UserControl
         anim.Tick += (_, _) => Animate();
         slow.Tick += (_, _) =>
         {
-            if (LobbyPanel.IsVisible) { RefreshFriends(); RefreshFullness(); }
+            if (LobbyPanel.IsVisible) RefreshFriends();
             RefreshBattleControls();
         };
         // The module only animates while it is on screen.
@@ -128,80 +132,70 @@ public partial class PetArenaView : System.Windows.Controls.UserControl
     {
         if ((e.PropertyName == nameof(PetArena.Current) && arena.Current is null) || (e.PropertyName == nameof(PetArena.CurrentCard) && arena.CurrentCard is null)) ShowLobby();
         else if (LobbyPanel.Visibility == Visibility.Visible) RefreshLobby();
-        else CoinsText.Text = $"{arena.Progress.Coins:N0} coins";
     }
 
-    // LAN battles are parked for now, so incoming challenges stay out of the lobby.
-    private void InvitesChanged(object? sender, NotifyCollectionChangedEventArgs e) { }
+    private void InvitesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        InvitesSection.Visibility = arena.Invites.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
 
     // ── Lobby ────────────────────────────────────────────────────────────
 
     private void RefreshLobby()
     {
         var p = arena.Progress;
-        CoinsText.Text = $"{p.Coins:N0} coins";
         MyNameText.Text = model.Settings.DisplayName;
-        LevelText.Text = $"Level {p.Level}";
         var element = PetGame.ElementOf(p.Element);
         ElementBadgeText.Text = element.Name;
         ElementBadge.Background = BrushOf(element.Color);
+        MatchupText.Text = $"Strong vs {Names(PetGame.BeatenBy(p.Element))} · Weak to {Names(PetGame.WeakTo(p.Element))}";
         int need = PetGame.XpToNext(p.Level);
-        XpText.Text = p.Level >= PetGame.MaxLevel ? "Max" : $"{p.Xp} / {need}";
+        XpText.Text = p.Level >= PetGame.MaxLevel ? "Max" : $"{p.Xp} / {need} XP";
         SetBar(XpFill, XpTrack, p.Level >= PetGame.MaxLevel ? 1 : p.Xp / (double)need);
-        RefreshFullness();
-        RecordText.Text = $"{p.Wins} wins · {p.Losses} losses · {p.Draws} draws";
+        int nextPoint = PetGame.NextBonusLevel(p.Level);
+        NextPointText.Text = nextPoint > 0 ? $"Next stat point at level {nextPoint}" : $"All {PetGame.MaxBonusPoints} stat points earned";
+        RecordText.Text = $"{p.CardWins} wins · {p.CardLosses} losses";
         BoostText.Text = p.Boost switch { "power" => "Power boost ready", "guard" => "Guard boost ready", "speed" => "Speed boost ready", _ => "" };
         BoostText.Visibility = p.Boost.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
 
-        loadingElement = true;
-        ElementBox.SelectedValue = p.Element;
-        loadingElement = false;
 
         int free = PetGame.FreePoints(p);
-        PointsTitle.Text = free > 0 ? $"Stats · {free} points" : "Stats";
-        ResetPointsButton.IsEnabled = PetGame.SpentPoints(p) > 0;
+        bool busy = arena.CurrentCard is { Finished: false };
+        PointsTitle.Text = free > 0 ? $"Stats · {free} to place" : $"Stats · {PetGame.SpentPoints(p)}/{PetGame.MaxBonusPoints} bonus";
+        ResetPointsButton.IsEnabled = PetGame.SpentPoints(p) > 0 && !busy;
+        RerollButton.Content = $"Re-roll · {PetGame.RerollPrice}";
+        RerollButton.IsEnabled = p.Coins >= PetGame.RerollPrice && !busy;
         StatRows.ItemsSource = new[]
         {
-            new StatRow("power", "Power", p.Power, free > 0),
-            new StatRow("guard", "Guard", p.Guard, free > 0),
-            new StatRow("speed", "Speed", p.Speed, free > 0),
-            new StatRow("vitality", "Vitality", p.Vitality, free > 0)
+            new StatRow("power", "Power", PetCards.TotalPower(p), p.Power, free > 0),
+            new StatRow("guard", "Guard", PetCards.TotalGuard(p), p.Guard, free > 0),
+            new StatRow("speed", "Speed", PetCards.TotalSpeed(p), p.Speed, free > 0),
+            new StatRow("vitality", "Vitality", PetCards.TotalVitality(p), p.Vitality, free > 0)
         };
-        var stats = PetGame.StatsFor(PetGame.CardFor(p, "", "", DateTime.UtcNow));
-        StatsLine.Text = $"HP {stats.MaxHp} · ATK {stats.Attack} · DEF {stats.Defense} · SPD {stats.Speed}";
+        StatsLine.Text = $"{PetCards.MaxHpFor(PetCards.TotalVitality(p))} HP";
 
-        bool full = arena.Fullness >= 100;
-        FoodList.ItemsSource = PetGame.Foods.Select(f =>
-        {
-            int count = PetGame.FoodCount(p, f.Id);
-            string effect = f.Boost.Length > 0 ? char.ToUpperInvariant(f.Boost[0]) + f.Boost[1..] + " boost"
-                : f.Xp < 0 ? "Level up" : f.Xp > 0 ? $"+{f.Xp} XP" : $"+{f.Fullness} full";
-            return new FoodRow(f.Id, f.Name, effect, count, f.Price, count > 0 && !(full && f.Xp == 0 && f.Boost.Length == 0), p.Coins >= f.Price);
-        }).ToList();
         DailyButton.IsEnabled = p.LastDailyDay != DateTime.Now.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
 
         StatusText.Text = arena.Status;
         StatusText.Visibility = arena.Status.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         RefreshFriends();
-        RefreshGear();
+        RefreshCards();
     }
 
-    private void RefreshFullness()
-    {
-        int full = arena.Fullness;
-        FullText.Text = full < PetGame.HungryBelow ? $"{full}% · Hungry" : $"{full}%";
-        SetBar(FullFill, FullTrack, full / 100.0);
-    }
+    private static string Names(IEnumerable<string> elements) => string.Join(", ", elements.Select(e => PetGame.ElementOf(e).Name));
 
     private void RefreshFriends()
     {
         var rows = arena.BattleFriends.Select(peer => new FriendRow(peer, peer.Name,
-            PetAppearance.FromWireCode(peer.PetCode) ?? PetAppearance.Default, arena.ChallengePeerId == peer.Id)).ToList();
+            PetAppearance.FromWireCode(peer.PetCode) ?? PetAppearance.Default,
+            arena.CardChallengePeerId == peer.Id || arena.ChallengePeerId == peer.Id)).ToList();
         if (FriendList.ItemsSource is not List<FriendRow> old || !old.SequenceEqual(rows)) FriendList.ItemsSource = rows;
         NoFriendsText.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        InvitesSection.Visibility = arena.Invites.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private const string BarTag = "bar";
+    private const string HpBarTag = "hpbar";
 
     /// <summary>
     /// Sizes a progress bar. The fraction is kept on the fill, and a hidden or not-yet-measured track applies it when it
@@ -219,17 +213,65 @@ public partial class PetArenaView : System.Windows.Controls.UserControl
         if (width > 0) fill.Width = width * (double)fill.Tag;
     }
 
+    /// <summary>
+    /// Updates a battle HP bar: player is green/amber/red, enemy is always red, and taking damage flashes a bright
+    /// white trail at the old HP before smoothly draining down to the new width.
+    /// </summary>
+    private static void SetHpBar(Border fill, Border trail, Border track, double fraction, bool isEnemy, bool instant = false)
+    {
+        double next = Math.Clamp(double.IsFinite(fraction) ? fraction : 0, 0, 1);
+        double prev = fill.Tag is double old ? old : next;
+        fill.Tag = next;
+        fill.Background = isEnemy
+            ? (next > .5 ? BrushOf("#EF4444") : next > .25 ? BrushOf("#DC2626") : BrushOf("#B91C1C"))
+            : (next > .5 ? BrushOf("#22C55E") : next > .25 ? BrushOf("#F59E0B") : BrushOf("#EF4444"));
+        if (!Equals(track.Tag, HpBarTag))
+        {
+            track.Tag = HpBarTag;
+            track.SizeChanged += (_, _) =>
+            {
+                if (fill.Tag is not double f) return;
+                double w = Math.Max(0, track.ActualWidth - 2) * f;
+                fill.BeginAnimation(WidthProperty, null);
+                trail.BeginAnimation(WidthProperty, null);
+                fill.Width = w;
+                trail.Width = w;
+            };
+        }
+        double fullWidth = Math.Max(0, track.ActualWidth - 2);
+        if (fullWidth <= 0) return;
+        double targetW = fullWidth * next;
+        double startW = fullWidth * prev;
+        if (!instant && next < prev)
+        {
+            fill.BeginAnimation(WidthProperty, null);
+            fill.Width = targetW;
+            trail.Background = System.Windows.Media.Brushes.White;
+            trail.Opacity = 1;
+            double fromW = Math.Max(trail.Width, startW);
+            trail.BeginAnimation(WidthProperty, null);
+            trail.Width = fromW;
+            var drain = new DoubleAnimation(fromW, targetW, TimeSpan.FromMilliseconds(420))
+            {
+                BeginTime = TimeSpan.FromMilliseconds(160),
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+            };
+            trail.BeginAnimation(WidthProperty, drain);
+        }
+        else
+        {
+            fill.BeginAnimation(WidthProperty, null);
+            trail.BeginAnimation(WidthProperty, null);
+            fill.Width = targetW;
+            trail.Width = targetW;
+        }
+    }
+
     private static SolidColorBrush BrushOf(string hex)
     {
         var b = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
         b.Freeze();
         return b;
-    }
-
-    private void ElementBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (loadingElement || ElementBox.SelectedValue is not string id || id == arena.Progress.Element) return;
-        arena.SetElement(id);
     }
 
     private void AddPoint_Click(object sender, RoutedEventArgs e) { if (sender is FrameworkElement { Tag: string key }) arena.AddPoint(key); }
@@ -261,8 +303,8 @@ public partial class PetArenaView : System.Windows.Controls.UserControl
     private async void Challenge_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not FrameworkElement { Tag: FriendRow row }) return;
-        if (row.Pending) await arena.CancelChallengeAsync();
-        else await arena.ChallengeAsync(row.Peer);
+        if (row.Pending) { await arena.CancelCardChallengeAsync(); await arena.CancelChallengeAsync(); }
+        else await arena.ChallengeCardDuelAsync(row.Peer);
         RefreshFriends();
     }
 
@@ -323,13 +365,14 @@ public partial class PetArenaView : System.Windows.Controls.UserControl
         LeftLevel.Text = $"Lv {s.Me.Card.Level} · {PetGame.ElementOf(s.Me.Card.Element).Name}";
         RightLevel.Text = $"Lv {s.Them.Card.Level} · {PetGame.ElementOf(s.Them.Card.Element).Name}";
         LogText.Text = s.IsPractice ? $"{s.OpponentName} appears!" : $"{s.OpponentName} is ready!";
+        PaintTerrain(s.Them.Card.Element, "", s.Them.Card.Level, false);
         LeaveButton.Visibility = Visibility.Visible;
         StrikeButton.Content = "Strike";
         SpecialButton.Content = PetGame.ElementOf(s.Me.Card.Element).Special;
         GuardButton.Content = "Guard";
         HealButton.Content = "Heal";
         UltimateButton.Content = "Ultimate";
-        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () => { LayoutStage(); UpdateBars(); });
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () => { LayoutStage(); UpdateBars(instant: true); });
         RefreshBattleControls();
         if (s.Finished) ShowResult();
     }
@@ -389,9 +432,11 @@ public partial class PetArenaView : System.Windows.Controls.UserControl
     {
         if (cardSession is not null)
         {
+            string? duelPeerId = cardSession.PeerId;
             arena.DismissCardBattle();
             ShowLobby();
-            arena.StartCardBattle();
+            if (duelPeerId is null) arena.StartCardBattle();
+            else if (model.Peers.FirstOrDefault(p => p.Id == duelPeerId) is { } peer) await arena.ChallengeCardDuelAsync(peer);
             return;
         }
         string? peerId = lastOpponentPeer;
@@ -422,21 +467,30 @@ public partial class PetArenaView : System.Windows.Controls.UserControl
     private void CenterResult()
     {
         ResultCard.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        Canvas.SetLeft(ResultCard, (Stage.ActualWidth - ResultCard.DesiredSize.Width) / 2);
-        Canvas.SetTop(ResultCard, Math.Max(8, Stage.ActualHeight * .12));
+        Canvas.SetLeft(ResultCard, Math.Max(0, (Stage.ActualWidth - ResultCard.DesiredSize.Width) / 2));
+        Canvas.SetTop(ResultCard, Math.Max(4, (Stage.ActualHeight - ResultCard.DesiredSize.Height) / 2));
     }
+
+    // The stage is drawn at a reference size and scaled to fit, so the fight reads the same at any window size.
+    private const double StageRefWidth = 560, StageRefHeight = 300;
+    private double StageScale => WorldScale.ScaleX > 0 ? WorldScale.ScaleX : 1;
+    private double StageW => Stage.ActualWidth / StageScale;
+    private double StageH => Stage.ActualHeight / StageScale;
 
     private void Stage_SizeChanged(object sender, SizeChangedEventArgs e) { LayoutStage(); if (ResultCard.Visibility == Visibility.Visible) CenterResult(); }
 
     private void LayoutStage()
     {
-        double w = Stage.ActualWidth, h = Stage.ActualHeight;
-        if (w <= 0) return;
+        if (Stage.ActualWidth <= 0 || Stage.ActualHeight <= 0) return;
+        double scale = Math.Clamp(Math.Min(Stage.ActualHeight / StageRefHeight, Stage.ActualWidth / StageRefWidth), .3, 1.5);
+        WorldScale.ScaleX = WorldScale.ScaleY = scale;
+        double w = StageW, h = StageH;
         double ground = h * .68 + 44;
         Canvas.SetLeft(LeftPet, w * .25 - LeftPet.Width / 2);
         Canvas.SetTop(LeftPet, ground - LeftPet.Height);
         Canvas.SetLeft(RightPet, w * .75 - RightPet.Width / 2);
         Canvas.SetTop(RightPet, ground - RightPet.Height);
+        RedrawTerrain();
     }
 
     private Point CenterOf(StagePet pet)
@@ -450,18 +504,17 @@ public partial class PetArenaView : System.Windows.Controls.UserControl
         return new(Canvas.GetLeft(pet.Visual) + pet.Visual.Width / 2 + pet.Move.X, Canvas.GetTop(pet.Visual) + pet.Visual.Height * .62 + pet.Move.Y);
     }
 
-    private void UpdateBars()
+    private void UpdateBars(bool instant = false)
     {
         if (session is not { } s) return;
-        foreach (var (pet, fill, track, text, charge, chargeTrack, status, fighter) in new[]
+        foreach (var (pet, fill, trail, track, text, charge, chargeTrack, status, fighter, isEnemy) in new[]
         {
-            (left, LeftHpFill, LeftHpTrack, LeftHpText, LeftChargeFill, LeftChargeTrack, LeftStatus, s.Me),
-            (right, RightHpFill, RightHpTrack, RightHpText, RightChargeFill, RightChargeTrack, RightStatus, s.Them)
+            (left, LeftHpFill, LeftHpTrail, LeftHpTrack, LeftHpText, LeftChargeFill, LeftChargeTrack, LeftStatus, s.Me, false),
+            (right, RightHpFill, RightHpTrail, RightHpTrack, RightHpText, RightChargeFill, RightChargeTrack, RightStatus, s.Them, true)
         })
         {
             double frac = pet.MaxHp > 0 ? pet.ShownHp / (double)pet.MaxHp : 0;
-            SetBar(fill, track, frac);
-            fill.Background = frac > .5 ? BrushOf("#22C55E") : frac > .25 ? BrushOf("#F59E0B") : BrushOf("#EF4444");
+            SetHpBar(fill, trail, track, frac, isEnemy, instant);
             text.Text = $"{pet.ShownHp} / {pet.MaxHp}";
             SetBar(charge, chargeTrack, fighter.Charge / (double)PetGame.MaxCharge);
             var tags = new List<string>();
@@ -804,11 +857,11 @@ public partial class PetArenaView : System.Windows.Controls.UserControl
         for (int i = 0; i < 46; i++)
         {
             var bit = new Rectangle { Width = 6, Height = 10, Fill = new SolidColorBrush(colors[i % colors.Length]), RenderTransformOrigin = new Point(.5, .5), RenderTransform = new RotateTransform(rnd.Next(360)) };
-            double x = rnd.NextDouble() * Stage.ActualWidth;
+            double x = rnd.NextDouble() * StageW;
             Canvas.SetLeft(bit, x); Canvas.SetTop(bit, -12);
             FxLayer.Children.Add(bit);
             var dur = TimeSpan.FromMilliseconds(1400 + rnd.Next(1200));
-            var fall = new DoubleAnimation(-12, Stage.ActualHeight + 12, dur) { BeginTime = TimeSpan.FromMilliseconds(rnd.Next(500)) };
+            var fall = new DoubleAnimation(-12, StageH + 12, dur) { BeginTime = TimeSpan.FromMilliseconds(rnd.Next(500)) };
             fall.Completed += (_, _) => FxLayer.Children.Remove(bit);
             bit.BeginAnimation(Canvas.TopProperty, fall);
             bit.BeginAnimation(Canvas.LeftProperty, new DoubleAnimation(x, x + rnd.Next(-60, 60), dur));
@@ -835,8 +888,7 @@ public partial class PetArenaView : System.Windows.Controls.UserControl
             if (lobbyHop > 0) { lobbyHop += dt * 2.1; if (lobbyHop >= 1) lobbyHop = 0; }
             if (DateTime.UtcNow > lobbyMoodUntil)
             {
-                string mood = arena.Fullness < PetGame.HungryBelow ? PetMood.Hungry : "";
-                MyPetVisual.SetMood(mood);
+                MyPetVisual.SetMood("");
                 MyPetVisual.SetHeldFood("");
             }
             MyPetVisual.SetMotionState(breath, blink, lobbyHop, 0, 1, false, false, false, true, false, "chat");
@@ -851,10 +903,12 @@ public partial class PetArenaView : System.Windows.Controls.UserControl
                 : pet.MaxHp > 0 && pet.ShownHp * 100 / pet.MaxHp < 30 ? PetMood.Nervous
                 : "";
             if (pet.Fainted && DateTime.UtcNow < pet.TempUntil && pet.TempMood == PetMood.Crying) mood = PetMood.Crying;
+            mood = StatusMood(pet, mood);
             pet.Visual.SetMood(mood);
             pet.Visual.SetPose(pet.Spin, pet.Lift);
             pet.Visual.SetMotionState(breath, blink, pet.Hop, 0, pet.Facing, false, false, false, true, false, "chat");
         }
+        StatusAuras();
     }
 
 

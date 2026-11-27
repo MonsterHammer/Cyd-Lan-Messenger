@@ -621,7 +621,7 @@
                         Margin="8,0,8,0" Height="132" ClipToBounds="True" Cursor="Hand" MouseLeftButtonDown="SidebarPet_Click">
                   <local:FloatingPetVisual x:Name="SidebarPetVisual" Width="150" Height="124" VerticalAlignment="Bottom" PetStyle="{Binding PetAppearance}"/>
                 </Border>
-                <Button Content="Card battle" Style="{StaticResource Primary}" HorizontalAlignment="Stretch" Margin="8,12,8,0" Padding="0,8" Click="PetsCardBattle_Click"/>
+                <Button Content="Card battle" Style="{StaticResource Primary}" HorizontalAlignment="Stretch" Margin="8,12,8,0" Padding="0,8" Click="PetsCardBattle_Click" IsEnabled="{Binding PetDeckReady}"/>
                 <Button Content="Customize pet" Style="{StaticResource Secondary}" HorizontalAlignment="Stretch" Margin="8,8,8,0" Click="PetsCustomize_Click"/>
               </StackPanel>
               <StackPanel Margin="8,0" Visibility="{Binding IsRemindersSection, Converter={StaticResource Bool}}">
@@ -743,6 +743,30 @@
                           </Style>
                         </TextBlock.Style>
                       </TextBlock>
+                      <StackPanel Orientation="Horizontal" Margin="0,4,0,0" Visibility="{Binding IsPetsSection, Converter={StaticResource Bool}}">
+                        <Border CornerRadius="9" Padding="8,1" Margin="0,0,6,0" Background="{DynamicResource AccentSoft}">
+                          <TextBlock Text="{Binding PetLevelText}" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource Accent}"/>
+                        </Border>
+                        <Border CornerRadius="9" Padding="8,1" Margin="0,0,6,0" Background="{DynamicResource AccentSoft}">
+                          <TextBlock Text="{Binding PetCoinsText}" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource Accent}"/>
+                        </Border>
+                        <Border CornerRadius="9" Padding="8,1">
+                          <Border.Style>
+                            <Style TargetType="Border">
+                              <Setter Property="Background" Value="{DynamicResource AccentSoft}"/>
+                              <Style.Triggers><DataTrigger Binding="{Binding PetDeckReady}" Value="False"><Setter Property="Background" Value="#33EF4444"/></DataTrigger></Style.Triggers>
+                            </Style>
+                          </Border.Style>
+                          <TextBlock Text="{Binding PetDeckText}" FontSize="11.5" FontWeight="SemiBold">
+                            <TextBlock.Style>
+                              <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+                                <Style.Triggers><DataTrigger Binding="{Binding PetDeckReady}" Value="False"><Setter Property="Foreground" Value="#EF4444"/></DataTrigger></Style.Triggers>
+                              </Style>
+                            </TextBlock.Style>
+                          </TextBlock>
+                        </Border>
+                      </StackPanel>
                     </StackPanel>
                   </DockPanel>
                   <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0" Visibility="{Binding ChatOpen, Converter={StaticResource Bool}}"><Border x:Name="SearchPill" Width="32" Height="32" CornerRadius="{DynamicResource ControlCorner}" Background="Transparent" Margin="0,0,2,0" ClipToBounds="True">
