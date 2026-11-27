@@ -1,18 +1,25 @@
 using System.IO;
 using System.IO.Compression;
-using System.Text;
+using System.Text.RegularExpressions;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Windows;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using CydLan.Core;
+using Color = System.Windows.Media.Color;
 
 namespace CydLan.Desktop;
 
 /// <summary>Encodes, decodes, randomizes, and resets full CydLan appearance configurations.</summary>
-public static class AppearanceCodec
+public static partial class AppearanceCodec
 {
     public const string Prefix = "CYDLAN1:";
-    private const int MaxCodeLength = 8192;
-    private const int MaxDecompressedBytes = 16384;
+    public const int MaxCodeLength = 32000;
+    private const int ShareableCodeTargetLength = 28000;
+    private const int MaxDecompressedBytes = 65536;
+    private const int MaxBackgroundImageChars = 24000;
+    private const int MaxBackgroundPixelDimension = 4096;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -38,6 +45,16 @@ public static class AppearanceCodec
         public double? CanvasGradientIntensity { get; set; }
         public bool? SeamlessComposer { get; set; }
         public double? BgBlur { get; set; }
+        public double? BgOpacity { get; set; }
+        public string? BgFade { get; set; }
+        public double? BgFadeStrength { get; set; }
+        public string? BgImage { get; set; }
+        public double? BgDim { get; set; }
+        public double? BgScale { get; set; }
+        public string? BgFit { get; set; }
+        public string? BgAnchor { get; set; }
+        public bool? BgGrayscale { get; set; }
+        public bool? AnimUnfocused { get; set; }
         public string? CornerStyle { get; set; }
         public string? AvatarShape { get; set; }
         public bool? OnlineRing { get; set; }
@@ -185,6 +202,25 @@ public static class AppearanceCodec
         public double? ButtonLiftIntensity { get; set; }
         public bool? ButtonSpark { get; set; }
         public double? ButtonSparkIntensity { get; set; }
+        public string? PetBody { get; set; }
+        public string? PetEars { get; set; }
+        public string? PetEyes { get; set; }
+        public string? PetBrows { get; set; }
+        public string? PetMouth { get; set; }
+        public string? PetCheeks { get; set; }
+        public string? PetGlasses { get; set; }
+        public string? PetHat { get; set; }
+        public string? PetOutfit { get; set; }
+        public string? PetBack { get; set; }
+        public string? PetProp { get; set; }
+        public string? PetAura { get; set; }
+        public string? PetFeet { get; set; }
+        public string? PetPattern { get; set; }
+        public string? PetVibe { get; set; }
+        public string? PetBodyColor { get; set; }
+        public string? PetAccentColor { get; set; }
+        public string? PetDetailColor { get; set; }
+        public double? PetSize { get; set; }
     }
 
     public static LookData Capture(AppSettings s) => new()
@@ -206,6 +242,14 @@ public static class AppearanceCodec
         CanvasGradientIntensity = ChatCanvasOverlay.Normalize(s.ChatCanvasGradient) != ChatCanvasOverlay.Off ? Round2(s.ChatCanvasGradientIntensity) : null,
         SeamlessComposer = s.SeamlessComposerEnabled ? true : null,
         BgBlur = s.ChatBackgroundBlur > .1 ? Math.Round(Math.Clamp(s.ChatBackgroundBlur, 0, 24), 1) : null,
+        BgFade = NonDefault(BackgroundSideTransition.Normalize(s.ChatBackgroundTransition), BackgroundSideTransition.Off),
+        BgFadeStrength = BackgroundSideTransition.Normalize(s.ChatBackgroundTransition) != BackgroundSideTransition.Off ? Round2(s.ChatBackgroundTransitionStrength) : null,
+        BgDim = s.ChatBackgroundDim > .005 ? Math.Round(Math.Clamp(s.ChatBackgroundDim, 0, .80), 2) : null,
+        BgScale = Math.Abs(s.ChatBackgroundScale - 1.0) > .01 ? Math.Round(Math.Clamp(s.ChatBackgroundScale, 1.0, 1.6), 2) : null,
+        BgFit = NonDefault(NormalizeBgFit(s.ChatBackgroundFit), "fill"),
+        BgAnchor = NonDefault(BackgroundAnchor.Normalize(s.ChatBackgroundAnchor), BackgroundAnchor.Center),
+        BgGrayscale = s.ChatBackgroundGrayscale ? true : null,
+        AnimUnfocused = s.AnimateWhenUnfocused ? true : null,
         CornerStyle = NonDefault(AppearanceOptions.NormalizeCornerStyle(s.CornerStyle), AppearanceOptions.Default),
         AvatarShape = NonDefault(AppearanceOptions.NormalizeAvatarShape(s.AvatarShape), AppearanceOptions.Default),
         OnlineRing = s.OnlineRingEnabled ? true : null,
@@ -352,7 +396,26 @@ public static class AppearanceCodec
         ButtonLift = s.ButtonLiftEnabled ? true : null,
         ButtonLiftIntensity = s.ButtonLiftEnabled ? Round2(s.ButtonLiftIntensity) : null,
         ButtonSpark = s.ButtonSparkEnabled ? true : null,
-        ButtonSparkIntensity = s.ButtonSparkEnabled ? Round2(s.ButtonSparkIntensity) : null
+        ButtonSparkIntensity = s.ButtonSparkEnabled ? Round2(s.ButtonSparkIntensity) : null,
+        PetBody = NonDefault(FloatingPetStyle.NormalizeBody(s.PetBody), PetAppearance.Default.Body),
+        PetEars = NonDefault(FloatingPetStyle.NormalizeEars(s.PetEars), PetAppearance.Default.Ears),
+        PetEyes = NonDefault(FloatingPetStyle.NormalizeEyes(s.PetEyes), PetAppearance.Default.Eyes),
+        PetBrows = NonDefault(FloatingPetStyle.NormalizeBrows(s.PetBrows), PetAppearance.Default.Brows),
+        PetMouth = NonDefault(FloatingPetStyle.NormalizeMouth(s.PetMouth), PetAppearance.Default.Mouth),
+        PetCheeks = NonDefault(FloatingPetStyle.NormalizeCheeks(s.PetCheeks), PetAppearance.Default.Cheeks),
+        PetGlasses = NonDefault(FloatingPetStyle.NormalizeGlasses(s.PetGlasses), PetAppearance.Default.Glasses),
+        PetHat = NonDefault(FloatingPetStyle.NormalizeHat(s.PetHat), PetAppearance.Default.Hat),
+        PetOutfit = NonDefault(FloatingPetStyle.NormalizeOutfit(s.PetOutfit), PetAppearance.Default.Outfit),
+        PetBack = NonDefault(FloatingPetStyle.NormalizeBack(s.PetBack), PetAppearance.Default.Back),
+        PetProp = NonDefault(FloatingPetStyle.NormalizeProp(s.PetProp), PetAppearance.Default.Prop),
+        PetAura = NonDefault(FloatingPetStyle.NormalizeAura(s.PetAura), PetAppearance.Default.Aura),
+        PetFeet = NonDefault(FloatingPetStyle.NormalizeFeet(s.PetFeet), PetAppearance.Default.Feet),
+        PetPattern = NonDefault(FloatingPetStyle.NormalizePattern(s.PetPattern), PetAppearance.Default.Pattern),
+        PetVibe = NonDefault(FloatingPetStyle.NormalizeVibe(s.PetVibe), PetAppearance.Default.Vibe),
+        PetBodyColor = NormalizeHexOrNull(s.PetBodyColor),
+        PetAccentColor = NormalizeHexOrNull(s.PetAccentColor),
+        PetDetailColor = NormalizeHexOrNull(s.PetDetailColor),
+        PetSize = Math.Abs(FloatingPetStyle.ClampSize(s.PetSize) - 1.0) > .01 ? FloatingPetStyle.ClampSize(s.PetSize) : null
     };
 
     public static string Encode(LookData data)
@@ -365,7 +428,227 @@ public static class AppearanceCodec
         return Prefix + b64;
     }
 
-    public static string Encode(AppSettings settings) => Encode(Capture(settings));
+    public static string NormalizeBgFit(string? value) => value?.Trim().ToLowerInvariant() switch
+    {
+        "fit" => "fit",
+        "stretch" => "stretch",
+        "center" => "center",
+        _ => "fill"
+    };
+
+    public static string Encode(AppSettings settings) => Encode(settings, null, null);
+
+    public static string Encode(AppSettings settings, BitmapSource? backgroundImage) =>
+        Encode(settings, backgroundImage, null);
+
+    public static string Encode(AppSettings settings, BitmapSource? backgroundImage, byte[]? backgroundBytes)
+    {
+        var data = Capture(settings);
+        byte[]? rawGif = backgroundBytes is { Length: > 0 } && Images.HasGifSignature(backgroundBytes)
+            ? backgroundBytes
+            : TryLoadSavedGifBytes(settings.ChatBackgroundPath);
+
+        BitmapSource? bg = backgroundImage;
+        if (bg is null && rawGif is not null)
+            bg = Images.LoadChatBackgroundFromBytes(rawGif);
+        if (bg is null && !string.IsNullOrWhiteSpace(settings.ChatBackgroundPath))
+            bg = Images.LoadChatBackground(settings.ChatBackgroundPath);
+
+        if (bg is not null || rawGif is not null)
+        {
+            double opacity = double.IsFinite(settings.ChatBackgroundOpacity)
+                ? Math.Clamp(settings.ChatBackgroundOpacity, .10, 1.0)
+                : .26;
+            data.BgOpacity = Round2(opacity);
+            if (!(rawGif is not null && TryAttachGifBytes(data, rawGif)) && bg is not null)
+                AttachBackgroundImage(data, bg);
+        }
+
+        return Encode(data);
+    }
+
+    private static byte[]? TryLoadSavedGifBytes(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return null;
+        try
+        {
+            if (!File.Exists(path)) return null;
+            var info = new FileInfo(path);
+            if (info.Length == 0 || info.Length > 2 * 1024 * 1024) return null;
+            byte[] bytes = File.ReadAllBytes(path);
+            return Images.HasGifSignature(bytes) ? bytes : null;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            return null;
+        }
+    }
+
+    private static bool TryAttachGifBytes(LookData data, byte[] rawGif)
+    {
+        if (AnimatedGifSequence.TryLoadFromBytes(rawGif) is null) return false;
+        string b64 = Convert.ToBase64String(rawGif);
+        if (b64.Length > MaxBackgroundImageChars) return false;
+        data.BgImage = b64;
+        if (Encode(data).Length <= MaxCodeLength) return true;
+        data.BgImage = null;
+        return false;
+    }
+
+    private static void AttachBackgroundImage(LookData data, BitmapSource source)
+    {
+        if (source.PixelWidth <= 0 || source.PixelHeight <= 0) return;
+
+        foreach (string candidate in EncodeBackgroundCandidates(source))
+        {
+            if (candidate.Length > MaxBackgroundImageChars) continue;
+            data.BgImage = candidate;
+            string encoded = Encode(data);
+            if (encoded.Length <= ShareableCodeTargetLength) return;
+        }
+
+        // Last-chance fit under hard MaxCodeLength if other look properties were exceptionally dense.
+        foreach (string candidate in EncodeBackgroundCandidates(source).Reverse())
+        {
+            if (candidate.Length > MaxBackgroundImageChars) continue;
+            data.BgImage = candidate;
+            if (Encode(data).Length <= MaxCodeLength) return;
+        }
+
+        data.BgImage = null;
+    }
+
+    private static IEnumerable<string> EncodeBackgroundCandidates(BitmapSource source)
+    {
+        // Fast check: simple illustrations / transparent patterns can compress tightly as PNG.
+        if (TryScaleImage(source, 640) is { } pngScaled)
+        {
+            byte[] png = EncodePngBytes(pngScaled);
+            if (png.Length <= 15000)
+                yield return Convert.ToBase64String(png);
+        }
+
+        BitmapSource opaque = FlattenToOpaqueBitmap(source);
+        foreach (var (maxSide, quality) in new[]
+        {
+            (960, 72),
+            (960, 58),
+            (800, 50),
+            (720, 44),
+            (640, 38),
+            (512, 32),
+            (400, 26),
+            (320, 20),
+            (240, 16)
+        })
+        {
+            BitmapSource scaled = TryScaleImage(opaque, maxSide) ?? opaque;
+            byte[] jpeg = EncodeJpegBytes(scaled, quality);
+            if (jpeg.Length <= 20000)
+                yield return Convert.ToBase64String(jpeg);
+        }
+    }
+
+    private static BitmapSource? TryScaleImage(BitmapSource source, int maxSide)
+    {
+        int w = source.PixelWidth;
+        int h = source.PixelHeight;
+        if (w <= 0 || h <= 0) return null;
+        int longest = Math.Max(w, h);
+        if (longest <= maxSide) return source;
+        double scale = (double)maxSide / longest;
+        var scaled = new TransformedBitmap(source, new ScaleTransform(scale, scale));
+        scaled.Freeze();
+        return scaled;
+    }
+
+    private static BitmapSource FlattenToOpaqueBitmap(BitmapSource source)
+    {
+        if (source.Format == PixelFormats.Bgr32 || source.Format == PixelFormats.Bgr24) return source;
+        Color backdrop = Color.FromRgb(0x14, 0x18, 0x1F);
+        if (System.Windows.Application.Current?.Resources["Canvas"] is SolidColorBrush canvasBrush)
+            backdrop = canvasBrush.Color;
+
+        int w = Math.Max(1, source.PixelWidth);
+        int h = Math.Max(1, source.PixelHeight);
+        var visual = new DrawingVisual();
+        using (var dc = visual.RenderOpen())
+        {
+            dc.DrawRectangle(new SolidColorBrush(backdrop), null, new Rect(0, 0, w, h));
+            dc.DrawImage(source, new Rect(0, 0, w, h));
+        }
+        var flattened = new RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
+        flattened.Render(visual);
+        var bgr = new FormatConvertedBitmap(flattened, PixelFormats.Bgr32, null, 0);
+        bgr.Freeze();
+        return bgr;
+    }
+
+    private static byte[] EncodePngBytes(BitmapSource source)
+    {
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(source));
+        using var ms = new MemoryStream();
+        encoder.Save(ms);
+        return ms.ToArray();
+    }
+
+    private static byte[] EncodeJpegBytes(BitmapSource source, int quality)
+    {
+        var encoder = new JpegBitmapEncoder { QualityLevel = Math.Clamp(quality, 10, 95) };
+        encoder.Frames.Add(BitmapFrame.Create(source));
+        using var ms = new MemoryStream();
+        encoder.Save(ms);
+        return ms.ToArray();
+    }
+
+    public static (BitmapImage? StaticBitmap, byte[]? GifBytes) TryDecodeBackground(LookData data)
+    {
+        if (string.IsNullOrWhiteSpace(data.BgImage) || data.BgImage.Length > MaxBackgroundImageChars) return (null, null);
+        try
+        {
+            byte[] bytes = Convert.FromBase64String(data.BgImage);
+            if (bytes.Length == 0) return (null, null);
+            BitmapImage? image = Images.LoadChatBackgroundFromBytes(bytes);
+            if (image is null || image.PixelWidth <= 0 || image.PixelHeight <= 0 ||
+                image.PixelWidth > MaxBackgroundPixelDimension || image.PixelHeight > MaxBackgroundPixelDimension)
+                return (null, null);
+            byte[]? gif = Images.HasGifSignature(bytes) && AnimatedGifSequence.TryLoadFromBytes(bytes) is not null
+                ? bytes
+                : null;
+            return (image, gif);
+        }
+        catch (FormatException)
+        {
+            return (null, null);
+        }
+    }
+
+    public static BitmapImage? TryDecodeBackgroundImage(LookData data) => TryDecodeBackground(data).StaticBitmap;
+
+    [GeneratedRegex(@"CYDLAN1:[A-Za-z0-9\-_]+")]
+    private static partial Regex LookCodeRegex();
+
+    public static bool TryExtractLookCode(string? text, out string code, out LookData look, out string caption)
+    {
+        code = "";
+        look = new LookData();
+        caption = "";
+        if (string.IsNullOrWhiteSpace(text) || !text.Contains(Prefix, StringComparison.Ordinal)) return false;
+
+        foreach (Match match in LookCodeRegex().Matches(text))
+        {
+            if (TryDecode(match.Value, out look))
+            {
+                code = match.Value;
+                string before = text[..match.Index].Trim();
+                string after = text[(match.Index + match.Length)..].Trim();
+                caption = before.Length > 0 && after.Length > 0 ? before + "\n" + after : before.Length > 0 ? before : after;
+                return true;
+            }
+        }
+        return false;
+    }
 
     public static bool TryDecode(string? code, out LookData data)
     {
@@ -421,6 +704,15 @@ public static class AppearanceCodec
         s.ChatCanvasGradientIntensity = ClampUnit(d.CanvasGradientIntensity, .55);
         s.SeamlessComposerEnabled = d.SeamlessComposer == true;
         s.ChatBackgroundBlur = Math.Clamp(d.BgBlur ?? 0, 0, 24);
+        s.ChatBackgroundOpacity = d.BgOpacity is { } bo && double.IsFinite(bo) ? Math.Clamp(bo, .10, 1.0) : .26;
+        s.ChatBackgroundTransition = BackgroundSideTransition.Normalize(d.BgFade);
+        s.ChatBackgroundTransitionStrength = ClampUnit(d.BgFadeStrength, .55);
+        s.ChatBackgroundDim = d.BgDim is { } dim && double.IsFinite(dim) ? Math.Clamp(dim, 0, .80) : 0;
+        s.ChatBackgroundScale = d.BgScale is { } sc && double.IsFinite(sc) ? Math.Clamp(sc, 1.0, 1.6) : 1.0;
+        s.ChatBackgroundFit = NormalizeBgFit(d.BgFit);
+        s.ChatBackgroundAnchor = BackgroundAnchor.Normalize(d.BgAnchor);
+        s.ChatBackgroundGrayscale = d.BgGrayscale == true;
+        s.AnimateWhenUnfocused = d.AnimUnfocused == true;
         s.CornerStyle = AppearanceOptions.NormalizeCornerStyle(d.CornerStyle);
         s.AvatarShape = AppearanceOptions.NormalizeAvatarShape(d.AvatarShape);
         s.OnlineRingEnabled = d.OnlineRing == true;
@@ -568,6 +860,25 @@ public static class AppearanceCodec
         s.ButtonLiftIntensity = ClampUnit(d.ButtonLiftIntensity, .65);
         s.ButtonSparkEnabled = d.ButtonSpark == true;
         s.ButtonSparkIntensity = ClampUnit(d.ButtonSparkIntensity, .65);
+        s.PetBody = FloatingPetStyle.NormalizeBody(d.PetBody);
+        s.PetEars = FloatingPetStyle.NormalizeEars(d.PetEars);
+        s.PetEyes = FloatingPetStyle.NormalizeEyes(d.PetEyes);
+        s.PetBrows = FloatingPetStyle.NormalizeBrows(d.PetBrows);
+        s.PetMouth = FloatingPetStyle.NormalizeMouth(d.PetMouth);
+        s.PetCheeks = FloatingPetStyle.NormalizeCheeks(d.PetCheeks);
+        s.PetGlasses = FloatingPetStyle.NormalizeGlasses(d.PetGlasses);
+        s.PetHat = FloatingPetStyle.NormalizeHat(d.PetHat);
+        s.PetOutfit = FloatingPetStyle.NormalizeOutfit(d.PetOutfit);
+        s.PetBack = FloatingPetStyle.NormalizeBack(d.PetBack);
+        s.PetProp = FloatingPetStyle.NormalizeProp(d.PetProp);
+        s.PetAura = FloatingPetStyle.NormalizeAura(d.PetAura);
+        s.PetFeet = FloatingPetStyle.NormalizeFeet(d.PetFeet);
+        s.PetPattern = FloatingPetStyle.NormalizePattern(d.PetPattern);
+        s.PetVibe = FloatingPetStyle.NormalizeVibe(d.PetVibe);
+        s.PetBodyColor = AppearanceOptions.NormalizeHex(d.PetBodyColor);
+        s.PetAccentColor = AppearanceOptions.NormalizeHex(d.PetAccentColor);
+        s.PetDetailColor = AppearanceOptions.NormalizeHex(d.PetDetailColor);
+        s.PetSize = d.PetSize is { } ps ? FloatingPetStyle.ClampSize(ps) : 1.0;
     }
 
     public static void ResetDefaults(AppSettings s)
@@ -591,6 +902,15 @@ public static class AppearanceCodec
         s.ChatCanvasGradientIntensity = .55;
         s.SeamlessComposerEnabled = false;
         s.ChatBackgroundBlur = 0;
+        s.ChatBackgroundOpacity = .26;
+        s.ChatBackgroundTransition = BackgroundSideTransition.Off;
+        s.ChatBackgroundTransitionStrength = .55;
+        s.ChatBackgroundDim = 0;
+        s.ChatBackgroundScale = 1.0;
+        s.ChatBackgroundFit = "fill";
+        s.ChatBackgroundAnchor = BackgroundAnchor.Center;
+        s.ChatBackgroundGrayscale = false;
+        s.AnimateWhenUnfocused = false;
         s.CornerStyle = AppearanceOptions.Default;
         s.AvatarShape = AppearanceOptions.Default;
         s.OnlineRingEnabled = false;
@@ -735,6 +1055,7 @@ public static class AppearanceCodec
         s.ButtonLiftIntensity = .65;
         s.ButtonSparkEnabled = false;
         s.ButtonSparkIntensity = .65;
+        FloatingPetStyle.Apply(PetAppearance.Default, s);
     }
 
     public static LookData Randomize(Random? random = null)

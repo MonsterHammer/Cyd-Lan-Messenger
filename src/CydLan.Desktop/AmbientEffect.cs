@@ -23,7 +23,9 @@ public abstract class AmbientEffect : FrameworkElement
     private double accumulatedPhase;
 
     public static double SpeedMultiplier { get; private set; } = 1.0;
+    public static bool AnimateWhenUnfocused { get; private set; }
     internal static event Action? SpeedChanged;
+    internal static event Action? UnfocusedChanged;
 
     public static void SetSpeed(double speed)
     {
@@ -31,6 +33,13 @@ public abstract class AmbientEffect : FrameworkElement
         if (Math.Abs(SpeedMultiplier - clamped) < .001) return;
         SpeedMultiplier = clamped;
         SpeedChanged?.Invoke();
+    }
+
+    public static void SetAnimateWhenUnfocused(bool enabled)
+    {
+        if (AnimateWhenUnfocused == enabled) return;
+        AnimateWhenUnfocused = enabled;
+        UnfocusedChanged?.Invoke();
     }
 
     internal double Progress => (double)GetValue(ProgressProperty);
@@ -64,6 +73,7 @@ public abstract class AmbientEffect : FrameworkElement
         }
         SystemParameters.StaticPropertyChanged += SystemPropertyChanged;
         SpeedChanged += OnSpeedChanged;
+        UnfocusedChanged += OnUnfocusedChanged;
         UpdateAnimation();
     }
 
@@ -81,11 +91,13 @@ public abstract class AmbientEffect : FrameworkElement
         host = null;
         SystemParameters.StaticPropertyChanged -= SystemPropertyChanged;
         SpeedChanged -= OnSpeedChanged;
+        UnfocusedChanged -= OnUnfocusedChanged;
         UpdateAnimation();
     }
 
     private void HostClosed(object? sender, EventArgs e) => Detach();
     private void OnSpeedChanged() => UpdateAnimation();
+    private void OnUnfocusedChanged() => UpdateAnimation();
 
     protected virtual void OnTintChanged() { }
     protected virtual int FrameRate => 24;
@@ -108,7 +120,9 @@ public abstract class AmbientEffect : FrameworkElement
 
     private void UpdateAnimation()
     {
-        int requestedFrameRate = host is { IsActive: true, WindowState: not WindowState.Minimized } && IsVisible &&
+        int requestedFrameRate = host is { WindowState: not WindowState.Minimized } &&
+            (host.IsActive || AnimateWhenUnfocused) &&
+            IsVisible &&
             SystemParameters.ClientAreaAnimation ? (IsLargeSurface ? Math.Min(18, FrameRate) : FrameRate) : 0;
         double speed = SpeedMultiplier;
         if (activeFrameRate == requestedFrameRate && (requestedFrameRate == 0 || Math.Abs(activeSpeed - speed) < .001)) return;

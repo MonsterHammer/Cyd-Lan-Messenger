@@ -70,10 +70,12 @@ public partial class FloatingQuickChatWindow : Window
         Left = left;
         Top = top;
         lastShownUtc = DateTime.UtcNow;
-        if (model.SelectedPeer is null && model.Peers.FirstOrDefault(p => p.Online) is { } firstOnline)
-            model.SelectedPeer = firstOnline;
+        if (model.SelectedPeer is null && model.QuickChatPeers.FirstOrDefault() is { } firstActive)
+            model.SelectedPeer = firstActive;
         Show();
         Activate();
+        if (QuickPeersList.SelectedItem is { } selectedPeer)
+            QuickPeersList.ScrollIntoView(selectedPeer);
         QuickScroller.ScrollToEnd();
         QuickComposer.Focus();
     }
@@ -81,6 +83,8 @@ public partial class FloatingQuickChatWindow : Window
     private void Peer_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
         if (!IsVisible) return;
+        if (QuickPeersList.SelectedItem is { } selectedPeer)
+            QuickPeersList.ScrollIntoView(selectedPeer);
         QuickScroller.ScrollToEnd();
         QuickComposer.Focus();
         if (QuickComposer.IsKeyboardFocusWithin || QuickComposer.IsFocused)
@@ -118,6 +122,13 @@ public partial class FloatingQuickChatWindow : Window
     private async void Send_Click(object sender, RoutedEventArgs e)
     {
         if (model.CanSend) await model.SendAsync();
+        QuickComposer.Focus();
+    }
+
+    private async void ApplyLook_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: SharedLookInfo look })
+            await model.ApplyLookCodeAsync(look.Code);
         QuickComposer.Focus();
     }
 

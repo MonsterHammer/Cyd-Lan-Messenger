@@ -5,18 +5,18 @@
         Style="{StaticResource {x:Type Window}}" Title="CydLan Pet"
         WindowStyle="None" ResizeMode="NoResize" AllowsTransparency="True" Background="Transparent"
         ShowInTaskbar="False" ShowActivated="False" Topmost="True"
-        WindowStartupLocation="Manual" Width="228" Height="158">
+        WindowStartupLocation="Manual" Width="240" Height="198">
   <Window.Resources>
     <BooleanToVisibilityConverter x:Key="Bool"/>
   </Window.Resources>
   <Grid Background="Transparent">
     <Grid.RowDefinitions>
       <RowDefinition Height="*"/>
-      <RowDefinition Height="86"/>
+      <RowDefinition Height="128"/>
     </Grid.RowDefinitions>
 
-    <Border x:Name="SpeechBubble" Grid.Row="0" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="6,0,6,4"
-            MaxWidth="212" Padding="10,6" CornerRadius="{DynamicResource PanelCorner}"
+    <Border x:Name="SpeechBubble" Grid.Row="0" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="6,0,6,2"
+            MaxWidth="220" Padding="10,6" CornerRadius="{DynamicResource PanelCorner}"
             Background="{DynamicResource Sidebar}" BorderBrush="{DynamicResource Accent}" BorderThickness="1.2"
             Visibility="Collapsed" Cursor="Hand" MouseLeftButtonDown="SpeechBubble_Click">
       <StackPanel>
@@ -25,7 +25,7 @@
       </StackPanel>
     </Border>
 
-    <Grid x:Name="PetHitArea" Grid.Row="1" Width="88" Height="84" HorizontalAlignment="Center" VerticalAlignment="Bottom"
+    <Grid x:Name="PetHitArea" Grid.Row="1" Width="136" Height="124" HorizontalAlignment="Center" VerticalAlignment="Bottom"
           Margin="0,0,0,4" Cursor="Hand"
           MouseLeftButtonDown="Pet_MouseLeftButtonDown"
           MouseMove="Pet_MouseMove"
@@ -37,15 +37,16 @@
         <ContextMenu x:Name="PetContextMenu">
           <MenuItem Header="Quick chat" Click="QuickChat_Click"/>
           <MenuItem x:Name="RoamMenuItem" Header="Roam" IsCheckable="True" Click="Roam_Click"/>
+          <MenuItem Header="Customize..." Click="Customize_Click"/>
           <MenuItem Header="Open CydLan" Click="OpenApp_Click"/>
           <Separator/>
           <MenuItem Header="Hide" Click="HidePet_Click"/>
         </ContextMenu>
       </Grid.ContextMenu>
-      <Border CornerRadius="28" Background="#01000000"/>
-      <local:FloatingPetVisual x:Name="PetVisual" Width="76" Height="78" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+      <Border CornerRadius="36" Background="#01000000"/>
+      <local:FloatingPetVisual x:Name="PetVisual" Width="136" Height="124" PetStyle="{Binding PetAppearance}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
       <Border x:Name="UnreadBadge" MinWidth="20" Height="20" Padding="5,0" CornerRadius="10"
-              HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,5,1,0"
+              HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,62,24,0"
               Background="{DynamicResource Accent}" BorderBrush="{DynamicResource Canvas}" BorderThickness="1.8"
               Visibility="{Binding HasUnread, Converter={StaticResource Bool}}" IsHitTestVisible="False">
         <TextBlock Text="{Binding TotalUnread}" FontSize="10.5" FontWeight="Bold"

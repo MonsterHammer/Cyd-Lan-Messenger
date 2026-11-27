@@ -92,7 +92,14 @@ public partial class App : System.Windows.Application
             if (!capturing)
             {
                 CreateTray(window);
-                floatingPet = new FloatingPetController(model, () => ShowWindow(window));
+                floatingPet = new FloatingPetController(
+                    model,
+                    () => ShowWindow(window),
+                    () =>
+                    {
+                        ShowWindow(window);
+                        window.OpenAppearanceTab("Companion");
+                    });
                 floatingPet.SyncVisibility();
                 if (!preview) ConnectNotifications(window, model);
             }
@@ -119,6 +126,8 @@ public partial class App : System.Windows.Application
                 settingsWindow.Show();
                 int pageArg = Array.IndexOf(e.Args, "--settings-page");
                 if (pageArg >= 0 && pageArg + 1 < e.Args.Length) settingsWindow.ShowPage(e.Args[pageArg + 1] + "Page");
+                int tabArg = Array.IndexOf(e.Args, "--settings-tab");
+                if (tabArg >= 0 && tabArg + 1 < e.Args.Length) settingsWindow.ShowAppearanceTab(e.Args[tabArg + 1]);
                 captureWindow = settingsWindow;
             }
             int capture = Array.IndexOf(e.Args, captureTray ? "--tray-screenshot" : captureSettings ? "--settings-screenshot" : "--screenshot");

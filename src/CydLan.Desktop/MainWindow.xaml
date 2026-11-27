@@ -12,6 +12,31 @@
     <local:ImagePathConverter x:Key="ImageFile"/>
     <local:AvatarPathConverter x:Key="AvatarFile"/>
     <local:SmileyVisibilityConverter x:Key="SmileyVisibility"/>
+    <local:LookMessageConverter x:Key="LookMessage"/>
+    <local:MediaFileVisibilityConverter x:Key="MediaFile"/>
+    <Style x:Key="MediaSlider" TargetType="Slider">
+      <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
+      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Slider">
+        <Grid Height="20">
+          <Grid.Resources>
+            <Style TargetType="RepeatButton">
+              <Setter Property="Focusable" Value="False"/>
+              <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="RepeatButton"><Border Background="Transparent"/></ControlTemplate></Setter.Value></Setter>
+            </Style>
+          </Grid.Resources>
+          <Border Height="4" Background="{DynamicResource Hover}" CornerRadius="2" VerticalAlignment="Center"/>
+          <Track x:Name="PART_Track">
+            <Track.DecreaseRepeatButton><RepeatButton Command="Slider.DecreaseLarge"/></Track.DecreaseRepeatButton>
+            <Track.Thumb>
+              <Thumb Width="12" Height="12">
+                <Thumb.Template><ControlTemplate TargetType="Thumb"><Ellipse Fill="{DynamicResource Accent}" Cursor="Hand"/></ControlTemplate></Thumb.Template>
+              </Thumb>
+            </Track.Thumb>
+            <Track.IncreaseRepeatButton><RepeatButton Command="Slider.IncreaseLarge"/></Track.IncreaseRepeatButton>
+          </Track>
+        </Grid>
+      </ControlTemplate></Setter.Value></Setter>
+    </Style>
     <Style x:Key="ConversationList" TargetType="ListBox" BasedOn="{StaticResource {x:Type ListBox}}">
       <Setter Property="ScrollViewer.CanContentScroll" Value="True"/>
       <Setter Property="VirtualizingPanel.IsVirtualizing" Value="True"/>
@@ -50,6 +75,7 @@
                   HorizontalAlignment="{Binding HorizontalAlignment, RelativeSource={RelativeSource AncestorType=Grid}}">
             <Border.ContextMenu>
               <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                <MenuItem Header="Play" Tag="Play" Click="FileMenu_Click" Visibility="{Binding FileName, Converter={StaticResource MediaFile}}"/>
                 <MenuItem Header="Open" Tag="Open" Click="FileMenu_Click"/>
                 <MenuItem Header="Show in folder" Tag="Reveal" Click="FileMenu_Click"/>
                 <MenuItem Header="Copy file" Tag="Copy" Click="FileMenu_Click"/>
@@ -113,13 +139,37 @@
               <local:BubbleDecoration IsOutgoing="{Binding Outgoing}"/>
               <StackPanel Margin="{DynamicResource MessageBubblePadding}">
                 <TextBlock Text="ANNOUNCEMENT" Foreground="{DynamicResource Accent}" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,6" Visibility="{Binding Broadcast, Converter={StaticResource Bool}}"/>
-                <TextBox Text="{Binding Text, Mode=OneWay}" IsReadOnly="True" ContextMenu="{StaticResource ReadOnlyTextContextMenu}" TextWrapping="Wrap" FontSize="{DynamicResource MessageFontSize}" FontFamily="{DynamicResource MessageFontFamily}" Foreground="{Binding (TextElement.Foreground), RelativeSource={RelativeSource AncestorType=Border}}" Background="Transparent" BorderThickness="0" Padding="0"
-                         Visibility="{Binding Text, Converter={StaticResource SmileyVisibility}, ConverterParameter=plain}"/>
+                <TextBox Text="{Binding Text, Converter={StaticResource LookMessage}, ConverterParameter=caption, Mode=OneWay}" IsReadOnly="True" ContextMenu="{StaticResource ReadOnlyTextContextMenu}" TextWrapping="Wrap" FontSize="{DynamicResource MessageFontSize}" FontFamily="{DynamicResource MessageFontFamily}" Foreground="{Binding (TextElement.Foreground), RelativeSource={RelativeSource AncestorType=Border}}" Background="Transparent" BorderThickness="0" Padding="0"
+                         Visibility="{Binding Text, Converter={StaticResource LookMessage}, ConverterParameter=caption_plain}"/>
                 <!-- LAN Messenger emoticon codes are drawn as its pictures. -->
-                <TextBlock local:SmileyText.Text="{Binding Text}" TextWrapping="Wrap" FontSize="{DynamicResource MessageFontSize}" FontFamily="{DynamicResource MessageFontFamily}" Foreground="{Binding (TextElement.Foreground), RelativeSource={RelativeSource AncestorType=Border}}"
-                           Visibility="{Binding Text, Converter={StaticResource SmileyVisibility}}">
+                <TextBlock local:SmileyText.Text="{Binding Text, Converter={StaticResource LookMessage}, ConverterParameter=caption}" TextWrapping="Wrap" FontSize="{DynamicResource MessageFontSize}" FontFamily="{DynamicResource MessageFontFamily}" Foreground="{Binding (TextElement.Foreground), RelativeSource={RelativeSource AncestorType=Border}}"
+                           Visibility="{Binding Text, Converter={StaticResource LookMessage}, ConverterParameter=caption_smiley}">
                   <TextBlock.ContextMenu><ContextMenu><MenuItem Header="Copy" Click="CopyMessage_Click"/></ContextMenu></TextBlock.ContextMenu>
                 </TextBlock>
+                <Grid Visibility="{Binding Text, Converter={StaticResource LookMessage}, ConverterParameter=card}" Margin="0,2,0,0">
+                  <Border DataContext="{Binding Text, Converter={StaticResource LookMessage}}"
+                          Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Line}" BorderThickness="1"
+                          CornerRadius="{DynamicResource ControlCorner}" Padding="8,7" TextElement.Foreground="{DynamicResource Ink}">
+                    <Grid>
+                      <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                      <Border Width="42" Height="32" CornerRadius="6" Background="{Binding CanvasBrush}" BorderBrush="{DynamicResource Line}" BorderThickness="1" ClipToBounds="True">
+                        <Grid>
+                          <Border Width="13" HorizontalAlignment="Left" Background="{Binding SidebarBrush}"/>
+                          <Image Source="{Binding BackgroundPreview}" Stretch="UniformToFill" Opacity="0.82" Visibility="{Binding HasBackground, Converter={StaticResource Bool}}"/>
+                          <Ellipse Width="9" Height="9" Fill="{Binding AccentBrush}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,4,4"/>
+                        </Grid>
+                      </Border>
+                      <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="10,0,10,0" MinWidth="78">
+                        <TextBlock Text="{Binding ThemeName}" FontSize="12.5" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" TextTrimming="CharacterEllipsis" MaxWidth="150"/>
+                        <TextBlock Text="{Binding FontLabel}" FontSize="11" Foreground="{DynamicResource Muted}" TextTrimming="CharacterEllipsis" MaxWidth="150" Visibility="{Binding HasFontLabel, Converter={StaticResource Bool}}"/>
+                      </StackPanel>
+                      <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Content="Apply" Style="{StaticResource Primary}" Padding="10,4" FontSize="11.5" Click="ApplyLook_Click" AutomationProperties.Name="Apply theme"/>
+                        <Button Content="Copy" Style="{StaticResource Secondary}" Padding="8,4" FontSize="11.5" Margin="6,0,0,0" Click="CopyLook_Click" AutomationProperties.Name="Copy look code"/>
+                      </StackPanel>
+                    </Grid>
+                  </Border>
+                </Grid>
               </StackPanel>
             </Grid>
           </Border>
@@ -229,6 +279,11 @@
               <local:Glyph Data="{DynamicResource IconMegaphone}" Size="19"/>
               <Button.Style><Style TargetType="Button" BasedOn="{StaticResource NavIcon}"><Style.Triggers><DataTrigger Binding="{Binding IsBroadcastSection}" Value="True"><Setter Property="Background" Value="{DynamicResource NavSelected}"/><Setter Property="Foreground" Value="{DynamicResource Accent}"/></DataTrigger></Style.Triggers></Style></Button.Style>
             </Button>
+            <Button x:Name="MediaNav" ToolTip="Media" Click="Media_Click" AutomationProperties.Name="Media"
+                    local:ButtonEffects.IsHighlight="{Binding IsMediaSection}" local:TargetAura.Role="Module">
+              <local:Glyph Data="{DynamicResource IconMedia}" Size="19"/>
+              <Button.Style><Style TargetType="Button" BasedOn="{StaticResource NavIcon}"><Style.Triggers><DataTrigger Binding="{Binding IsMediaSection}" Value="True"><Setter Property="Background" Value="{DynamicResource NavSelected}"/><Setter Property="Foreground" Value="{DynamicResource Accent}"/></DataTrigger></Style.Triggers></Style></Button.Style>
+            </Button>
           </StackPanel>
           <StackPanel Grid.Row="2" VerticalAlignment="Bottom" Margin="0,0,0,18">
             <Button Style="{StaticResource NavIcon}" ToolTip="Preferences" Click="Settings_Click" AutomationProperties.Name="Preferences"><local:Glyph Data="{DynamicResource IconSettings}" Size="19"/></Button>
@@ -294,6 +349,7 @@
                 <local:Glyph Data="{DynamicResource IconPlus}" Size="18"/>
                 <Button.Style><Style TargetType="Button" BasedOn="{StaticResource Icon}"><Setter Property="ToolTip" Value="Connect"/><Style.Triggers>
                   <DataTrigger Binding="{Binding IsGroupsSection}" Value="True"><Setter Property="ToolTip" Value="New group"/></DataTrigger>
+                  <DataTrigger Binding="{Binding IsMediaSection}" Value="True"><Setter Property="ToolTip" Value="Add files"/></DataTrigger>
                   <DataTrigger Binding="{Binding IsFilesSection}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
                 </Style.Triggers></Style></Button.Style>
               </Button>
@@ -317,32 +373,37 @@
               <Button Style="{StaticResource Icon}" Width="28" Height="28" HorizontalAlignment="Right" Visibility="{Binding ShowPeopleList, Converter={StaticResource Bool}}" ToolTip="Refresh LAN discovery" Click="Refresh_Click" AutomationProperties.Name="Refresh LAN discovery"><local:Glyph Data="{DynamicResource IconRefresh}" Size="15"/></Button>
             </Grid>
             <Grid Grid.Row="3">
+              <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+              <Grid Grid.Row="0">
               <Grid.Resources>
                 <DataTemplate DataType="{x:Type core:Peer}">
-                  <Grid Margin="10,7,8,7" Background="Transparent"><Grid.ContextMenu><ContextMenu><MenuItem Header="Delete chat" Click="DeleteRowChat_Click"/></ContextMenu></Grid.ContextMenu>
+                  <Grid Margin="10,7,8,7" Background="Transparent"><Grid.ContextMenu><ContextMenu><MenuItem Header="View profile" Click="ViewRowProfile_Click"/><MenuItem Header="Delete chat" Click="DeleteRowChat_Click"/></ContextMenu></Grid.ContextMenu>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="40"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                    <Grid Width="30" Height="30" HorizontalAlignment="Left">
-                      <Border CornerRadius="{DynamicResource RowAvatarCorner}" BorderThickness="2" Margin="-2" IsHitTestVisible="False">
-                        <Border.Style><Style TargetType="Border">
-                          <Setter Property="Visibility" Value="Collapsed"/>
-                          <Setter Property="BorderBrush" Value="{DynamicResource Online}"/>
-                          <Style.Triggers>
-                            <MultiDataTrigger>
-                              <MultiDataTrigger.Conditions>
-                                <Condition Binding="{Binding Online}" Value="True"/>
-                                <Condition Binding="{Binding DataContext.OnlineRingEnabled, RelativeSource={RelativeSource AncestorType=local:MainWindow}}" Value="True"/>
-                              </MultiDataTrigger.Conditions>
-                              <Setter Property="Visibility" Value="Visible"/>
-                            </MultiDataTrigger>
-                            <DataTrigger Binding="{Binding Presence}" Value="Away"><Setter Property="BorderBrush" Value="{DynamicResource Away}"/></DataTrigger>
-                            <DataTrigger Binding="{Binding Presence}" Value="Busy"><Setter Property="BorderBrush" Value="{DynamicResource Away}"/></DataTrigger>
-                            <DataTrigger Binding="{Binding Presence}" Value="Do not disturb"><Setter Property="BorderBrush" Value="{DynamicResource Danger}"/></DataTrigger>
-                          </Style.Triggers>
-                        </Style></Border.Style>
-                      </Border>
-                      <Border Background="{DynamicResource Avatar}" CornerRadius="{DynamicResource RowAvatarCorner}"><TextBlock Text="{Binding Initials}" FontSize="12" Foreground="{DynamicResource Accent}" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
-                      <Image Source="{Binding AvatarPath, Converter={StaticResource AvatarFile}}" Stretch="UniformToFill" local:Rounded.Radius="{DynamicResource RowAvatarRadius}"/>
-                    </Grid>
+                    <Button Padding="0" Width="30" Height="30" HorizontalAlignment="Left" Background="Transparent" BorderThickness="0"
+                            Click="RowAvatar_Click" ToolTip="View profile" AutomationProperties.Name="View contact profile picture">
+                      <Grid Width="30" Height="30">
+                        <Border CornerRadius="{DynamicResource RowAvatarCorner}" BorderThickness="2" Margin="-2" IsHitTestVisible="False">
+                          <Border.Style><Style TargetType="Border">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Setter Property="BorderBrush" Value="{DynamicResource Online}"/>
+                            <Style.Triggers>
+                              <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                  <Condition Binding="{Binding Online}" Value="True"/>
+                                  <Condition Binding="{Binding DataContext.OnlineRingEnabled, RelativeSource={RelativeSource AncestorType=local:MainWindow}}" Value="True"/>
+                                </MultiDataTrigger.Conditions>
+                                <Setter Property="Visibility" Value="Visible"/>
+                              </MultiDataTrigger>
+                              <DataTrigger Binding="{Binding Presence}" Value="Away"><Setter Property="BorderBrush" Value="{DynamicResource Away}"/></DataTrigger>
+                              <DataTrigger Binding="{Binding Presence}" Value="Busy"><Setter Property="BorderBrush" Value="{DynamicResource Away}"/></DataTrigger>
+                              <DataTrigger Binding="{Binding Presence}" Value="Do not disturb"><Setter Property="BorderBrush" Value="{DynamicResource Danger}"/></DataTrigger>
+                            </Style.Triggers>
+                          </Style></Border.Style>
+                        </Border>
+                        <Border Background="{DynamicResource Avatar}" CornerRadius="{DynamicResource RowAvatarCorner}"><TextBlock Text="{Binding Initials}" FontSize="12" Foreground="{DynamicResource Accent}" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                        <Image Source="{Binding AvatarPath, Converter={StaticResource AvatarFile}}" Stretch="UniformToFill" local:Rounded.Radius="{DynamicResource RowAvatarRadius}"/>
+                      </Grid>
+                    </Button>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,5,0">
                       <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
                       <DockPanel Margin="0,2,0,0">
@@ -399,6 +460,46 @@
                 <RadioButton Style="{StaticResource FilterRow}" Tag="sent" Checked="TransferFilter_Checked"><Grid><TextBlock Text="Sent"/><TextBlock Text="{Binding SentCount}" Foreground="{DynamicResource Faint}" HorizontalAlignment="Right"/></Grid></RadioButton>
                 <Button Content="Open received folder" Style="{StaticResource Secondary}" HorizontalAlignment="Left" Margin="8,14,0,0" Click="OpenReceivedFolder_Click"/>
               </StackPanel>
+              <StackPanel Margin="8,0" Visibility="{Binding IsMediaSection, Converter={StaticResource Bool}}">
+                <RadioButton x:Name="MediaFilterAll" Style="{StaticResource FilterRow}" Tag="all" Checked="MediaFilter_Checked" IsChecked="True"><Grid><TextBlock Text="All"/><TextBlock Text="{Binding AllMediaCount}" Foreground="{DynamicResource Faint}" HorizontalAlignment="Right"/></Grid></RadioButton>
+                <RadioButton x:Name="MediaFilterAudio" Style="{StaticResource FilterRow}" Tag="audio" Checked="MediaFilter_Checked"><Grid><TextBlock Text="Music"/><TextBlock Text="{Binding AudioMediaCount}" Foreground="{DynamicResource Faint}" HorizontalAlignment="Right"/></Grid></RadioButton>
+                <RadioButton x:Name="MediaFilterVideo" Style="{StaticResource FilterRow}" Tag="video" Checked="MediaFilter_Checked"><Grid><TextBlock Text="Video"/><TextBlock Text="{Binding VideoMediaCount}" Foreground="{DynamicResource Faint}" HorizontalAlignment="Right"/></Grid></RadioButton>
+                <RadioButton x:Name="MediaFilterLan" Style="{StaticResource FilterRow}" Tag="lan" Checked="MediaFilter_Checked"><Grid><TextBlock Text="LAN"/><TextBlock Text="{Binding LanMediaCount}" Foreground="{DynamicResource Faint}" HorizontalAlignment="Right"/></Grid></RadioButton>
+                <StackPanel Margin="8,14,8,0">
+                  <Button Content="Add files" Style="{StaticResource Secondary}" HorizontalAlignment="Stretch" Click="AddMediaFiles_Click" AutomationProperties.Name="Add media files"/>
+                  <Button Content="Add folder" Style="{StaticResource Secondary}" HorizontalAlignment="Stretch" Margin="0,8,0,0" Click="AddMediaFolder_Click" AutomationProperties.Name="Add media folder"/>
+                  <Button Content="Clear added" Style="{StaticResource Secondary}" HorizontalAlignment="Stretch" Margin="0,8,0,0" Click="ClearMediaAdded_Click" Visibility="{Binding HasAddedMediaSources, Converter={StaticResource Bool}}" AutomationProperties.Name="Clear added media"/>
+                </StackPanel>
+              </StackPanel>
+              </Grid>
+              <Border x:Name="MiniPlayerCard" Grid.Row="1" Visibility="{Binding ShowMiniPlayer, Converter={StaticResource Bool}}"
+                      Margin="10,4,10,8" Padding="10,8" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Line}"
+                      BorderThickness="1" CornerRadius="{DynamicResource PanelCorner}">
+                <StackPanel>
+                  <DockPanel>
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding MediaPositionLabel}" FontSize="11" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" Margin="6,0,0,0"/>
+                    <Button Padding="0" Background="Transparent" HorizontalContentAlignment="Left" Click="Media_Click" ToolTip="Media" AutomationProperties.Name="Open Media player">
+                      <StackPanel Orientation="Horizontal">
+                        <local:Glyph Size="14" Foreground="{DynamicResource Accent}" Margin="0,0,7,0">
+                          <local:Glyph.Style><Style TargetType="local:Glyph"><Setter Property="Data" Value="{DynamicResource IconMedia}"/><Style.Triggers><DataTrigger Binding="{Binding IsCurrentVideo}" Value="True"><Setter Property="Data" Value="{DynamicResource IconVideo}"/></DataTrigger></Style.Triggers></Style></local:Glyph.Style>
+                        </local:Glyph>
+                        <TextBlock Text="{Binding CurrentMedia.Title}" FontSize="12.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxWidth="160"/>
+                      </StackPanel>
+                    </Button>
+                  </DockPanel>
+                  <ProgressBar Minimum="0" Maximum="1" Value="{Binding MediaProgressRatio, Mode=OneWay}" Height="3" Margin="0,7,0,6" BorderThickness="0" Foreground="{DynamicResource Accent}" Background="{DynamicResource Hover}"/>
+                  <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                    <Button Style="{StaticResource Icon}" Width="28" Height="26" Click="MediaPrev_Click" ToolTip="Previous" AutomationProperties.Name="Previous track"><local:Glyph Data="{DynamicResource IconPrev}" Size="13"/></Button>
+                    <Button Style="{StaticResource Icon}" Width="30" Height="26" Click="MediaPlayPause_Click" ToolTip="{Binding MediaPlayLabel}" AutomationProperties.Name="Mini Play or Pause">
+                      <local:Glyph Size="14" Foreground="{DynamicResource Accent}">
+                        <local:Glyph.Style><Style TargetType="local:Glyph"><Setter Property="Data" Value="{DynamicResource IconPlay}"/><Style.Triggers><DataTrigger Binding="{Binding IsMediaPlaying}" Value="True"><Setter Property="Data" Value="{DynamicResource IconPause}"/></DataTrigger></Style.Triggers></Style></local:Glyph.Style>
+                      </local:Glyph>
+                    </Button>
+                    <Button Style="{StaticResource Icon}" Width="28" Height="26" Click="MediaNext_Click" ToolTip="Next" AutomationProperties.Name="Next track"><local:Glyph Data="{DynamicResource IconNext}" Size="13"/></Button>
+                    <Button Style="{StaticResource Icon}" Width="28" Height="26" Click="MediaStop_Click" ToolTip="Stop" AutomationProperties.Name="Stop playback"><local:Glyph Data="{DynamicResource IconStop}" Size="12"/></Button>
+                  </StackPanel>
+                </StackPanel>
+              </Border>
             </Grid>
             <Border Grid.Row="4" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Margin="16,0" Padding="0,15">
               <StackPanel><StackPanel Orientation="Horizontal"><Ellipse Width="6" Height="6" Fill="{DynamicResource Accent}" Margin="0,0,8,0"/><TextBlock Text="{Binding ConnectionSummary}" FontSize="12" Foreground="{DynamicResource Muted}"/></StackPanel></StackPanel>
@@ -439,33 +540,37 @@
                 <Grid Margin="26,0,22,0">
                   <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                   <DockPanel VerticalAlignment="Center">
-                    <Grid Width="40" Height="40" Margin="0,0,12,0" Visibility="{Binding HasPeer, Converter={StaticResource Bool}}">
-                      <Border CornerRadius="{DynamicResource HeaderAvatarCorner}" BorderThickness="2" Margin="-2" IsHitTestVisible="False">
-                        <Border.Style><Style TargetType="Border">
-                          <Setter Property="Visibility" Value="Collapsed"/>
-                          <Setter Property="BorderBrush" Value="{DynamicResource Online}"/>
-                          <Style.Triggers>
-                            <MultiDataTrigger>
-                              <MultiDataTrigger.Conditions>
-                                <Condition Binding="{Binding SelectedPeer.Online}" Value="True"/>
-                                <Condition Binding="{Binding OnlineRingEnabled}" Value="True"/>
-                              </MultiDataTrigger.Conditions>
-                              <Setter Property="Visibility" Value="Visible"/>
-                            </MultiDataTrigger>
-                            <DataTrigger Binding="{Binding SelectedPeer.Presence}" Value="Away"><Setter Property="BorderBrush" Value="{DynamicResource Away}"/></DataTrigger>
-                            <DataTrigger Binding="{Binding SelectedPeer.Presence}" Value="Busy"><Setter Property="BorderBrush" Value="{DynamicResource Away}"/></DataTrigger>
-                            <DataTrigger Binding="{Binding SelectedPeer.Presence}" Value="Do not disturb"><Setter Property="BorderBrush" Value="{DynamicResource Danger}"/></DataTrigger>
-                          </Style.Triggers>
-                        </Style></Border.Style>
-                      </Border>
-                      <Border Background="{DynamicResource Avatar}" CornerRadius="{DynamicResource HeaderAvatarCorner}">
-                        <TextBlock Text="{Binding SelectedPeer.Initials}" FontSize="14" Foreground="{DynamicResource Accent}" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                      </Border>
-                      <Ellipse x:Name="ConversationAvatar" Visibility="{Binding UseCircularHeaderAvatar, Converter={StaticResource Bool}}">
-                        <Ellipse.Fill><ImageBrush ImageSource="{Binding SelectedPeer.AvatarPath, Converter={StaticResource AvatarFile}}" Stretch="UniformToFill"/></Ellipse.Fill>
-                      </Ellipse>
-                      <Image Source="{Binding SelectedPeer.AvatarPath, Converter={StaticResource AvatarFile}}" Stretch="UniformToFill" local:Rounded.Radius="{DynamicResource HeaderAvatarRadius}" Visibility="{Binding UseCustomAvatarShape, Converter={StaticResource Bool}}"/>
-                    </Grid>
+                    <Button x:Name="ConversationAvatarButton" Padding="0" Width="40" Height="40" Margin="0,0,12,0"
+                            Visibility="{Binding HasPeer, Converter={StaticResource Bool}}"
+                            Click="ConversationAvatar_Click" ToolTip="View profile" AutomationProperties.Name="View contact profile">
+                      <Grid Width="40" Height="40">
+                        <Border CornerRadius="{DynamicResource HeaderAvatarCorner}" BorderThickness="2" Margin="-2" IsHitTestVisible="False">
+                          <Border.Style><Style TargetType="Border">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Setter Property="BorderBrush" Value="{DynamicResource Online}"/>
+                            <Style.Triggers>
+                              <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                  <Condition Binding="{Binding SelectedPeer.Online}" Value="True"/>
+                                  <Condition Binding="{Binding OnlineRingEnabled}" Value="True"/>
+                                </MultiDataTrigger.Conditions>
+                                <Setter Property="Visibility" Value="Visible"/>
+                              </MultiDataTrigger>
+                              <DataTrigger Binding="{Binding SelectedPeer.Presence}" Value="Away"><Setter Property="BorderBrush" Value="{DynamicResource Away}"/></DataTrigger>
+                              <DataTrigger Binding="{Binding SelectedPeer.Presence}" Value="Busy"><Setter Property="BorderBrush" Value="{DynamicResource Away}"/></DataTrigger>
+                              <DataTrigger Binding="{Binding SelectedPeer.Presence}" Value="Do not disturb"><Setter Property="BorderBrush" Value="{DynamicResource Danger}"/></DataTrigger>
+                            </Style.Triggers>
+                          </Style></Border.Style>
+                        </Border>
+                        <Border Background="{DynamicResource Avatar}" CornerRadius="{DynamicResource HeaderAvatarCorner}">
+                          <TextBlock Text="{Binding SelectedPeer.Initials}" FontSize="14" Foreground="{DynamicResource Accent}" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <Ellipse x:Name="ConversationAvatar" Visibility="{Binding UseCircularHeaderAvatar, Converter={StaticResource Bool}}">
+                          <Ellipse.Fill><ImageBrush ImageSource="{Binding SelectedPeer.AvatarPath, Converter={StaticResource AvatarFile}}" Stretch="UniformToFill"/></Ellipse.Fill>
+                        </Ellipse>
+                        <Image Source="{Binding SelectedPeer.AvatarPath, Converter={StaticResource AvatarFile}}" Stretch="UniformToFill" local:Rounded.Radius="{DynamicResource HeaderAvatarRadius}" Visibility="{Binding UseCustomAvatarShape, Converter={StaticResource Bool}}"/>
+                      </Grid>
+                    </Button>
                     <StackPanel VerticalAlignment="Center">
                       <TextBlock x:Name="ConversationTitle" Text="{Binding ChatTitle}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
                       <TextBlock Text="{Binding ChatSubtitle}" FontSize="12" Foreground="{DynamicResource Muted}" Margin="0,4,0,0" TextTrimming="CharacterEllipsis">
@@ -499,9 +604,34 @@
                 <Grid x:Name="ChatBackdropLayer" Grid.Row="1" Grid.RowSpan="{Binding ChatBackdropRowSpan}" ClipToBounds="True" IsHitTestVisible="False">
                   <local:ChatCanvasOverlay x:Name="ChatCanvasGradientLayer" Gradient="{Binding ChatCanvasGradient}" Intensity="{Binding ChatCanvasGradientIntensity}"
                                            Visibility="{Binding ChatCanvasGradientEnabled, Converter={StaticResource Bool}}"/>
-                  <Image x:Name="ChatBackgroundImage" Source="{Binding ChatBackground}" Opacity="{Binding ChatBackgroundOpacity}"
-                         Effect="{Binding ChatBackgroundBlurEffect}"
-                         Stretch="UniformToFill" IsHitTestVisible="False" Visibility="{Binding HasDetails, Converter={StaticResource Bool}}"/>
+                  <Grid OpacityMask="{Binding ChatBackgroundHorizontalMask}" Visibility="{Binding HasDetails, Converter={StaticResource Bool}}" IsHitTestVisible="False">
+                    <Grid OpacityMask="{Binding ChatBackgroundVerticalMask}" IsHitTestVisible="False">
+                      <local:BackgroundImageViewport Fit="{Binding ChatBackgroundFit}"
+                                                     Anchor="{Binding ChatBackgroundAnchor}"
+                                                     ImageScale="{Binding ChatBackgroundScale}"
+                                                     IsHitTestVisible="False">
+                        <Image x:Name="ChatBackgroundImage"
+                               local:AnimatedGifBehavior.FallbackSource="{Binding ChatBackground}"
+                               local:AnimatedGifBehavior.Sequence="{Binding ChatBackgroundGif}"
+                               Opacity="{Binding ChatBackgroundOpacity}"
+                               Effect="{Binding ChatBackgroundBlurEffect}"
+                               Stretch="Fill"
+                               IsHitTestVisible="False"/>
+                      </local:BackgroundImageViewport>
+                      <Border Background="{DynamicResource Canvas}" Opacity="{Binding ChatBackgroundDim}" IsHitTestVisible="False">
+                        <Border.Style>
+                          <Style TargetType="Border">
+                            <Setter Property="Visibility" Value="Visible"/>
+                            <Style.Triggers>
+                              <DataTrigger Binding="{Binding ChatBackground}" Value="{x:Null}">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                              </DataTrigger>
+                            </Style.Triggers>
+                          </Style>
+                        </Border.Style>
+                      </Border>
+                    </Grid>
+                  </Grid>
                   <local:SakuraPetals x:Name="ConversationPetals" Intensity="{Binding PetalIntensity}"
                                       Visibility="{Binding SakuraPetalsEnabled, Converter={StaticResource Bool}}"/>
                   <local:WeatherEffect x:Name="ConversationFireflies" Kind="Fireflies" Intensity="{Binding FireflyIntensity}"
@@ -655,7 +785,9 @@
                   <local:SidebarEffect Kind="Sweep" Intensity="{Binding SidebarSweepIntensity}" Visibility="{Binding SidebarSweepEnabled, Converter={StaticResource Bool}}"/>
                   <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="20,16">
                     <Grid><TextBlock Text="Contact details" Style="{StaticResource Caption}" VerticalAlignment="Center"/><Button Style="{StaticResource Icon}" Width="28" Height="28" HorizontalAlignment="Right" Click="Details_Click" ToolTip="Close details"><local:Glyph Data="{DynamicResource IconClose}" Size="15"/></Button></Grid>
-                    <Grid Width="56" Height="56" Margin="0,28,0,16"><Border CornerRadius="18" Background="{DynamicResource Avatar}"><TextBlock Text="{Binding SelectedPeer.Initials}" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource Accent}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><Image Source="{Binding SelectedPeer.AvatarPath, Converter={StaticResource AvatarFile}}" Stretch="UniformToFill" local:Rounded.Radius="18"/></Grid>
+                    <Button Padding="0" Width="56" Height="56" Margin="0,28,0,16" HorizontalAlignment="Center" Click="ConversationAvatar_Click" ToolTip="View profile" AutomationProperties.Name="Expand profile">
+                      <Grid Width="56" Height="56"><Border CornerRadius="18" Background="{DynamicResource Avatar}"><TextBlock Text="{Binding SelectedPeer.Initials}" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource Accent}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><Image Source="{Binding SelectedPeer.AvatarPath, Converter={StaticResource AvatarFile}}" Stretch="UniformToFill" local:Rounded.Radius="18"/></Grid>
+                    </Button>
                     <TextBlock Text="{Binding SelectedPeer.Name}" FontSize="16" FontWeight="SemiBold" TextAlignment="Center" TextWrapping="Wrap"/>
                     <TextBlock Text="{Binding SelectedPeer.Presence}" FontSize="13" Foreground="{DynamicResource Accent}" HorizontalAlignment="Center" Margin="0,7,0,22"/>
                     <TextBlock Text="Full name" Style="{StaticResource Caption}" Margin="0,4,0,8" Visibility="{Binding SelectedPeer.HasFullName, Converter={StaticResource Bool}}"/><TextBlock Text="{Binding SelectedPeer.FullName}" FontSize="13" TextWrapping="Wrap" Visibility="{Binding SelectedPeer.HasFullName, Converter={StaticResource Bool}}"/>
@@ -694,7 +826,7 @@
                           <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0"><StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding State}" Value="Waiting for approval"/><Condition Binding="{Binding Outgoing}" Value="False"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers></Style></StackPanel.Style><Button Content="Decline" Style="{StaticResource Secondary}" Margin="0,0,6,0" Click="DeclineFile_Click"/><Button Content="Accept" Style="{StaticResource Primary}" Click="AcceptFile_Click"/></StackPanel>
                           <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0"><StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding State}" Value="Waiting for approval"/><Condition Binding="{Binding Outgoing}" Value="True"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers></Style></StackPanel.Style><Button Content="Cancel offer" Style="{StaticResource Secondary}" Click="CancelOffer_Click"/></StackPanel>
                           <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0" Visibility="{Binding IsActive, Converter={StaticResource Bool}}"><Button Content="Cancel" Style="{StaticResource Secondary}" Background="{DynamicResource Hover}" Click="CancelOffer_Click" AutomationProperties.Name="Cancel transfer"/></StackPanel>
-                          <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,6,0,0"><StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding State}" Value="Received"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding State}" Value="Sent · receipt unavailable"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></StackPanel.Style><Button Style="{StaticResource Icon}" Width="28" Height="28" ToolTip="Show in folder" Click="ShowFile_Click" AutomationProperties.Name="Show in folder"><local:Glyph Data="{DynamicResource IconFolder}" Size="15"/></Button><Button Style="{StaticResource Icon}" Width="28" Height="28" ToolTip="Open" Click="OpenFile_Click" AutomationProperties.Name="Open file"><local:Glyph Data="{DynamicResource IconDownload}" Size="15"/></Button></StackPanel>
+                          <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,6,0,0"><StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding State}" Value="Received"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding State}" Value="Sent · receipt unavailable"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></StackPanel.Style><Button Style="{StaticResource Icon}" Width="28" Height="28" ToolTip="Play" Click="PlayFile_Click" Visibility="{Binding Name, Converter={StaticResource MediaFile}}" AutomationProperties.Name="Play file"><local:Glyph Data="{DynamicResource IconPlay}" Size="13"/></Button><Button Style="{StaticResource Icon}" Width="28" Height="28" ToolTip="Show in folder" Click="ShowFile_Click" AutomationProperties.Name="Show in folder"><local:Glyph Data="{DynamicResource IconFolder}" Size="15"/></Button><Button Style="{StaticResource Icon}" Width="28" Height="28" ToolTip="Open" Click="OpenFile_Click" AutomationProperties.Name="Open file"><local:Glyph Data="{DynamicResource IconDownload}" Size="15"/></Button></StackPanel>
                         </StackPanel>
                       </Border>
                     </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
@@ -753,11 +885,195 @@
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0"><StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding State}" Value="Waiting for approval"/><Condition Binding="{Binding Outgoing}" Value="False"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers></Style></StackPanel.Style><Button Content="Decline" Style="{StaticResource Secondary}" Margin="0,0,8,0" Click="DeclineFile_Click"/><Button Content="Accept" Style="{StaticResource Primary}" Click="AcceptFile_Click"/></StackPanel>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0"><StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding State}" Value="Waiting for approval"/><Condition Binding="{Binding Outgoing}" Value="True"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers></Style></StackPanel.Style><Button Content="Cancel offer" Style="{StaticResource Secondary}" Click="CancelOffer_Click"/></StackPanel>
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0" Visibility="{Binding IsActive, Converter={StaticResource Bool}}"><Button Content="Cancel" Style="{StaticResource Secondary}" Background="{DynamicResource Hover}" Click="CancelOffer_Click" AutomationProperties.Name="Cancel transfer"/></StackPanel>
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0"><StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding State}" Value="Received"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding State}" Value="Sent · receipt unavailable"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></StackPanel.Style><Button Content="Show in folder" Style="{StaticResource Secondary}" Margin="0,0,8,0" Click="ShowFile_Click"/><Button Content="Open" Style="{StaticResource Secondary}" Click="OpenFile_Click"/></StackPanel>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0"><StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding State}" Value="Received"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding State}" Value="Sent · receipt unavailable"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></StackPanel.Style><Button Content="Play" Style="{StaticResource Secondary}" Margin="0,0,8,0" Click="PlayFile_Click" Visibility="{Binding Name, Converter={StaticResource MediaFile}}"/><Button Content="Show in folder" Style="{StaticResource Secondary}" Margin="0,0,8,0" Click="ShowFile_Click"/><Button Content="Open" Style="{StaticResource Secondary}" Click="OpenFile_Click"/></StackPanel>
                   </StackPanel>
                 </Grid></Border>
               </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
               <TextBlock Text="No files" Foreground="{DynamicResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding NoTransfersShown}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+            </Grid>
+            <Grid x:Name="MediaSectionGrid" Grid.Row="1" Visibility="{Binding MediaOpen, Converter={StaticResource Bool}}" Margin="26,12,26,16">
+              <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+              <Border x:Name="MediaStageBorder" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Line}" BorderThickness="1"
+                      CornerRadius="{DynamicResource OverlayCorner}" ClipToBounds="True">
+                <Border.Style>
+                  <Style TargetType="Border">
+                    <Setter Property="Height" Value="152"/>
+                    <Style.Triggers>
+                      <DataTrigger Binding="{Binding IsCurrentVideo}" Value="True">
+                        <Setter Property="Height" Value="216"/>
+                        <Setter Property="Background" Value="#0A0D14"/>
+                      </DataTrigger>
+                    </Style.Triggers>
+                  </Style>
+                </Border.Style>
+                <Grid>
+                  <MediaElement x:Name="MediaPlayerElement" LoadedBehavior="Manual" UnloadedBehavior="Manual" ScrubbingEnabled="True"
+                                Stretch="Uniform" Cursor="Hand"
+                                MouseLeftButtonDown="MediaVideoStage_Click"
+                                MediaOpened="MediaPlayer_Opened" MediaEnded="MediaPlayer_Ended" MediaFailed="MediaPlayer_Failed">
+                    <MediaElement.Style>
+                      <Style TargetType="MediaElement">
+                        <Setter Property="Width" Value="1"/>
+                        <Setter Property="Height" Value="1"/>
+                        <Setter Property="Opacity" Value="0"/>
+                        <Setter Property="HorizontalAlignment" Value="Left"/>
+                        <Setter Property="VerticalAlignment" Value="Top"/>
+                        <Setter Property="IsHitTestVisible" Value="False"/>
+                        <Style.Triggers>
+                          <DataTrigger Binding="{Binding IsCurrentVideo}" Value="True">
+                            <Setter Property="Width" Value="NaN"/>
+                            <Setter Property="Height" Value="NaN"/>
+                            <Setter Property="Opacity" Value="1"/>
+                            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+                            <Setter Property="VerticalAlignment" Value="Stretch"/>
+                            <Setter Property="IsHitTestVisible" Value="True"/>
+                          </DataTrigger>
+                        </Style.Triggers>
+                      </Style>
+                    </MediaElement.Style>
+                  </MediaElement>
+                  <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <StackPanel.Style>
+                      <Style TargetType="StackPanel">
+                        <Setter Property="Visibility" Value="Collapsed"/>
+                        <Style.Triggers>
+                          <DataTrigger Binding="{Binding HasCurrentMedia}" Value="False"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+                        </Style.Triggers>
+                      </Style>
+                    </StackPanel.Style>
+                    <local:Glyph Data="{DynamicResource IconMedia}" Size="36" Foreground="{DynamicResource Accent}"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,14,0,0">
+                      <Button Content="Add files" Style="{StaticResource Primary}" Padding="14,7" Margin="0,0,8,0" Click="AddMediaFiles_Click"/>
+                      <Button Content="Add folder" Style="{StaticResource Secondary}" Padding="14,7" Click="AddMediaFolder_Click"/>
+                    </StackPanel>
+                  </StackPanel>
+                  <Grid Margin="20,16">
+                    <Grid.Style>
+                      <Style TargetType="Grid">
+                        <Setter Property="Visibility" Value="Collapsed"/>
+                        <Style.Triggers>
+                          <DataTrigger Binding="{Binding IsCurrentAudio}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+                        </Style.Triggers>
+                      </Style>
+                    </Grid.Style>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="152"/></Grid.ColumnDefinitions>
+                    <Border Width="68" Height="68" CornerRadius="{DynamicResource PanelCorner}" Background="{DynamicResource AccentSoft}" BorderBrush="{DynamicResource Line}" BorderThickness="1" VerticalAlignment="Center">
+                      <local:Glyph Data="{DynamicResource IconMedia}" Size="28" Foreground="{DynamicResource Accent}"/>
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="16,0,14,0">
+                      <TextBlock Text="{Binding CurrentMedia.Title}" FontSize="17" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                      <TextBlock Text="{Binding CurrentMedia.MetaLabel}" FontSize="12.5" Foreground="{DynamicResource Muted}" Margin="0,5,0,0" TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
+                    <local:AudioVisualizer Grid.Column="2" Height="62" VerticalAlignment="Center" IsPlaying="{Binding IsCurrentAudioPlaying}"/>
+                  </Grid>
+                </Grid>
+              </Border>
+              <Border Grid.Row="1" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Line}" BorderThickness="1"
+                      CornerRadius="{DynamicResource PanelCorner}" Padding="14,10" Margin="0,10,0,10">
+                <StackPanel>
+                  <Grid Margin="0,0,0,6">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding MediaPositionLabel}" FontSize="11.5" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" MinWidth="36"/>
+                    <Slider x:Name="MediaSeekSlider" Grid.Column="1" Style="{StaticResource MediaSlider}" Margin="10,0"
+                            Minimum="0" Maximum="{Binding MediaDurationSeconds}" Value="{Binding MediaPositionSeconds, Mode=OneWay}"
+                            IsEnabled="{Binding HasCurrentMedia}"
+                            PreviewMouseDown="MediaSeek_PreviewMouseDown" PreviewMouseUp="MediaSeek_PreviewMouseUp" ValueChanged="MediaSeek_ValueChanged"
+                            AutomationProperties.Name="Media position"/>
+                    <TextBlock Grid.Column="2" Text="{Binding MediaDurationLabel}" FontSize="11.5" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" MinWidth="36" TextAlignment="Right"/>
+                  </Grid>
+                  <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <Button x:Name="MediaSpeedButton" Content="{Binding MediaSpeedLabel}" Style="{StaticResource Secondary}" Padding="9,4" FontSize="11.5"
+                            Background="{DynamicResource Hover}" VerticalAlignment="Center" Click="MediaSpeed_Click" ToolTip="Speed" AutomationProperties.Name="Playback speed"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                      <Button Click="MediaShuffle_Click" ToolTip="Shuffle" AutomationProperties.Name="Shuffle">
+                        <Button.Style><Style TargetType="Button" BasedOn="{StaticResource Icon}"><Style.Triggers><DataTrigger Binding="{Binding MediaShuffle}" Value="True"><Setter Property="Background" Value="{DynamicResource NavSelected}"/><Setter Property="Foreground" Value="{DynamicResource Accent}"/></DataTrigger></Style.Triggers></Style></Button.Style>
+                        <local:Glyph Data="{DynamicResource IconShuffle}" Size="15"/>
+                      </Button>
+                      <Button Style="{StaticResource Icon}" Click="MediaPrev_Click" Margin="2,0" ToolTip="Previous" AutomationProperties.Name="Previous track"><local:Glyph Data="{DynamicResource IconPrev}" Size="16"/></Button>
+                      <Button x:Name="MediaPlayButton" Style="{StaticResource Primary}" Width="38" Height="34" Padding="0" Margin="4,0" Click="MediaPlayPause_Click" ToolTip="{Binding MediaPlayLabel}" AutomationProperties.Name="Play or Pause">
+                        <local:Glyph Size="16" Foreground="{DynamicResource AccentInk}">
+                          <local:Glyph.Style><Style TargetType="local:Glyph"><Setter Property="Data" Value="{DynamicResource IconPlay}"/><Style.Triggers><DataTrigger Binding="{Binding IsMediaPlaying}" Value="True"><Setter Property="Data" Value="{DynamicResource IconPause}"/></DataTrigger></Style.Triggers></Style></local:Glyph.Style>
+                        </local:Glyph>
+                      </Button>
+                      <Button Style="{StaticResource Icon}" Click="MediaNext_Click" Margin="2,0" ToolTip="Next" AutomationProperties.Name="Next track"><local:Glyph Data="{DynamicResource IconNext}" Size="16"/></Button>
+                      <Button Style="{StaticResource Icon}" Click="MediaStop_Click" IsEnabled="{Binding HasCurrentMedia}" ToolTip="Stop" AutomationProperties.Name="Stop playback"><local:Glyph Data="{DynamicResource IconStop}" Size="14"/></Button>
+                      <Button Click="MediaRepeat_Click" ToolTip="{Binding MediaRepeatLabel}" AutomationProperties.Name="Repeat mode">
+                        <Button.Style><Style TargetType="Button" BasedOn="{StaticResource Icon}"><Style.Triggers><DataTrigger Binding="{Binding MediaRepeatActive}" Value="True"><Setter Property="Background" Value="{DynamicResource NavSelected}"/><Setter Property="Foreground" Value="{DynamicResource Accent}"/></DataTrigger></Style.Triggers></Style></Button.Style>
+                        <local:Glyph Data="{DynamicResource IconRepeat}" Size="15"/>
+                      </Button>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                      <Button Click="MediaMute_Click" ToolTip="Mute" AutomationProperties.Name="Mute volume">
+                        <Button.Style><Style TargetType="Button" BasedOn="{StaticResource Icon}"><Style.Triggers><DataTrigger Binding="{Binding MediaMuted}" Value="True"><Setter Property="Foreground" Value="{DynamicResource Accent}"/></DataTrigger></Style.Triggers></Style></Button.Style>
+                        <local:Glyph Size="16">
+                          <local:Glyph.Style><Style TargetType="local:Glyph"><Setter Property="Data" Value="{DynamicResource IconVolume}"/><Style.Triggers><DataTrigger Binding="{Binding MediaMuted}" Value="True"><Setter Property="Data" Value="{DynamicResource IconMute}"/></DataTrigger></Style.Triggers></Style></local:Glyph.Style>
+                        </local:Glyph>
+                      </Button>
+                      <Slider x:Name="MediaVolumeSlider" Style="{StaticResource MediaSlider}" Width="68" Minimum="0" Maximum="1"
+                              Value="{Binding MediaVolume}" VerticalAlignment="Center" Margin="2,0,0,0" AutomationProperties.Name="Volume"/>
+                    </StackPanel>
+                  </Grid>
+                </StackPanel>
+              </Border>
+              <Grid Grid.Row="2">
+                <ListBox x:Name="MediaPlaylistBox" Style="{StaticResource ConversationList}" ItemsSource="{Binding MediaView}"
+                         ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         AutomationProperties.Name="Media playlist">
+                  <ListBox.ItemTemplate>
+                    <DataTemplate DataType="{x:Type local:MediaItem}">
+                      <Border Padding="12,9" Margin="0,0,0,6" CornerRadius="{DynamicResource PanelCorner}" BorderThickness="1" MouseLeftButtonDown="MediaItem_DoubleClick">
+                        <Border.Style>
+                          <Style TargetType="Border">
+                            <Setter Property="Background" Value="{DynamicResource Surface}"/>
+                            <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
+                            <Style.Triggers>
+                              <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                                <Setter Property="Background" Value="{DynamicResource RowSelected}"/>
+                                <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                              </DataTrigger>
+                            </Style.Triggers>
+                          </Style>
+                        </Border.Style>
+                        <Border.ContextMenu>
+                          <ContextMenu>
+                            <MenuItem Header="Play" Click="MediaPlayItem_Click"/>
+                            <MenuItem Header="Send to chat" Click="MediaSendToChat_Click"/>
+                            <MenuItem Header="Show in folder" Click="MediaRevealItem_Click"/>
+                            <MenuItem Header="Remove" Click="MediaRemoveItem_Click"/>
+                          </ContextMenu>
+                        </Border.ContextMenu>
+                        <Grid>
+                          <Grid.ColumnDefinitions><ColumnDefinition Width="30"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                          <local:Glyph Size="17" HorizontalAlignment="Left" VerticalAlignment="Center">
+                            <local:Glyph.Style>
+                              <Style TargetType="local:Glyph">
+                                <Setter Property="Data" Value="{DynamicResource IconMedia}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
+                                <Style.Triggers>
+                                  <DataTrigger Binding="{Binding IsVideo}" Value="True"><Setter Property="Data" Value="{DynamicResource IconVideo}"/></DataTrigger>
+                                  <DataTrigger Binding="{Binding IsCurrent}" Value="True"><Setter Property="Foreground" Value="{DynamicResource Accent}"/></DataTrigger>
+                                </Style.Triggers>
+                              </Style>
+                            </local:Glyph.Style>
+                          </local:Glyph>
+                          <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,8,0">
+                            <TextBlock Text="{Binding Title}" FontSize="13.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Text="{Binding MetaLabel}" FontSize="11.5" Foreground="{DynamicResource Faint}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
+                          </StackPanel>
+                          <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Style="{StaticResource Icon}" Width="28" Height="28" Click="MediaPlayItem_Click" ToolTip="Play" AutomationProperties.Name="Play track"><local:Glyph Data="{DynamicResource IconPlay}" Size="13"/></Button>
+                            <Button Style="{StaticResource Icon}" Width="28" Height="28" Click="MediaRemoveItem_Click" ToolTip="Remove" AutomationProperties.Name="Remove track"><local:Glyph Data="{DynamicResource IconTrash}" Size="13"/></Button>
+                          </StackPanel>
+                        </Grid>
+                      </Border>
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
+                <TextBlock Text="No media" Foreground="{DynamicResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
+                  <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding NoMediaShown}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+                </TextBlock>
+              </Grid>
             </Grid>
             <StackPanel Grid.Row="2">
               <Border Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Line}" BorderThickness="1" Padding="13,10" Margin="26,0,26,10" CornerRadius="{DynamicResource PanelCorner}" MaxWidth="760"><Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Visible"/><Style.Triggers><DataTrigger Binding="{Binding Toast}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Border.Style><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="24"/></Grid.ColumnDefinitions><TextBlock Text="{Binding Toast}" FontSize="12" Foreground="{DynamicResource Muted}" TextWrapping="Wrap" VerticalAlignment="Center"/><Button Grid.Column="1" Style="{StaticResource Icon}" Width="24" Height="24" Click="DismissToast_Click" ToolTip="Dismiss notification"><local:Glyph Data="{DynamicResource IconClose}" Size="13"/></Button></Grid></Border>

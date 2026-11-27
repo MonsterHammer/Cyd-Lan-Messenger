@@ -84,6 +84,54 @@ public static class Images
         { return null; }
     }
 
+    internal static BitmapImage? LoadChatBackgroundFromBytes(byte[] bytes)
+    {
+        if (bytes.Length == 0) return null;
+        try
+        {
+            using var probe = new MemoryStream(bytes, writable: false);
+            var decoder = BitmapDecoder.Create(probe, BitmapCreateOptions.DelayCreation | BitmapCreateOptions.IgnoreColorProfile, BitmapCacheOption.None);
+            if (decoder.Frames.Count == 0) return null;
+            var frame = decoder.Frames[0];
+            if (frame.PixelWidth <= 0 || frame.PixelHeight <= 0 || frame.PixelWidth > 4096 || frame.PixelHeight > 4096) return null;
+
+            const int maxSide = 1600;
+            using var ms = new MemoryStream(bytes, writable: false);
+            var image = new BitmapImage();
+            image.BeginInit();
+            image.CacheOption = BitmapCacheOption.OnLoad;
+            image.CreateOptions = BitmapCreateOptions.IgnoreColorProfile;
+            if (frame.PixelWidth >= frame.PixelHeight) image.DecodePixelWidth = Math.Min(frame.PixelWidth, maxSide);
+            else image.DecodePixelHeight = Math.Min(frame.PixelHeight, maxSide);
+            image.StreamSource = ms;
+            image.EndInit();
+            image.Freeze();
+            return image;
+        }
+        catch (Exception e) when (e is IOException or NotSupportedException or ArgumentException or InvalidOperationException or FileFormatException or System.Runtime.InteropServices.COMException)
+        { return null; }
+    }
+
+    internal static BitmapSource ToGrayscale(BitmapSource source)
+    {
+        var gray = new FormatConvertedBitmap(source, PixelFormats.Gray8, null, 0);
+        var bgra = new FormatConvertedBitmap(gray, PixelFormats.Pbgra32, null, 0);
+        bgra.Freeze();
+        return bgra;
+    }
+
+    internal static bool HasGifSignature(ReadOnlySpan<byte> data) =>
+        data.Length >= 6 && (data[..6].SequenceEqual("GIF87a"u8) || data[..6].SequenceEqual("GIF89a"u8));
+
+    internal static string SaveBytes(byte[] bytes, string extension, string directory)
+    {
+        Directory.CreateDirectory(directory);
+        string ext = extension.StartsWith('.') ? extension.ToLowerInvariant() : "." + extension.ToLowerInvariant();
+        var path = System.IO.Path.Combine(directory, $"bg-{DateTime.Now:yyyyMMdd-HHmmss}-{Guid.NewGuid().ToString("N")[..6]}{ext}");
+        File.WriteAllBytes(path, bytes);
+        return path;
+    }
+
     /// <summary>Center-crops an image to a square, scales it to 96 px and saves it as a new PNG; null when the file is not a usable image.</summary>
     public static string? SaveProfilePicture(string source, string directory)
     {

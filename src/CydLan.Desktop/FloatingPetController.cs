@@ -5,6 +5,7 @@ public sealed class FloatingPetController : IDisposable
 {
     private readonly MainViewModel model;
     private readonly Action openMainWindow;
+    private readonly Action? customizePet;
     private FloatingPetWindow? petWindow;
     private FloatingQuickChatWindow? quickChatWindow;
     private DateTime lastQuickChatDeactivatedUtc = DateTime.MinValue;
@@ -13,12 +14,14 @@ public sealed class FloatingPetController : IDisposable
     public FloatingPetWindow? PetWindow => petWindow;
     public FloatingQuickChatWindow? QuickChatWindow => quickChatWindow;
 
-    public FloatingPetController(MainViewModel model, Action openMainWindow)
+    public FloatingPetController(MainViewModel model, Action openMainWindow, Action? customizePet = null)
     {
         this.model = model;
         this.openMainWindow = openMainWindow;
+        this.customizePet = customizePet;
         model.FloatingStateChanged += SyncVisibility;
         model.PetActivity += OnPetActivity;
+        model.PetHopRequested += OnPetHopRequested;
     }
 
     public void SyncVisibility()
@@ -30,7 +33,8 @@ public sealed class FloatingPetController : IDisposable
                 model,
                 ToggleQuickChat,
                 openMainWindow,
-                () => quickChatWindow?.IsVisible == true);
+                () => quickChatWindow?.IsVisible == true,
+                customizePet ?? openMainWindow);
             if (!petWindow.IsVisible) petWindow.Show();
         }
         else
@@ -69,12 +73,20 @@ public sealed class FloatingPetController : IDisposable
             petWindow.ReactToIncoming(sender, preview, peerId);
     }
 
+    private void OnPetHopRequested()
+    {
+        if (disposed || !model.FloatingLanEnabled) return;
+        if (petWindow is { IsVisible: true })
+            petWindow.TriggerHop();
+    }
+
     public void Dispose()
     {
         if (disposed) return;
         disposed = true;
         model.FloatingStateChanged -= SyncVisibility;
         model.PetActivity -= OnPetActivity;
+        model.PetHopRequested -= OnPetHopRequested;
         quickChatWindow?.Close();
         petWindow?.Close();
     }

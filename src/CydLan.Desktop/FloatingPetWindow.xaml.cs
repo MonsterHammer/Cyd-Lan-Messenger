@@ -15,6 +15,7 @@ public partial class FloatingPetWindow : Window
     private readonly Action toggleQuickChat;
     private readonly Action openMainWindow;
     private readonly Func<bool> isQuickChatOpen;
+    private readonly Action? customizePet;
     private readonly DispatcherTimer animTimer = new(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(33) };
     private readonly DispatcherTimer speechTimer = new() { Interval = TimeSpan.FromSeconds(4.5) };
     private string? speechPeerId;
@@ -41,13 +42,15 @@ public partial class FloatingPetWindow : Window
         MainViewModel model,
         Action toggleQuickChat,
         Action openMainWindow,
-        Func<bool> isQuickChatOpen)
+        Func<bool> isQuickChatOpen,
+        Action? customizePet = null)
     {
         InitializeComponent();
         this.model = model;
         this.toggleQuickChat = toggleQuickChat;
         this.openMainWindow = openMainWindow;
         this.isQuickChatOpen = isQuickChatOpen;
+        this.customizePet = customizePet;
         DataContext = model;
 
         SourceInitialized += (_, _) => PopupHost.MakeToolWindow(this);
@@ -79,6 +82,14 @@ public partial class FloatingPetWindow : Window
         hopProgress = .02;
         excited = true;
         excitedUntilUtc = DateTime.UtcNow.AddSeconds(3.2);
+        UpdateVisual();
+    }
+
+    public void TriggerHop()
+    {
+        hopProgress = .02;
+        excited = true;
+        excitedUntilUtc = DateTime.UtcNow.AddSeconds(1.8);
         UpdateVisual();
     }
 
@@ -151,6 +162,7 @@ public partial class FloatingPetWindow : Window
         }
 
         // Casual screen roaming along the current horizontal perch.
+        string vibe = model.PetAppearance.Vibe;
         bool walking = model.FloatingLanRoam && !dragging && !hovered && !isQuickChatOpen();
         if (walking)
         {
@@ -164,21 +176,29 @@ public partial class FloatingPetWindow : Window
                 var work = WorkAreaDipForCurrentWindow();
                 double minLeft = work.Left - (Width - PetHitArea.Width) * .5 + 8;
                 double maxLeft = work.Right - Width + (Width - PetHitArea.Width) * .5 - 8;
-                double nextLeft = Left + facing * 1.15;
-                if (nextLeft <= minLeft) { nextLeft = minLeft; facing = 1; roamPauseTicks = 45; }
-                else if (nextLeft >= maxLeft) { nextLeft = maxLeft; facing = -1; roamPauseTicks = 45; }
-                else if (Random.Shared.Next(260) == 0)
+                double walkSpeed = vibe == "zoomies" ? 1.65 : vibe == "calm" ? .90 : vibe == "sleepy" ? .70 : 1.15;
+                double stepRate = vibe == "zoomies" ? 12.0 : 9.5;
+                double nextLeft = Left + facing * walkSpeed;
+                if (nextLeft <= minLeft) { nextLeft = minLeft; facing = 1; roamPauseTicks = vibe == "zoomies" ? 20 : 45; }
+                else if (nextLeft >= maxLeft) { nextLeft = maxLeft; facing = -1; roamPauseTicks = vibe == "zoomies" ? 20 : 45; }
+                else if (Random.Shared.Next(vibe == "zoomies" ? 360 : 260) == 0)
                 {
-                    roamPauseTicks = Random.Shared.Next(45, 95);
+                    roamPauseTicks = Random.Shared.Next(35, 90);
                     if (Random.Shared.Next(2) == 0) facing = -facing;
                 }
+                else if (vibe == "zoomies" && hopProgress == 0 && Random.Shared.Next(150) == 0)
+                {
+                    hopProgress = .02;
+                }
                 Left = nextLeft;
-                stepPhase = (stepPhase + dt * 9.5) % (Math.PI * 2);
+                stepPhase = (stepPhase + dt * stepRate) % (Math.PI * 2);
             }
         }
         else
         {
             stepPhase = 0;
+            if (vibe == "zoomies" && hopProgress == 0 && !dragging && !isQuickChatOpen() && Random.Shared.Next(220) == 0)
+                hopProgress = .02;
         }
 
         UpdateVisual();
@@ -187,7 +207,8 @@ public partial class FloatingPetWindow : Window
     private void UpdateVisual()
     {
         bool online = model.OnlineCount > 0;
-        bool sleepy = model.Settings.Status == "dnd" || (!online && !hovered && !excited);
+        bool sleepyVibe = model.PetAppearance.Vibe == "sleepy" && !hovered && !excited && !model.IsMediaPlaying;
+        bool sleepy = sleepyVibe || model.Settings.Status == "dnd" || (!online && !hovered && !excited && !model.IsMediaPlaying);
         PetVisual.SetMotionState(
             breathPhase,
             blinkProgress,
@@ -199,7 +220,8 @@ public partial class FloatingPetWindow : Window
             sleepy,
             online,
             model.FloatingLanRoam && !dragging && !hovered && !isQuickChatOpen() && roamPauseTicks == 0,
-            model.Settings.Status);
+            model.Settings.Status,
+            model.IsMediaPlaying);
     }
 
     private void Pet_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -267,6 +289,7 @@ public partial class FloatingPetWindow : Window
     private void Roam_Click(object sender, RoutedEventArgs e) =>
         model.UpdateFloatingState(roam: !model.FloatingLanRoam);
 
+    private void Customize_Click(object sender, RoutedEventArgs e) => (customizePet ?? openMainWindow)();
     private void OpenApp_Click(object sender, RoutedEventArgs e) => openMainWindow();
     private void HidePet_Click(object sender, RoutedEventArgs e) => model.UpdateFloatingState(enabled: false);
 

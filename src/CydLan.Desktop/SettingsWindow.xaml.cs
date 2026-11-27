@@ -35,7 +35,7 @@ public partial class SettingsWindow : Window
 
     public static string NormalizeAppearanceTab(string? name) => name switch
     {
-        "Colors" or "Bubbles" or "Textures" or "Ambient" or "Headers" or "Panels" or "Aura" or "Customize" => name,
+        "Colors" or "Bubbles" or "Textures" or "Ambient" or "Headers" or "Panels" or "Aura" or "Companion" or "Customize" => name,
         _ => "Themes"
     };
 
@@ -88,18 +88,23 @@ public partial class SettingsWindow : Window
         ChromeTextureBox.ItemsSource = ChromeTexture.Catalog;
         TargetAuraBox.ItemsSource = TargetAura.Catalog;
         ChatCanvasBox.ItemsSource = ChatCanvasOverlay.Catalog;
+        BackgroundTransitionBox.ItemsSource = BackgroundSideTransition.Catalog;
+        InitCompanionControls();
 
         backgroundPath = s.ChatBackgroundPath;
         BackgroundOpacityBox.Value = model.ChatBackgroundOpacity;
-        ShowBackground(model.ChatBackground);
 
         LoadAppearanceControls(s);
         RefreshPresets();
         applyingAppearance = false;
 
+        ShowBackground();
         ApplyTargetAuraPreview();
         ApplyBackgroundBlurPreview();
+        ApplyBackgroundTransitionPreview();
+        SyncBackgroundPreviewVisuals();
         UpdateFontPreview();
+        ApplyCompanionPreview();
 
         if (initialAppearanceTab is not null || initialPage is not null)
         {
@@ -117,12 +122,18 @@ public partial class SettingsWindow : Window
             {
                 ThemeManager.Apply(originalTheme, originalOverrides);
                 AmbientEffect.SetSpeed(model.EffectSpeed);
+                AmbientEffect.SetAnimateWhenUnfocused(s.AnimateWhenUnfocused);
                 MessageMotion.Configure(s.MessageAnimation);
                 model.PreviewChromeTexture(null, null);
                 model.PreviewChatCanvas(null, null);
                 model.PreviewSeamlessComposer(null);
                 model.PreviewBackgroundBlur(null);
+                model.PreviewChatBackground(false, null, null, null);
+                model.PreviewBackgroundTransition(null, null);
+                model.PreviewBackgroundOptions(null, null, null, null);
+                model.PreviewMessageTypography(null, null, null);
                 model.PreviewAvatarOptions(null, null);
+                model.PreviewPetAppearance(null);
                 ButtonEffects.Configure(
                     s.ButtonGlowEnabled, model.ButtonGlowIntensity,
                     s.ButtonSheenEnabled, model.ButtonSheenIntensity,
@@ -153,13 +164,20 @@ public partial class SettingsWindow : Window
             ChromeTextureBox.ItemsSource = null;
             TargetAuraBox.ItemsSource = null;
             ChatCanvasBox.ItemsSource = null;
+            BackgroundTransitionBox.ItemsSource = null;
             FontBox.ItemsSource = null;
             UiFontBox.ItemsSource = null;
             PresetBox.ItemsSource = null;
+            BackgroundPreviewHorizontalMask.OpacityMask = null;
+            BackgroundPreviewVerticalMask.OpacityMask = null;
             BackgroundPreview.Effect = null;
-            BackgroundPreview.Source = null;
+            AnimatedGifBehavior.SetSequence(BackgroundPreview, null);
+            AnimatedGifBehavior.SetFallbackSource(BackgroundPreview, null);
+            DisposeCompanionControls();
             AvatarPreview.Source = null;
             chosenBackground = null;
+            chosenBackgroundBytes = null;
+            chosenBackgroundGif = null;
             DataContext = null;
         };
     }
@@ -241,6 +259,7 @@ public partial class SettingsWindow : Window
         SendPulseBox.IsChecked = s.SendPulseEnabled;
         SendPulseIntensityBox.Value = ClampUnit(s.SendPulseIntensity, .65);
         AmbientOnSidebarBox.IsChecked = s.AmbientOnSidebarEnabled;
+        AnimateWhenUnfocusedBox.IsChecked = s.AnimateWhenUnfocused;
 
         HeaderAuroraBox.IsChecked = s.HeaderAuroraEnabled;
         HeaderAuroraIntensityBox.Value = ClampUnit(s.HeaderAuroraIntensity, .65);
@@ -351,11 +370,8 @@ public partial class SettingsWindow : Window
         AuraButtonsBox.IsChecked = s.AuraHighlightButtonsEnabled;
 
         string uiFont = (s.UiFont ?? "").Trim();
-        UiFontBox.SelectedItem = uiFont.Length == 0 ? UiFontThemeDefault : uiFont;
-        if (UiFontBox.SelectedItem is null) UiFontBox.SelectedItem = UiFontThemeDefault;
-
-        FontBox.SelectedItem = s.MessageFont;
-        if (FontBox.SelectedItem is null) FontBox.SelectedItem = "Segoe UI Variable Text";
+        SelectFontItem(UiFontBox, uiFont.Length == 0 ? UiFontThemeDefault : uiFont, UiFontThemeDefault);
+        SelectFontItem(FontBox, s.MessageFont, "Segoe UI Variable Text");
         SizeBox.SelectedItem = SizeBox.Items.Cast<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag == s.MessageFontSize) ?? SizeBox.Items[1];
         customFontPx = s.MessageFontSizePx is { } px && double.IsFinite(px) ? Math.Clamp(Math.Round(px), 11, 22) : null;
         MessageFontPxBox.Value = customFontPx ?? MainViewModel.FontSizeFor(SelectedFontSizeTag);
@@ -365,6 +381,43 @@ public partial class SettingsWindow : Window
         ChatCanvasIntensityBox.Value = ClampUnit(s.ChatCanvasGradientIntensity, .55);
         SeamlessComposerBox.IsChecked = s.SeamlessComposerEnabled;
         BackgroundBlurBox.Value = double.IsFinite(s.ChatBackgroundBlur) ? Math.Clamp(s.ChatBackgroundBlur, 0, 24) : 0;
+        BackgroundTransitionBox.SelectedValue = BackgroundSideTransition.Normalize(s.ChatBackgroundTransition);
+        BackgroundTransitionStrengthBox.Value = ClampUnit(s.ChatBackgroundTransitionStrength, .55);
+        BackgroundDimBox.Value = double.IsFinite(s.ChatBackgroundDim) ? Math.Clamp(s.ChatBackgroundDim, 0, .80) : 0;
+        BackgroundScaleBox.Value = double.IsFinite(s.ChatBackgroundScale) ? Math.Clamp(s.ChatBackgroundScale, 1.0, 1.6) : 1.0;
+        switch (AppearanceCodec.NormalizeBgFit(s.ChatBackgroundFit))
+        {
+            case "fit": BgFitFit.IsChecked = true; break;
+            case "stretch": BgFitStretch.IsChecked = true; break;
+            case "center": BgFitCenter.IsChecked = true; break;
+            default: BgFitFill.IsChecked = true; break;
+        }
+        string anchor = BackgroundAnchor.Normalize(s.ChatBackgroundAnchor);
+        (anchor switch
+        {
+            BackgroundAnchor.TopLeft => BgAnchorTopLeft,
+            BackgroundAnchor.Top => BgAnchorTop,
+            BackgroundAnchor.TopRight => BgAnchorTopRight,
+            BackgroundAnchor.Left => BgAnchorLeft,
+            BackgroundAnchor.Right => BgAnchorRight,
+            BackgroundAnchor.BottomLeft => BgAnchorBottomLeft,
+            BackgroundAnchor.Bottom => BgAnchorBottom,
+            BackgroundAnchor.BottomRight => BgAnchorBottomRight,
+            _ => BgAnchorCenter
+        }).IsChecked = true;
+        BackgroundAnchorLabel.Text = BackgroundAnchor.DisplayName(anchor);
+        BackgroundGrayscaleBox.IsChecked = s.ChatBackgroundGrayscale;
+        LoadCompanionControls(s);
+    }
+
+    private static void SelectFontItem(System.Windows.Controls.ComboBox box, string? requested, string fallback)
+    {
+        string target = (requested ?? "").Trim();
+        var items = box.Items.OfType<string>().ToList();
+        string? match = target.Length > 0
+            ? items.FirstOrDefault(f => string.Equals(f, target, StringComparison.OrdinalIgnoreCase))
+            : null;
+        box.SelectedItem = match ?? items.FirstOrDefault(f => string.Equals(f, fallback, StringComparison.OrdinalIgnoreCase)) ?? fallback;
     }
 
     private void WriteAppearanceTo(AppSettings s)
@@ -396,6 +449,15 @@ public partial class SettingsWindow : Window
         s.ChatCanvasGradientIntensity = ChatCanvasIntensityBox.Value;
         s.SeamlessComposerEnabled = SeamlessComposerBox.IsChecked == true;
         s.ChatBackgroundBlur = BackgroundBlurBox.Value;
+        s.ChatBackgroundOpacity = double.IsFinite(BackgroundOpacityBox.Value) ? Math.Clamp(BackgroundOpacityBox.Value, .10, 1.0) : .26;
+        s.ChatBackgroundTransition = BackgroundSideTransition.Normalize(BackgroundTransitionBox.SelectedValue as string);
+        s.ChatBackgroundTransitionStrength = ClampUnit(BackgroundTransitionStrengthBox.Value, .55);
+        s.ChatBackgroundDim = BackgroundDimBox.Value;
+        s.ChatBackgroundScale = BackgroundScaleBox.Value;
+        s.ChatBackgroundFit = SelectedBackgroundFit;
+        s.ChatBackgroundAnchor = SelectedBackgroundAnchor;
+        s.ChatBackgroundGrayscale = IsGrayscaleChecked;
+        WriteCompanionTo(s);
         s.TypingEffect = ChatEffects.Normalize(TypingEffectBox.SelectedValue as string, typing: true);
         s.ClickEffect = ChatEffects.Normalize(ClickEffectBox.SelectedValue as string);
         s.SteampunkEngineEnabled = SteampunkEngineBox.IsChecked == true;
@@ -430,6 +492,7 @@ public partial class SettingsWindow : Window
         s.SendPulseEnabled = SendPulseBox.IsChecked == true;
         s.SendPulseIntensity = SendPulseIntensityBox.Value;
         s.AmbientOnSidebarEnabled = AmbientOnSidebarBox.IsChecked == true;
+        s.AnimateWhenUnfocused = AnimateWhenUnfocusedBox.IsChecked == true;
         s.HeaderAuroraEnabled = HeaderAuroraBox.IsChecked == true;
         s.HeaderAuroraIntensity = HeaderAuroraIntensityBox.Value;
         s.TitleSparklesEnabled = TitleSparklesBox.IsChecked == true;
@@ -583,14 +646,21 @@ public partial class SettingsWindow : Window
         if (!IsInitialized || closing) return;
         ApplyLiveThemeOverrides();
         AmbientEffect.SetSpeed(EffectSpeedBox.Value);
+        AmbientEffect.SetAnimateWhenUnfocused(AnimateWhenUnfocusedBox.IsChecked == true);
         MessageMotion.Configure(SelectedMessageAnimation);
         ApplyChromeTexturePreview();
         ApplyChatCanvasPreview();
         ApplySeamlessComposerPreview();
         ApplyBackgroundBlurPreview();
+        ApplyBackgroundTransitionPreview();
+        ApplyBackgroundOptionsPreview();
+        ApplyChatBackgroundPreview();
         ApplyButtonPreview();
         ApplyTargetAuraPreview();
         UpdateFontPreview();
+        ApplyMessageTypographyPreview();
+        ApplyCompanionPreview();
+        ShowBackground();
     }
 
     private void SetColorChannel(System.Windows.Controls.ListBox box, System.Windows.Controls.TextBox hexBox, ref string backingField, string? value)
@@ -697,6 +767,12 @@ public partial class SettingsWindow : Window
         AmbientEffect.SetSpeed(EffectSpeedBox.Value);
     }
 
+    private void AnimateUnfocused_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!IsInitialized || closing || applyingAppearance) return;
+        AmbientEffect.SetAnimateWhenUnfocused(AnimateWhenUnfocusedBox.IsChecked == true);
+    }
+
     private void WindowOpacity_SliderChanged(object sender, RoutedPropertyChangedEventArgs<double> e) => ApplyLiveThemeOverrides();
 
     private void ChatCanvas_Changed(object sender, SelectionChangedEventArgs e) => ApplyChatCanvasPreview();
@@ -714,13 +790,78 @@ public partial class SettingsWindow : Window
         model.PreviewSeamlessComposer(SeamlessComposerBox.IsChecked == true);
     }
 
+    private string SelectedBackgroundFit =>
+        BgFitFit.IsChecked == true ? "fit"
+        : BgFitStretch.IsChecked == true ? "stretch"
+        : BgFitCenter.IsChecked == true ? "center"
+        : "fill";
+    private string SelectedBackgroundAnchor =>
+        BgAnchorTopLeft.IsChecked == true ? BackgroundAnchor.TopLeft
+        : BgAnchorTop.IsChecked == true ? BackgroundAnchor.Top
+        : BgAnchorTopRight.IsChecked == true ? BackgroundAnchor.TopRight
+        : BgAnchorLeft.IsChecked == true ? BackgroundAnchor.Left
+        : BgAnchorRight.IsChecked == true ? BackgroundAnchor.Right
+        : BgAnchorBottomLeft.IsChecked == true ? BackgroundAnchor.BottomLeft
+        : BgAnchorBottom.IsChecked == true ? BackgroundAnchor.Bottom
+        : BgAnchorBottomRight.IsChecked == true ? BackgroundAnchor.BottomRight
+        : BackgroundAnchor.Center;
+    private bool IsGrayscaleChecked => BackgroundGrayscaleBox.IsChecked == true;
     private void BackgroundBlur_SliderChanged(object sender, RoutedPropertyChangedEventArgs<double> e) => ApplyBackgroundBlurPreview();
+    private void BackgroundOpacity_SliderChanged(object sender, RoutedPropertyChangedEventArgs<double> e) => ApplyChatBackgroundPreview();
+    private void BackgroundTransition_Changed(object sender, SelectionChangedEventArgs e) => ApplyBackgroundTransitionPreview();
+    private void BackgroundTransition_SliderChanged(object sender, RoutedPropertyChangedEventArgs<double> e) => ApplyBackgroundTransitionPreview();
+    private void BackgroundOptions_SliderChanged(object sender, RoutedPropertyChangedEventArgs<double> e) => ApplyBackgroundOptionsPreview();
+    private void BackgroundFit_Checked(object sender, RoutedEventArgs e) => ApplyBackgroundOptionsPreview();
+    private void BackgroundAnchor_Checked(object sender, RoutedEventArgs e) => ApplyBackgroundOptionsPreview();
+    private void BackgroundGrayscale_Changed(object sender, RoutedEventArgs e) => ApplyBackgroundOptionsPreview();
     private void ApplyBackgroundBlurPreview()
     {
         if (!IsInitialized || closing || applyingAppearance) return;
         double blur = BackgroundBlurBox.Value;
         model.PreviewBackgroundBlur(blur);
         BackgroundPreview.Effect = blur >= .5 ? new BlurEffect { Radius = blur } : null;
+    }
+
+    private void SyncBackgroundPreviewVisuals()
+    {
+        string fit = SelectedBackgroundFit;
+        string anchor = SelectedBackgroundAnchor;
+        BackgroundAnchorLabel.Text = BackgroundAnchor.DisplayName(anchor);
+        BackgroundPreviewViewport.Fit = fit;
+        BackgroundPreviewViewport.Anchor = anchor;
+        BackgroundPreviewViewport.ImageScale = BackgroundScaleBox.Value;
+        BackgroundPreviewDimOverlay.Opacity = BackgroundDimBox.Value;
+    }
+
+    private void ApplyBackgroundOptionsPreview()
+    {
+        if (!IsInitialized || closing || applyingAppearance) return;
+        model.PreviewBackgroundOptions(BackgroundDimBox.Value, BackgroundScaleBox.Value, SelectedBackgroundFit, IsGrayscaleChecked, SelectedBackgroundAnchor);
+        SyncBackgroundPreviewVisuals();
+        ShowBackground();
+    }
+
+    private void ApplyBackgroundTransitionPreview()
+    {
+        if (!IsInitialized || closing || applyingAppearance) return;
+        string transition = BackgroundSideTransition.Normalize(BackgroundTransitionBox.SelectedValue as string);
+        double strength = ClampUnit(BackgroundTransitionStrengthBox.Value, .55);
+        model.PreviewBackgroundTransition(transition, strength);
+        var kind = BackgroundSideTransition.KindFor(transition);
+        BackgroundPreviewHorizontalMask.OpacityMask = BackgroundSideTransition.CreateHorizontalMask(kind, strength);
+        BackgroundPreviewVerticalMask.OpacityMask = BackgroundSideTransition.CreateVerticalMask(kind, strength);
+    }
+
+    private BitmapSource? CurrentColorBackgroundSource() =>
+        chosenBackground ?? (backgroundPath.Length > 0 ? (model.RawSavedChatBackground ?? Images.LoadChatBackground(backgroundPath)) : null);
+
+    private AnimatedGifSequence? CurrentColorBackgroundGif() =>
+        chosenBackground is not null ? chosenBackgroundGif : (backgroundPath.Length > 0 ? model.RawSavedChatBackgroundGif : null);
+
+    private void ApplyChatBackgroundPreview()
+    {
+        if (!IsInitialized || closing || applyingAppearance) return;
+        model.PreviewChatBackground(true, CurrentColorBackgroundSource(), BackgroundOpacityBox.Value, CurrentColorBackgroundGif());
     }
 
     private void RefreshPresets(string? selectId = null)
@@ -738,14 +879,21 @@ public partial class SettingsWindow : Window
     {
         var temp = new AppSettings();
         WriteAppearanceTo(temp);
-        return AppearanceCodec.Encode(temp);
+        temp.ChatBackgroundPath = backgroundPath;
+        return AppearanceCodec.Encode(temp, CurrentColorBackgroundSource(), chosenBackgroundBytes);
     }
 
     private void ApplyLookData(AppearanceCodec.LookData look)
     {
         var temp = new AppSettings();
         AppearanceCodec.Apply(look, temp);
+        var (decodedImage, decodedGifBytes) = AppearanceCodec.TryDecodeBackground(look);
+        chosenBackground = decodedImage;
+        chosenBackgroundBytes = decodedGifBytes;
+        chosenBackgroundGif = decodedGifBytes is not null ? AnimatedGifSequence.TryLoadFromBytes(decodedGifBytes) : null;
+        backgroundPath = "";
         applyingAppearance = true;
+        BackgroundOpacityBox.Value = temp.ChatBackgroundOpacity;
         LoadAppearanceControls(temp);
         applyingAppearance = false;
         ApplyAllLivePreviews();
@@ -816,7 +964,12 @@ public partial class SettingsWindow : Window
     {
         var temp = new AppSettings { Theme = SelectedTheme };
         AppearanceCodec.ResetDefaults(temp);
+        chosenBackground = null;
+        chosenBackgroundBytes = null;
+        chosenBackgroundGif = null;
+        backgroundPath = "";
         applyingAppearance = true;
+        BackgroundOpacityBox.Value = temp.ChatBackgroundOpacity;
         LoadAppearanceControls(temp);
         applyingAppearance = false;
         ApplyAllLivePreviews();
@@ -842,32 +995,67 @@ public partial class SettingsWindow : Window
     }
     private void RemoveAvatar_Click(object sender, RoutedEventArgs e) { avatarPath = ""; ShowAvatar(); }
     private string backgroundPath = "";
-    private BitmapImage? chosenBackground;
-    private void ShowBackground(ImageSource? image)
+    private BitmapSource? chosenBackground;
+    private byte[]? chosenBackgroundBytes;
+    private AnimatedGifSequence? chosenBackgroundGif;
+    private void ShowBackground()
     {
-        BackgroundPreview.Source = image;
+        BitmapSource? image = model.ChatBackground;
+        AnimatedGifSequence? gif = model.ChatBackgroundGif;
+        AnimatedGifBehavior.SetFallbackSource(BackgroundPreview, image);
+        AnimatedGifBehavior.SetSequence(BackgroundPreview, gif);
         BackgroundAdjustments.Visibility = image is null ? Visibility.Collapsed : Visibility.Visible;
         RemoveBackgroundButton.IsEnabled = image is not null || backgroundPath.Length > 0;
+    }
+    private static byte[]? TryReadGifBytes(string path)
+    {
+        try
+        {
+            var info = new System.IO.FileInfo(path);
+            if (!info.Exists || info.Length is < 6 or > 20 * 1024 * 1024) return null;
+            Span<byte> header = stackalloc byte[6];
+            using (var stream = System.IO.File.OpenRead(path))
+            {
+                if (stream.Read(header) < 6 || !Images.HasGifSignature(header)) return null;
+            }
+            return System.IO.File.ReadAllBytes(path);
+        }
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            return null;
+        }
     }
     private void ChooseBackground_Click(object sender, RoutedEventArgs e)
     {
         var picker = new Microsoft.Win32.OpenFileDialog { Title = "Chat background", Filter = "Images|*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.webp" };
         if (picker.ShowDialog(this) != true) return;
-        if (Images.LoadChatBackground(picker.FileName) is not { } image)
+        byte[]? gifBytes = TryReadGifBytes(picker.FileName);
+        AnimatedGifSequence? gif = gifBytes is not null ? AnimatedGifSequence.TryLoadFromBytes(gifBytes) : null;
+        BitmapSource? image = Images.LoadChatBackground(picker.FileName) ?? (gif is { Frames.Count: > 0 } ? gif.Frames[0].Bitmap : null);
+        if (image is null)
         {
             BackgroundError.Text = "The image couldn't be opened.";
             return;
         }
         chosenBackground = image;
+        chosenBackgroundBytes = gifBytes;
+        chosenBackgroundGif = gif;
+        backgroundPath = "";
         BackgroundError.Text = "";
-        ShowBackground(image);
+        ApplyChatBackgroundPreview();
+        ApplyBackgroundOptionsPreview();
+        ShowBackground();
     }
     private void RemoveBackground_Click(object sender, RoutedEventArgs e)
     {
         chosenBackground = null;
+        chosenBackgroundBytes = null;
+        chosenBackgroundGif = null;
         backgroundPath = "";
         BackgroundError.Text = "";
-        ShowBackground(null);
+        ApplyChatBackgroundPreview();
+        ApplyBackgroundOptionsPreview();
+        ShowBackground();
     }
     private void PreviewTyping_Click(object sender, RoutedEventArgs e) => PreviewEffect((FrameworkElement)sender, TypingEffectBox, typing: true);
     private void PreviewClick_Click(object sender, RoutedEventArgs e) => PreviewEffect((FrameworkElement)sender, ClickEffectBox, typing: false);
@@ -937,8 +1125,10 @@ public partial class SettingsWindow : Window
         AppearanceHeadersSection.Visibility = normalized == "Headers" ? Visibility.Visible : Visibility.Collapsed;
         AppearancePanelsSection.Visibility = normalized == "Panels" ? Visibility.Visible : Visibility.Collapsed;
         AppearanceAuraSection.Visibility = normalized == "Aura" ? Visibility.Visible : Visibility.Collapsed;
+        AppearanceCompanionSection.Visibility = normalized == "Companion" ? Visibility.Visible : Visibility.Collapsed;
         AppearanceCustomizeSection.Visibility = normalized == "Customize" ? Visibility.Visible : Visibility.Collapsed;
         if (!restoringNavigation && !closing) model.LastAppearanceTab = normalized;
+        UpdateCompanionTimerState();
         PreferencesScroller.ScrollToTop();
     }
     private void Page_Checked(object sender, RoutedEventArgs e)
@@ -959,6 +1149,7 @@ public partial class SettingsWindow : Window
         foreach (var page in new[] { GeneralPage, AccountPage, MessagesPage, HistoryPage, AlertsPage, NetworkPage, FilesPage, AppearancePage, AboutPage })
             page.Visibility = page.Name == normalized ? Visibility.Visible : Visibility.Collapsed;
         if (!restoringNavigation && !closing) model.LastSettingsPage = normalized;
+        UpdateCompanionTimerState();
         PreferencesScroller.ScrollToTop();
     }
     private void Font_Changed(object sender, SelectionChangedEventArgs e)
@@ -972,6 +1163,7 @@ public partial class SettingsWindow : Window
             applyingAppearance = false;
         }
         UpdateFontPreview();
+        ApplyMessageTypographyPreview();
     }
     private void MessageFontPx_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
@@ -980,6 +1172,12 @@ public partial class SettingsWindow : Window
         double presetPx = MainViewModel.FontSizeFor(SelectedFontSizeTag);
         customFontPx = Math.Abs(px - presetPx) < .01 ? null : px;
         UpdateFontPreview();
+        ApplyMessageTypographyPreview();
+    }
+    private void ApplyMessageTypographyPreview()
+    {
+        if (!IsInitialized || closing || applyingAppearance) return;
+        model.PreviewMessageTypography(FontBox.SelectedItem as string, SelectedFontSizeTag, customFontPx);
     }
     private void UpdateFontPreview()
     {
@@ -1061,7 +1259,19 @@ public partial class SettingsWindow : Window
         var multicast = MulticastBox.Text.Trim();
         if (!IPAddress.TryParse(multicast, out var group) || group.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork || group.GetAddressBytes()[0] is < 224 or > 239)
         { ShowPage("NetworkPage"); MulticastBox.Focus(); return; }
-        if (chosenBackground is not null)
+        if (chosenBackgroundBytes is not null && Images.HasGifSignature(chosenBackgroundBytes))
+        {
+            try { backgroundPath = model.SaveChatBackgroundBytes(chosenBackgroundBytes, ".gif"); }
+            catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException or NotSupportedException)
+            {
+                ShowPage("AppearancePage");
+                ShowAppearanceTab("Customize");
+                BackgroundError.Text = "The background couldn't be saved.";
+                BackgroundError.BringIntoView();
+                return;
+            }
+        }
+        else if (chosenBackground is not null)
         {
             try { backgroundPath = model.SaveChatBackground(chosenBackground); }
             catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException or NotSupportedException)
@@ -1077,6 +1287,8 @@ public partial class SettingsWindow : Window
         CommitHexInput(EffectHexBox);
         CommitHexInput(OutgoingBubbleHexBox);
         CommitHexInput(IncomingBubbleHexBox);
+        CommitHexInput(ChatBackgroundHexBox);
+        CommitCompanionHexInputs();
         bool networkChanged = port != model.Settings.Port || multicast != model.Settings.Multicast;
         string defaultFolder = AppSettings.DefaultReceivedFilesFolder;
         await model.SavePreferencesAsync(s =>
@@ -1094,7 +1306,7 @@ public partial class SettingsWindow : Window
             s.ReceivedFilesFolder = string.Equals(FolderBox.Text, defaultFolder, StringComparison.OrdinalIgnoreCase) ? "" : FolderBox.Text;
             s.AutoAcceptFiles = AutoAcceptBox.IsChecked == true;
             s.ChatBackgroundPath = backgroundPath;
-            s.ChatBackgroundOpacity = BackgroundOpacityBox.Value;
+            s.ChatBackgroundOpacity = double.IsFinite(BackgroundOpacityBox.Value) ? Math.Clamp(BackgroundOpacityBox.Value, .10, 1.0) : .26;
             WriteAppearanceTo(s);
             s.SavedPresets = savedPresets.Select(p => new AppearancePreset { Id = p.Id, Name = p.Name, Code = p.Code }).ToList();
             s.LastSettingsPage = NormalizePage(model.LastSettingsPage);

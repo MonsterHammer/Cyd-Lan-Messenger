@@ -14,7 +14,7 @@ using CydLan.Core;
 
 namespace CydLan.Desktop;
 
-public sealed class MainViewModel : Observable, IAsyncDisposable
+public sealed partial class MainViewModel : Observable, IAsyncDisposable
 {
     private readonly LocalStore? store;
     private readonly LanService? lan;
@@ -103,7 +103,10 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     }
     public ObservableCollection<string> Diagnostics { get; } = [];
     public ICollectionView People { get; }
+    public ObservableCollection<Peer> QuickChatPeers { get; } = [];
+    public bool HasQuickChatPeers => QuickChatPeers.Count > 0;
     public ObservableCollection<object> RecentChats { get; } = [];
+    private readonly HashSet<string> activeSessionChatPeers = [];
     private bool showRecentChats;
     public bool ShowRecentChats
     {
@@ -135,7 +138,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     private bool groupsOpen;
     private string transferFilter = "all";
     private string search = "", messageSearch = "", networkStatus = "Starting local network…", toast = "";
-    private bool transfersOpen, broadcasting, connected;
+    private bool transfersOpen, mediaOpen, broadcasting, connected;
     private bool replying;
     /// <summary>The user has clicked or typed in the composer of the open conversation; until then its messages stay unread.</summary>
     public bool Replying { get => replying; set { replying = value; MarkConversationRead(); } }
@@ -150,7 +153,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         {
             if (!Set(ref selected, value)) return;
             // Picking a person always returns to one-to-one chat.
-            if (value is not null) { broadcasting = false; groupsOpen = false; transfersOpen = false; }
+            if (value is not null) { broadcasting = false; groupsOpen = false; transfersOpen = false; mediaOpen = false; }
             ClearMessageSearch(); SectionChanged();
         }
     }
@@ -160,35 +163,37 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         set
         {
             if (!Set(ref selectedGroup, value)) return;
-            if (value is not null) { groupsOpen = true; broadcasting = false; transfersOpen = false; }
+            if (value is not null) { groupsOpen = true; broadcasting = false; transfersOpen = false; mediaOpen = false; }
             ClearMessageSearch(); SectionChanged();
         }
     }
-    public string Search { get => search; set { if (Set(ref search, value)) { People.Refresh(); RefreshRecentChats(); } } }
+    public string Search { get => search; set { if (Set(ref search, value)) { People.Refresh(); RefreshRecentChats(); RefreshMediaFilterIfLoaded(); } } }
     public string MessageSearch { get => messageSearch; set { if (Set(ref messageSearch, value)) RefreshMessages(true); } }
     private void ClearMessageSearch() => Set(ref messageSearch, "", nameof(MessageSearch));
     private string DraftKey => GroupsOpen ? (SelectedGroup is { } g ? "group:" + g.Id : "groups") : Broadcasting ? "broadcast" : SelectedPeer?.Id ?? "none";
     public string Draft { get => drafts.GetValueOrDefault(DraftKey, ""); set { drafts[DraftKey] = value; Changed(); Changed(nameof(CanSend)); } }
     public string NetworkStatus { get => networkStatus; set { Set(ref networkStatus, value); Changed(nameof(ConnectionSummary)); } }
     public string Toast { get => toast; set => Set(ref toast, value); }
-    // Sections (left rail): Chats, Groups, Files, Broadcast. Exactly one is active.
-    public bool TransfersOpen { get => transfersOpen; set { if (transfersOpen == value) return; transfersOpen = value; SectionChanged(); } }
-    public bool Broadcasting { get => broadcasting; set { if (broadcasting == value) return; broadcasting = value; if (value) groupsOpen = false; SectionChanged(); } }
-    public bool GroupsOpen { get => groupsOpen; set { if (groupsOpen == value) return; groupsOpen = value; if (value) broadcasting = false; SectionChanged(); } }
-    public bool ChatOpen => !TransfersOpen;
-    public bool IsConversationSection => !TransfersOpen && !Broadcasting && !GroupsOpen;
-    public bool IsBroadcastSection => !TransfersOpen && Broadcasting;
-    public bool IsGroupsSection => !TransfersOpen && GroupsOpen;
-    public bool IsFilesSection => TransfersOpen;
-    public bool ShowPeopleList => !TransfersOpen && !GroupsOpen;
-    public bool ShowGroupList => !TransfersOpen && GroupsOpen;
+    // Sections (left rail): Chats, Groups, Files, Media, Broadcast. Exactly one is active.
+    public bool TransfersOpen { get => transfersOpen; set { if (transfersOpen == value) return; transfersOpen = value; if (value) mediaOpen = false; SectionChanged(); } }
+    public bool MediaOpen { get => mediaOpen; set { if (mediaOpen == value) return; mediaOpen = value; if (value) { transfersOpen = false; broadcasting = false; groupsOpen = false; _ = EnsureMediaLoadedAsync(); } SectionChanged(); } }
+    public bool Broadcasting { get => broadcasting; set { if (broadcasting == value) return; broadcasting = value; if (value) { groupsOpen = false; transfersOpen = false; mediaOpen = false; } SectionChanged(); } }
+    public bool GroupsOpen { get => groupsOpen; set { if (groupsOpen == value) return; groupsOpen = value; if (value) { broadcasting = false; transfersOpen = false; mediaOpen = false; } SectionChanged(); } }
+    public bool ChatOpen => !TransfersOpen && !MediaOpen;
+    public bool IsConversationSection => ChatOpen && !Broadcasting && !GroupsOpen;
+    public bool IsBroadcastSection => ChatOpen && Broadcasting;
+    public bool IsGroupsSection => ChatOpen && GroupsOpen;
+    public bool IsFilesSection => TransfersOpen && !MediaOpen;
+    public bool IsMediaSection => MediaOpen;
+    public bool ShowPeopleList => ChatOpen && !GroupsOpen;
+    public bool ShowGroupList => ChatOpen && GroupsOpen;
     public bool InGroup => IsGroupsSection && SelectedGroup is not null;
-    public bool HasPeer => SelectedPeer is not null && !Broadcasting && !GroupsOpen;
-    public bool NoPeer => SelectedPeer is null && !Broadcasting && !GroupsOpen;
-    public bool NoGroup => GroupsOpen && SelectedGroup is null;
+    public bool HasPeer => SelectedPeer is not null && IsConversationSection;
+    public bool NoPeer => SelectedPeer is null && IsConversationSection;
+    public bool NoGroup => GroupsOpen && SelectedGroup is null && ChatOpen;
     public bool HasDetails => HasPeer || InGroup;
     public IEnumerable<Peer> SelectedGroupMembers => SelectedGroup?.Members.Select(id => Peers.FirstOrDefault(p => p.Id == id) ?? new Peer { Id = id, Name = "Someone" }).ToList() ?? [];
-    public string SectionTitle => TransfersOpen ? "Files" : Broadcasting ? "Broadcast" : GroupsOpen ? "Groups" : "Chats";
+    public string SectionTitle => MediaOpen ? "Media" : TransfersOpen ? "Files" : Broadcasting ? "Broadcast" : GroupsOpen ? "Groups" : "Chats";
     public bool CanCompose => Broadcasting || (GroupsOpen ? SelectedGroup is { Left: false } : SelectedPeer is not null);
     private bool GroupReachable => SelectedGroup is { Left: false } g && g.Members.Any(id => Peers.Any(p => p.Id == id && p.Online));
     public bool CanSend => (!string.IsNullOrWhiteSpace(Draft) || HasAttachments) && (Broadcasting ? OnlineCount > 0 : GroupsOpen ? GroupReachable : SelectedPeer?.Online == true);
@@ -203,20 +208,20 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     }
     public bool HasAttachments => HasPeer && Attachments.Count > 0;
     public bool CanAttach => HasPeer && SelectedPeer?.Online == true;
-    public string ChatTitle => TransfersOpen ? "Files" : Broadcasting ? "Broadcast" : GroupsOpen ? SelectedGroup?.Name ?? "Groups" : SelectedPeer?.Name ?? "Conversations";
-    public string ChatSubtitle => TransfersOpen ? "" : Broadcasting ? $"{OnlineCount} online" : GroupsOpen ? (SelectedGroup is { } g ? GroupPeopleLabel(g) : "") : SelectedPeer is { } p ? p.Presence : "";
+    public string ChatTitle => MediaOpen ? (CurrentMedia?.Title ?? "Media") : TransfersOpen ? "Files" : Broadcasting ? "Broadcast" : GroupsOpen ? SelectedGroup?.Name ?? "Groups" : SelectedPeer?.Name ?? "Conversations";
+    public string ChatSubtitle => MediaOpen ? (CurrentMedia?.MetaLabel ?? "") : TransfersOpen ? "" : Broadcasting ? $"{OnlineCount} online" : GroupsOpen ? (SelectedGroup is { } g ? GroupPeopleLabel(g) : "") : SelectedPeer is { } p ? p.Presence : "";
     private string GroupPeopleLabel(GroupChat g) => g.Left ? "You left this group" : string.Join(", ", g.Members.Select(NameOf).Append("you"));
     private string NameOf(string peerId) => Peers.FirstOrDefault(p => p.Id == peerId)?.Name ?? "Someone";
     private void SectionChanged()
     {
         replying = false;
-        foreach (var name in new[] { nameof(TransfersOpen), nameof(Broadcasting), nameof(GroupsOpen), nameof(ChatOpen), nameof(IsConversationSection), nameof(IsBroadcastSection),
-            nameof(IsGroupsSection), nameof(IsFilesSection), nameof(ShowPeopleList), nameof(ShowPeopleDirectory), nameof(ShowRecentList), nameof(ShowGroupList), nameof(InGroup), nameof(HasPeer), nameof(NoPeer), nameof(NoGroup),
-            nameof(HasDetails), nameof(SelectedGroupMembers), nameof(SectionTitle), nameof(ChatTitle), nameof(ChatSubtitle), nameof(Draft) })
+        foreach (var name in new[] { nameof(TransfersOpen), nameof(MediaOpen), nameof(Broadcasting), nameof(GroupsOpen), nameof(ChatOpen), nameof(IsConversationSection), nameof(IsBroadcastSection),
+            nameof(IsGroupsSection), nameof(IsFilesSection), nameof(IsMediaSection), nameof(ShowPeopleList), nameof(ShowPeopleDirectory), nameof(ShowRecentList), nameof(ShowGroupList), nameof(InGroup), nameof(HasPeer), nameof(NoPeer), nameof(NoGroup),
+            nameof(HasDetails), nameof(SelectedGroupMembers), nameof(SectionTitle), nameof(ChatTitle), nameof(ChatSubtitle), nameof(Draft), nameof(ShowMiniPlayer) })
             Changed(name);
         Changed(nameof(SelectedGroup)); Changed(nameof(SelectedPeer)); Changed(nameof(SelectedRecentChat));
         filePage = 0;
-        AttachmentsSwitched(); ComposeChanged(); RefreshMessages(true); RefreshConversationFiles(); RefreshActiveTransfers();
+        AttachmentsSwitched(); ComposeChanged(); RefreshMessages(true); RefreshConversationFiles(); RefreshActiveTransfers(); RefreshQuickChatPeers();
     }
     private void AttachmentsSwitched() { Changed(nameof(Attachments)); Changed(nameof(HasAttachments)); Changed(nameof(CanSend)); }
     public int OnlineCount => Peers.Count(p => p.Online);
@@ -224,6 +229,10 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     public bool HasUnread => TotalUnread > 0;
     public bool FloatingLanEnabled => Settings.FloatingLanEnabled;
     public bool FloatingLanRoam => Settings.FloatingLanRoam;
+    private PetAppearance? previewPetAppearance;
+    public PetAppearance PetAppearance => previewPetAppearance ?? PetAppearance.From(Settings);
+    public event Action? PetHopRequested;
+    internal void RequestPetHop() => PetHopRequested?.Invoke();
     public string ProfileName => Settings.DisplayName;
     public string ProfileInitial => Settings.DisplayName.Length > 0 ? Settings.DisplayName[..1].ToUpperInvariant() : "C";
     public string ProfileAvatar => Settings.AvatarPath;
@@ -278,11 +287,11 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
                 if (existing is null) { existing = peer; Peers.Add(peer); rosterSaveTimer.Start(); }
                 else
                 {
-                    var previous = (existing.Name, existing.Address, existing.Port, existing.Version, existing.Status, existing.FirstName, existing.LastName, existing.About);
+                    var previous = (existing.Name, existing.Address, existing.Port, existing.Version, existing.Status, existing.FirstName, existing.LastName, existing.About, existing.PetCode);
                     existing.Name = peer.Name; existing.Address = peer.Address; existing.Port = peer.Port; existing.Version = peer.Version; existing.Status = peer.Status; existing.Online = true;
                     // CydLan peers include these in user data; LAN Messenger only sends them in reply to a query.
-                    if (LanService.IsCydLanVersion(peer.Version)) { existing.FirstName = peer.FirstName; existing.LastName = peer.LastName; existing.About = peer.About; }
-                    if (previous != (existing.Name, existing.Address, existing.Port, existing.Version, existing.Status, existing.FirstName, existing.LastName, existing.About))
+                    if (LanService.IsCydLanVersion(peer.Version)) { existing.FirstName = peer.FirstName; existing.LastName = peer.LastName; existing.About = peer.About; existing.PetCode = peer.PetCode; }
+                    if (previous != (existing.Name, existing.Address, existing.Port, existing.Version, existing.Status, existing.FirstName, existing.LastName, existing.About, existing.PetCode))
                         rosterSaveTimer.Start();
                 }
                 existing.PropertyChanged -= PeerChanged; existing.PropertyChanged += PeerChanged;
@@ -293,6 +302,11 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
                 if (Peers.FirstOrDefault(p => p.Id == id) is not { } peer) return;
                 if ((peer.FirstName, peer.LastName, peer.About) == (first, last, about)) return;
                 peer.FirstName = first; peer.LastName = last; peer.About = about; rosterSaveTimer.Start();
+            });
+            lan.PetCodeReceived += (id, petCode) => UI(() => {
+                if (disposed) return;
+                if (Peers.FirstOrDefault(p => p.Id == id) is not { } peer || peer.PetCode == petCode) return;
+                peer.PetCode = petCode; rosterSaveTimer.Start();
             });
             lan.AvatarReceived += (id, path) => UI(() => {
                 if (disposed) { TryDelete(path); return; }
@@ -305,13 +319,15 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
             lan.MessageReceived += message => UI(() => {
                 var peer = Peers.FirstOrDefault(p => p.Id == message.PeerId);
                 if (peer is null) return;
+                activeSessionChatPeers.Add(peer.Id);
                 AddMessage(message); peer.Preview = message.Text.ReplaceLineEndings(" ");
                 RefreshRecentChats();
                 if (SelectedPeer?.Id != peer.Id || !IsConversationSection || !Replying) peer.Unread++;
                 peer.Typing = "";
+                RefreshQuickChatPeers();
                 RefreshMessages(); Changed(nameof(PeopleSummary)); Changed(nameof(TotalUnread)); Changed(nameof(HasUnread)); Save(); NotifyIncoming(peer.Name, message.Text, peer.Id);
             });
-            lan.TypingChanged += (id, typing) => UI(() => { if (Peers.FirstOrDefault(p => p.Id == id) is { } p) p.Typing = typing; });
+            lan.TypingChanged += (id, typing) => UI(() => { if (Peers.FirstOrDefault(p => p.Id == id) is { } p) { p.Typing = typing; RefreshQuickChatPeers(); } });
             lan.TransferChanged += transfer => UI(() => OnTransferChanged(transfer));
             lan.GroupMessageReceived += (sender, thread, op, text) => UI(() => OnGroupMessage(sender, thread, op, text));
             lan.Diagnostic += message => UI(() => { Diagnostics.Insert(0, $"{DateTime.Now:HH:mm:ss}  {message}"); while (Diagnostics.Count > 100) Diagnostics.RemoveAt(100); });
@@ -328,7 +344,45 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         foreach (var peer in Peers) peer.PropertyChanged += PeerChanged;
         if (preview && seedPreview) SeedPreview();
         RefreshRecentChats();
+        RefreshQuickChatPeers();
+        InitMedia();
         ApplySettings();
+    }
+    private void RefreshQuickChatPeers()
+    {
+        var cutoff = DateTimeOffset.Now - TimeSpan.FromHours(12);
+        var active = new List<(Peer Peer, DateTimeOffset LastActivity)>();
+        foreach (var peer in Peers)
+        {
+            var direct = ChatHistory(false, peer.Id);
+            DateTimeOffset lastTime = direct.Count > 0 ? direct[^1].Time : DateTimeOffset.MinValue;
+            bool chatting = peer.Unread > 0
+                || peer.Typing.Length > 0
+                || (HasPeer && peer == SelectedPeer)
+                || (direct.Count > 0 && (activeSessionChatPeers.Contains(peer.Id) || lastTime >= cutoff));
+            if (chatting) active.Add((peer, lastTime));
+        }
+
+        var ordered = active
+            .OrderByDescending(x => x.Peer.Unread > 0)
+            .ThenByDescending(x => x.Peer.Typing.Length > 0)
+            .ThenByDescending(x => x.LastActivity)
+            .ThenByDescending(x => HasPeer && x.Peer == SelectedPeer)
+            .ThenBy(x => x.Peer.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(x => x.Peer)
+            .ToList();
+
+        var included = ordered.ToHashSet();
+        for (int i = QuickChatPeers.Count - 1; i >= 0; i--)
+            if (!included.Contains(QuickChatPeers[i])) QuickChatPeers.RemoveAt(i);
+        for (int i = 0; i < ordered.Count; i++)
+        {
+            int previous = QuickChatPeers.IndexOf(ordered[i]);
+            if (previous < 0) QuickChatPeers.Insert(i, ordered[i]);
+            else if (previous != i) QuickChatPeers.Move(previous, i);
+        }
+        Changed(nameof(HasQuickChatPeers));
+        Changed(nameof(SelectedPeer));
     }
     private void RefreshRecentChats()
     {
@@ -362,6 +416,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     private void PeerChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (sender == SelectedPeer) { Changed(nameof(ChatSubtitle)); Changed(nameof(ChatTitle)); ComposeChanged(); }
+        if (e.PropertyName is nameof(Peer.Unread) or nameof(Peer.Online) or nameof(Peer.Typing)) RefreshQuickChatPeers();
         if (e.PropertyName == nameof(Peer.Unread)) { Changed(nameof(PeopleSummary)); Changed(nameof(TotalUnread)); Changed(nameof(HasUnread)); }
     }
     private void UpdateCounts() { Changed(nameof(OnlineCount)); Changed(nameof(TotalUnread)); Changed(nameof(HasUnread)); Changed(nameof(LocalAddress)); Changed(nameof(DeviceLabel)); Changed(nameof(NetworkEndpoint)); Changed(nameof(PeopleSummary)); ComposeChanged(); Changed(nameof(ChatSubtitle)); People.Refresh(); if (Search.Length > 0) RefreshRecentChats(); }
@@ -401,11 +456,12 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         {
             if (Broadcasting) { Toast = "Announcement preview only · nothing was sent."; Draft = ""; return true; }
             if (SelectedPeer is not { } sample) return false;
+            activeSessionChatPeers.Add(sample.Id);
             foreach (var file in files)
                 AddMessage(new() { PeerId = sample.Id, Outgoing = true, Delivery = "Preview only", ImagePath = file.IsImage ? KeepCopy(file.Path) : "", FileName = file.IsImage ? "" : file.Name, FolderAttachment = file.IsFolder });
             if (text.Length > 0) AddMessage(new() { PeerId = sample.Id, Text = text, Outgoing = true, Delivery = "Preview only" });
             sample.Preview = text.Length > 0 ? text.ReplaceLineEndings(" ") : files.Any(f => f.IsImage) ? "Photo" : files[0].Name;
-            Attachments.Clear(); Draft = ""; RefreshRecentChats(); RefreshMessages(true);
+            Attachments.Clear(); Draft = ""; RefreshRecentChats(); RefreshQuickChatPeers(); RefreshMessages(true);
             return text.Length > 0;
         }
         if (Broadcasting)
@@ -422,7 +478,8 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         var message = new ChatMessage { PeerId = peer.Id, Text = text, Outgoing = true, Delivery = "Sending…" };
         // Legacy peers parse message IDs as signed 64-bit decimal integers.
         message.Id = NextMessageId().ToString();
-        AddMessage(message); peer.Preview = text.ReplaceLineEndings(" "); RefreshRecentChats();
+        activeSessionChatPeers.Add(peer.Id);
+        AddMessage(message); peer.Preview = text.ReplaceLineEndings(" "); RefreshRecentChats(); RefreshQuickChatPeers();
         if (IsConversationSection && SelectedPeer == peer) RefreshMessages(true);
         Save();
         await DeliverAsync(message);
@@ -497,6 +554,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     private async Task SendAttachmentsAsync(Peer peer, List<Attachment> files)
     {
         Attachments.Clear();
+        activeSessionChatPeers.Add(peer.Id);
         var queued = new List<(ChatMessage Message, string Path)>();
         foreach (var file in files)
         {
@@ -510,6 +568,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         {
             peer.Preview = queued[^1].Message.HasImage ? "Photo" : queued[^1].Message.FileName;
             RefreshRecentChats();
+            RefreshQuickChatPeers();
         }
         RefreshMessages(true); Save();
         foreach (var (message, path) in queued)
@@ -591,10 +650,12 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
                 if (Peers.FirstOrDefault(p => p.Id == transfer.PeerId) is { } sender && !transferMessages.ContainsKey(transfer.Id))
                 {
                     var offer = new ChatMessage { Id = transfer.Id, PeerId = sender.Id, FileName = transfer.Name, FolderAttachment = transfer.Folder, TransferId = transfer.Id, Delivery = DeliveryFor(transfer) };
+                    activeSessionChatPeers.Add(sender.Id);
                     AddMessage(offer); transferMessages[transfer.Id] = offer;
                     sender.Preview = transfer.Name; sender.Typing = "";
                     RefreshRecentChats();
                     if (SelectedPeer?.Id != sender.Id || !IsConversationSection || !Replying) sender.Unread++;
+                    RefreshQuickChatPeers();
                     RefreshMessages(); Changed(nameof(PeopleSummary)); Changed(nameof(TotalUnread)); Changed(nameof(HasUnread)); Save();
                 }
             }
@@ -608,7 +669,11 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
             if (sent.Delivery != delivery) sent.Delivery = delivery;
             if (sent.CanCancel != transfer.CanCancel) sent.CanCancel = transfer.CanCancel;
         }
-        if (IsFinished(transfer.State)) Save();
+        if (IsFinished(transfer.State))
+        {
+            Save();
+            SyncMediaFromTransferIfLoaded(transfer);
+        }
         var peer = Peers.FirstOrDefault(p => p.Id == transfer.PeerId);
         if (transfer.Inline)
         {
@@ -826,9 +891,160 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     public string LastAppearanceTab { get; set; } = "Themes";
     public string ReceivedFilesFolder => string.IsNullOrWhiteSpace(Settings.ReceivedFilesFolder) ? AppSettings.DefaultReceivedFilesFolder : Settings.ReceivedFilesFolder;
     private string BackgroundsDirectory => Path.Combine(ImagesDirectory, "backgrounds");
-    public BitmapImage? ChatBackground { get; private set; }
-    public double ChatBackgroundOpacity => double.IsFinite(Settings.ChatBackgroundOpacity) ? Math.Clamp(Settings.ChatBackgroundOpacity, .10, .55) : .26;
+    private BitmapSource? savedChatBackground;
+    private BitmapSource? savedChatBackgroundGray;
+    private AnimatedGifSequence? savedChatBackgroundGif;
+    private AnimatedGifSequence? savedChatBackgroundGrayGif;
+    private bool previewingChatBackground;
+    private BitmapSource? previewChatBackground;
+    private BitmapSource? previewChatBackgroundGray;
+    private AnimatedGifSequence? previewChatBackgroundGif;
+    private AnimatedGifSequence? previewChatBackgroundGrayGif;
+    private double? previewChatBackgroundOpacity;
+    private double? previewBackgroundDim;
+    private double? previewBackgroundScale;
+    private string? previewBackgroundFit;
+    private string? previewBackgroundAnchor;
+    private bool? previewBackgroundGrayscale;
+    private BitmapSource? ResolveBackgroundFallback(BitmapSource? color, ref BitmapSource? gray) =>
+        color is null ? null : ChatBackgroundGrayscale ? (gray ??= Images.ToGrayscale(color)) : color;
+    private AnimatedGifSequence? ResolveBackgroundGif(AnimatedGifSequence? color, ref AnimatedGifSequence? gray) =>
+        color is null ? null : ChatBackgroundGrayscale ? (gray ??= color.ToGrayscale()) : color;
+    public BitmapSource? SavedChatBackground => ResolveBackgroundFallback(savedChatBackground, ref savedChatBackgroundGray);
+    internal BitmapSource? RawSavedChatBackground => savedChatBackground;
+    public AnimatedGifSequence? SavedChatBackgroundGif => ResolveBackgroundGif(savedChatBackgroundGif, ref savedChatBackgroundGrayGif);
+    internal AnimatedGifSequence? RawSavedChatBackgroundGif => savedChatBackgroundGif;
+    public BitmapSource? ChatBackground => previewingChatBackground
+        ? ResolveBackgroundFallback(previewChatBackground, ref previewChatBackgroundGray)
+        : SavedChatBackground;
+    public AnimatedGifSequence? ChatBackgroundGif => previewingChatBackground
+        ? ResolveBackgroundGif(previewChatBackgroundGif, ref previewChatBackgroundGrayGif)
+        : SavedChatBackgroundGif;
+    public double ChatBackgroundOpacity
+    {
+        get
+        {
+            double value = previewChatBackgroundOpacity ?? Settings.ChatBackgroundOpacity;
+            return double.IsFinite(value) ? Math.Clamp(value, .10, 1.0) : .26;
+        }
+    }
+    public double ChatBackgroundDim
+    {
+        get
+        {
+            double value = previewBackgroundDim ?? Settings.ChatBackgroundDim;
+            return double.IsFinite(value) ? Math.Clamp(value, 0, .80) : 0;
+        }
+    }
+    public double ChatBackgroundScale
+    {
+        get
+        {
+            double value = previewBackgroundScale ?? Settings.ChatBackgroundScale;
+            return double.IsFinite(value) ? Math.Clamp(value, 1.0, 1.6) : 1.0;
+        }
+    }
+    public string ChatBackgroundFit => AppearanceCodec.NormalizeBgFit(previewBackgroundFit ?? Settings.ChatBackgroundFit);
+    public string ChatBackgroundAnchor => BackgroundAnchor.Normalize(previewBackgroundAnchor ?? Settings.ChatBackgroundAnchor);
+    public System.Windows.Media.Stretch ChatBackgroundStretch => ChatBackgroundFit switch
+    {
+        "fit" => System.Windows.Media.Stretch.Uniform,
+        "stretch" => System.Windows.Media.Stretch.Fill,
+        "center" => System.Windows.Media.Stretch.None,
+        _ => System.Windows.Media.Stretch.UniformToFill
+    };
+    public bool ChatBackgroundGrayscale => previewBackgroundGrayscale ?? Settings.ChatBackgroundGrayscale;
     internal string SaveChatBackground(BitmapSource image) => Images.SavePng(image, BackgroundsDirectory);
+    internal string SaveChatBackgroundBytes(byte[] bytes, string extension) => Images.SaveBytes(bytes, extension, BackgroundsDirectory);
+    public void PreviewChatBackground(bool active, BitmapSource? image, double? opacity, AnimatedGifSequence? gif = null)
+    {
+        previewingChatBackground = active;
+        if (!ReferenceEquals(previewChatBackground, image)) previewChatBackgroundGray = null;
+        previewChatBackground = image;
+        if (!ReferenceEquals(previewChatBackgroundGif, gif)) previewChatBackgroundGrayGif = null;
+        previewChatBackgroundGif = gif;
+        previewChatBackgroundOpacity = active ? opacity : null;
+        Changed(nameof(ChatBackground));
+        Changed(nameof(ChatBackgroundGif));
+        Changed(nameof(ChatBackgroundOpacity));
+    }
+    public void PreviewBackgroundOptions(double? dim, double? scale, string? fit, bool? grayscale, string? anchor = null)
+    {
+        previewBackgroundDim = dim;
+        previewBackgroundScale = scale;
+        previewBackgroundFit = fit;
+        previewBackgroundAnchor = anchor;
+        previewBackgroundGrayscale = grayscale;
+        Changed(nameof(ChatBackgroundDim));
+        Changed(nameof(ChatBackgroundScale));
+        Changed(nameof(ChatBackgroundFit));
+        Changed(nameof(ChatBackgroundAnchor));
+        Changed(nameof(ChatBackgroundStretch));
+        Changed(nameof(ChatBackgroundGrayscale));
+        Changed(nameof(ChatBackground));
+        Changed(nameof(ChatBackgroundGif));
+    }
+    private string? previewBgTransition;
+    private double? previewBgTransitionStrength;
+    public string ChatBackgroundTransition => BackgroundSideTransition.Normalize(previewBgTransition ?? Settings.ChatBackgroundTransition);
+    public double ChatBackgroundTransitionStrength
+    {
+        get
+        {
+            double value = previewBgTransitionStrength ?? Settings.ChatBackgroundTransitionStrength;
+            return double.IsFinite(value) ? Math.Clamp(value, .1, 1.0) : .55;
+        }
+    }
+    public System.Windows.Media.Brush? ChatBackgroundHorizontalMask =>
+        BackgroundSideTransition.CreateHorizontalMask(BackgroundSideTransition.KindFor(ChatBackgroundTransition), ChatBackgroundTransitionStrength);
+    public System.Windows.Media.Brush? ChatBackgroundVerticalMask =>
+        BackgroundSideTransition.CreateVerticalMask(BackgroundSideTransition.KindFor(ChatBackgroundTransition), ChatBackgroundTransitionStrength);
+    public void PreviewBackgroundTransition(string? transition, double? strength)
+    {
+        previewBgTransition = transition;
+        previewBgTransitionStrength = strength;
+        Changed(nameof(ChatBackgroundTransition));
+        Changed(nameof(ChatBackgroundTransitionStrength));
+        Changed(nameof(ChatBackgroundHorizontalMask));
+        Changed(nameof(ChatBackgroundVerticalMask));
+    }
+    public void PreviewMessageTypography(string? font, string? sizeTag, double? px)
+    {
+        if (System.Windows.Application.Current is not { } app) return;
+        string family = string.IsNullOrWhiteSpace(font) ? Settings.MessageFont : font.Trim();
+        double resolvedSize = px is { } custom && double.IsFinite(custom)
+            ? Math.Clamp(Math.Round(custom), 11, 22)
+            : sizeTag is not null ? FontSizeFor(sizeTag) : EffectiveMessageFontSize;
+        try { app.Resources["MessageFontFamily"] = new FontFamily(family + ", Segoe UI"); } catch (ArgumentException) { }
+        app.Resources["MessageFontSize"] = resolvedSize;
+    }
+    public async Task<bool> ApplyLookCodeAsync(string code)
+    {
+        if (!AppearanceCodec.TryDecode(code, out var look)) return false;
+        string bgPath = "";
+        var (bgImage, gifBytes) = AppearanceCodec.TryDecodeBackground(look);
+        if (gifBytes is not null || bgImage is not null)
+        {
+            try
+            {
+                bgPath = gifBytes is not null
+                    ? SaveChatBackgroundBytes(gifBytes, ".gif")
+                    : SaveChatBackground(bgImage!);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or NotSupportedException)
+            {
+                Toast = "The background couldn't be saved.";
+                return false;
+            }
+        }
+        await SavePreferencesAsync(s =>
+        {
+            AppearanceCodec.Apply(look, s);
+            s.ChatBackgroundPath = bgPath;
+        });
+        Toast = "Theme applied";
+        return true;
+    }
     public static double FontSizeFor(string size) => size switch { "small" => 13, "large" => 17, _ => 15 };
     public bool SteampunkEngineEnabled => Settings.SteampunkEngineEnabled;
     public bool SakuraPetalsEnabled => Settings.SakuraPetalsEnabled;
@@ -1045,6 +1261,12 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         Changed(nameof(OnlineRingEnabled));
     }
 
+    public void PreviewPetAppearance(PetAppearance? preview)
+    {
+        previewPetAppearance = preview;
+        Changed(nameof(PetAppearance));
+    }
+
     public void ApplySettings()
     {
         if (System.Windows.Application.Current is { } app)
@@ -1053,10 +1275,20 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
             app.Resources["MessageFontSize"] = EffectiveMessageFontSize;
         }
         AmbientEffect.SetSpeed(EffectSpeed);
+        AmbientEffect.SetAnimateWhenUnfocused(Settings.AnimateWhenUnfocused);
         MessageMotion.Configure(Settings.MessageAnimation);
         ThemeManager.Apply(Settings.Theme, AppearanceOverrides.From(Settings));
-        ChatBackground = Settings.ChatBackgroundPath.Length == 0 ? null : Images.LoadChatBackground(Settings.ChatBackgroundPath);
-        Changed(nameof(ChatBackground)); Changed(nameof(ChatBackgroundOpacity));
+        savedChatBackground = Settings.ChatBackgroundPath.Length == 0 ? null : Images.LoadChatBackground(Settings.ChatBackgroundPath);
+        savedChatBackgroundGray = null;
+        savedChatBackgroundGif = Settings.ChatBackgroundPath.Length == 0 ? null : AnimatedGifSequence.TryLoadFromFile(Settings.ChatBackgroundPath);
+        savedChatBackgroundGrayGif = null;
+        previewingChatBackground = false;
+        previewChatBackground = null;
+        previewChatBackgroundGray = null;
+        previewChatBackgroundGif = null;
+        previewChatBackgroundGrayGif = null;
+        previewChatBackgroundOpacity = null;
+        Changed(nameof(ChatBackground)); Changed(nameof(ChatBackgroundGif)); Changed(nameof(ChatBackgroundOpacity));
         Changed(nameof(SteampunkEngineEnabled));
         Changed(nameof(SakuraPetalsEnabled));
         Changed(nameof(ThemeDetailsEnabled));
@@ -1183,8 +1415,17 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         previewChatCanvasIntensity = null;
         previewSeamlessComposer = null;
         previewBackgroundBlur = null;
+        previewBgTransition = null;
+        previewBgTransitionStrength = null;
+        previewBackgroundDim = null;
+        previewBackgroundScale = null;
+        previewBackgroundFit = null;
+        previewBackgroundAnchor = null;
+        previewBackgroundGrayscale = null;
         previewOnlineRing = null;
         previewAvatarShape = null;
+        previewPetAppearance = null;
+        Changed(nameof(PetAppearance));
         Changed(nameof(ChromeTexture));
         Changed(nameof(ChromeTextureEnabled));
         Changed(nameof(ChromeTextureIntensity));
@@ -1195,6 +1436,18 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         Changed(nameof(ChatBackdropRowSpan));
         Changed(nameof(ChatBackgroundBlur));
         Changed(nameof(ChatBackgroundBlurEffect));
+        Changed(nameof(ChatBackgroundTransition));
+        Changed(nameof(ChatBackgroundTransitionStrength));
+        Changed(nameof(ChatBackgroundHorizontalMask));
+        Changed(nameof(ChatBackgroundVerticalMask));
+        Changed(nameof(ChatBackgroundDim));
+        Changed(nameof(ChatBackgroundScale));
+        Changed(nameof(ChatBackgroundFit));
+        Changed(nameof(ChatBackgroundAnchor));
+        Changed(nameof(ChatBackgroundStretch));
+        Changed(nameof(ChatBackgroundGrayscale));
+        Changed(nameof(ChatBackground));
+        Changed(nameof(ChatBackgroundGif));
         Changed(nameof(OnlineRingEnabled));
         Changed(nameof(UseCustomAvatarShape));
         Changed(nameof(UseCircularHeaderAvatar));
@@ -1231,7 +1484,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         bool hadHistory = Settings.KeepHistory;
         string previousAvatar = Settings.AvatarPath;
         string previousBackground = Settings.ChatBackgroundPath;
-        var previousProfile = (Settings.DisplayName, Settings.Status, Settings.FirstName, Settings.LastName, Settings.About);
+        var previousProfile = (Settings.DisplayName, Settings.Status, Settings.FirstName, Settings.LastName, Settings.About, CompanionProfileCodec.Encode(Settings));
         change(Settings);
         Changed(nameof(ShouldShowNotificationPopup));
         bool avatarChanged = previousAvatar != Settings.AvatarPath;
@@ -1249,6 +1502,13 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         Settings.ChatCanvasGradient = ChatCanvasOverlay.Normalize(Settings.ChatCanvasGradient);
         Settings.ChatCanvasGradientIntensity = Math.Clamp(double.IsFinite(Settings.ChatCanvasGradientIntensity) ? Settings.ChatCanvasGradientIntensity : .55, .1, 1);
         Settings.ChatBackgroundBlur = Math.Clamp(double.IsFinite(Settings.ChatBackgroundBlur) ? Settings.ChatBackgroundBlur : 0, 0, 24);
+        Settings.ChatBackgroundOpacity = double.IsFinite(Settings.ChatBackgroundOpacity) ? Math.Clamp(Settings.ChatBackgroundOpacity, .10, 1.0) : .26;
+        Settings.ChatBackgroundTransition = BackgroundSideTransition.Normalize(Settings.ChatBackgroundTransition);
+        Settings.ChatBackgroundTransitionStrength = Math.Clamp(double.IsFinite(Settings.ChatBackgroundTransitionStrength) ? Settings.ChatBackgroundTransitionStrength : .55, .1, 1.0);
+        Settings.ChatBackgroundDim = double.IsFinite(Settings.ChatBackgroundDim) ? Math.Clamp(Settings.ChatBackgroundDim, 0, .80) : 0;
+        Settings.ChatBackgroundScale = double.IsFinite(Settings.ChatBackgroundScale) ? Math.Clamp(Settings.ChatBackgroundScale, 1.0, 1.6) : 1.0;
+        Settings.ChatBackgroundFit = AppearanceCodec.NormalizeBgFit(Settings.ChatBackgroundFit);
+        Settings.ChatBackgroundAnchor = BackgroundAnchor.Normalize(Settings.ChatBackgroundAnchor);
         Settings.CornerStyle = AppearanceOptions.NormalizeCornerStyle(Settings.CornerStyle);
         Settings.AvatarShape = AppearanceOptions.NormalizeAvatarShape(Settings.AvatarShape);
         Settings.UiFont = (Settings.UiFont ?? "").Trim();
@@ -1261,7 +1521,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         Settings.LastAppearanceTab = SettingsWindow.NormalizeAppearanceTab(Settings.LastAppearanceTab);
         Settings.TypingEffect = ChatEffects.Normalize(Settings.TypingEffect, typing: true);
         Settings.ClickEffect = ChatEffects.Normalize(Settings.ClickEffect);
-        Settings.ChatBackgroundOpacity = ChatBackgroundOpacity;
+        FloatingPetStyle.Apply(PetAppearance.From(Settings), Settings);
         if (Settings.MessageFontSize is not ("small" or "medium" or "large")) Settings.MessageFontSize = "medium";
         store?.SaveSettings(Settings);
         if (previousBackground.Length > 0 && previousBackground != Settings.ChatBackgroundPath &&
@@ -1271,7 +1531,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         ApplySettings();
         Changed(nameof(ProfileName)); Changed(nameof(ProfileInitial)); Changed(nameof(ProfileStatus)); Changed(nameof(ProfileAvatar));
         if (hadHistory != Settings.KeepHistory) Save();
-        if (lan is not null && previousProfile != (Settings.DisplayName, Settings.Status, Settings.FirstName, Settings.LastName, Settings.About))
+        if (lan is not null && previousProfile != (Settings.DisplayName, Settings.Status, Settings.FirstName, Settings.LastName, Settings.About, CompanionProfileCodec.Encode(Settings)))
             await RunAsync(() => lan.UpdateProfileAsync());
         // LAN Messenger has no "picture removed" message, so only a new picture is sent.
         if (lan is not null && avatarChanged && Settings.AvatarPath.Length > 0) await RunAsync(() => lan.SendAvatarAsync());
@@ -1315,8 +1575,9 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         // Pictures are CydLan's own copies; files saved to the received files folder are kept.
         foreach (var image in removed.Select(m => m.ImagePath).Where(p => p.Length > 0 && Path.GetFullPath(p).StartsWith(Path.GetFullPath(ImagesDirectory), StringComparison.OrdinalIgnoreCase)))
             if (!history.Any(m => string.Equals(m.ImagePath, image, StringComparison.OrdinalIgnoreCase))) TryDelete(image);
-        foreach (var peer in Peers.Where(p => !history.Any(m => m.GroupId.Length == 0 && m.PeerId == p.Id))) { peer.Preview = ""; peer.Unread = 0; }
+        foreach (var peer in Peers.Where(p => !history.Any(m => m.GroupId.Length == 0 && m.PeerId == p.Id))) { peer.Preview = ""; peer.Unread = 0; activeSessionChatPeers.Remove(peer.Id); }
         foreach (var group in Groups.Where(g => !history.Any(m => m.GroupId == g.Id))) { group.Preview = ""; group.Unread = 0; }
+        RefreshQuickChatPeers();
         RefreshMessages(); Changed(nameof(PeopleSummary)); Changed(nameof(TotalUnread)); Changed(nameof(HasUnread)); Save();
     }
     public void ClearTransferHistory()
@@ -1442,7 +1703,31 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         var names = new[] { ("1", "Jamie Chen", "chat", "Thanks! That looks great."), ("2", "Sofia Reyes", "chat", "Sent you the updated assets"), ("3", "Marcus Taylor", "busy", "Let's sync after lunch"), ("4", "Olivia Wilson", "chat", "The network is all set ✓"), ("5", "Daniel Kim", "away", "Back in a few minutes") };
         foreach (var (id, name, status, preview) in names)
         {
-            var peer = new Peer { Id = id, Name = name, Status = status, Online = true, Address = "192.168.1." + (110 + int.Parse(id)), Version = id == "1" ? "LAN Messenger 1.2.35" : "CydLan 0.1", Preview = preview, Unread = id == "2" ? 2 : 0 };
+            var peer = new Peer
+            {
+                Id = id,
+                Name = name,
+                Status = status,
+                Online = true,
+                Address = "192.168.1." + (110 + int.Parse(id)),
+                Version = id == "1" ? "LAN Messenger 1.2.35" : "CydLan 0.1",
+                Preview = preview,
+                Unread = id == "2" ? 2 : 0,
+                About = id switch
+                {
+                    "1" => "Still running classic LAN Messenger at the front desk.",
+                    "2" => "UI designer & tea enthusiast. Drop assets anytime!",
+                    "3" => "Backend & homelab builds.",
+                    _ => ""
+                },
+                PetCode = id switch
+                {
+                    "2" => FloatingPetStyle.Presets.First(p => p.Name == "Sakura").Appearance.ToWireCode(),
+                    "3" => FloatingPetStyle.Presets.First(p => p.Name == "Mecha Ace").Appearance.ToWireCode(),
+                    "4" => FloatingPetStyle.Presets.First(p => p.Name == "Wizard").Appearance.ToWireCode(),
+                    _ => ""
+                }
+            };
             peer.PropertyChanged += PeerChanged; Peers.Add(peer);
         }
         void Add(string text, bool outgoing, int minutes) => AddMessage(new() { PeerId = "1", Text = text, Outgoing = outgoing, Delivery = outgoing ? "Delivered" : "Received", Time = DateTimeOffset.Now.AddMinutes(-minutes) });

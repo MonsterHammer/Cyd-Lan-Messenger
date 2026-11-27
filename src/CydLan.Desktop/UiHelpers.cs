@@ -76,3 +76,99 @@ public sealed class SmileyVisibilityConverter : IValueConverter
     }
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
 }
+
+/// <summary>Decoded preview metadata for a shared Look code sent in a chat message.</summary>
+public sealed record SharedLookInfo(
+    string Code,
+    string ThemeName,
+    string Caption,
+    bool HasCaption,
+    string FontLabel,
+    bool HasFontLabel,
+    bool HasBackground,
+    System.Windows.Media.Brush CanvasBrush,
+    System.Windows.Media.Brush SidebarBrush,
+    System.Windows.Media.Brush AccentBrush,
+    ImageSource? BackgroundPreview);
+
+/// <summary>Extracts a compact theme card when a chat message carries a valid Look code.</summary>
+public sealed class LookMessageConverter : IValueConverter
+{
+    private static readonly object CacheGate = new();
+    private static readonly Dictionary<string, SharedLookInfo?> Cache = [];
+
+    public object? Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        string text = value as string ?? "";
+        var info = ParseCached(text);
+        string? mode = parameter as string;
+        if (info is null)
+        {
+            return mode switch
+            {
+                "card" => Visibility.Collapsed,
+                "caption" => text,
+                "caption_plain" => text.Length > 0 && !CydLan.Core.Smileys.HasAny(text) ? Visibility.Visible : Visibility.Collapsed,
+                "caption_smiley" => text.Length > 0 && CydLan.Core.Smileys.HasAny(text) ? Visibility.Visible : Visibility.Collapsed,
+                _ => null
+            };
+        }
+
+        return mode switch
+        {
+            "card" => Visibility.Visible,
+            "caption" => info.Caption,
+            "caption_plain" => info.HasCaption && !CydLan.Core.Smileys.HasAny(info.Caption) ? Visibility.Visible : Visibility.Collapsed,
+            "caption_smiley" => info.HasCaption && CydLan.Core.Smileys.HasAny(info.Caption) ? Visibility.Visible : Visibility.Collapsed,
+            _ => info
+        };
+    }
+
+    private static SharedLookInfo? ParseCached(string text)
+    {
+        if (text.Length == 0 || !text.Contains(AppearanceCodec.Prefix, StringComparison.Ordinal)) return null;
+        lock (CacheGate)
+        {
+            if (Cache.TryGetValue(text, out var hit)) return hit;
+        }
+
+        SharedLookInfo? parsed = null;
+        if (AppearanceCodec.TryExtractLookCode(text, out string code, out var look, out string caption))
+        {
+            var swatch = ThemeManager.SwatchFor(look.Theme);
+            var bg = AppearanceCodec.TryDecodeBackgroundImage(look);
+            string font = !string.IsNullOrWhiteSpace(look.MsgFont) ? look.MsgFont.Trim()
+                : !string.IsNullOrWhiteSpace(look.UiFont) ? look.UiFont.Trim() : "";
+            parsed = new SharedLookInfo(
+                code,
+                swatch.Name,
+                caption,
+                caption.Length > 0,
+                font,
+                font.Length > 0,
+                bg is not null,
+                swatch.Canvas,
+                swatch.Sidebar,
+                swatch.Accent,
+                bg);
+        }
+
+        lock (CacheGate)
+        {
+            if (Cache.Count >= 64) Cache.Clear();
+            Cache[text] = parsed;
+        }
+        return parsed;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
+}
+
+/// <summary>Visible only when a file name matches a playable audio or video format.</summary>
+public sealed class MediaFileVisibilityConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
+        value is string name && MediaCatalog.IsMediaFile(name) ? Visibility.Visible : Visibility.Collapsed;
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
+}

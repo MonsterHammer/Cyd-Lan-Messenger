@@ -99,6 +99,12 @@ public static class ThemeManager
     public static IReadOnlyList<ThemeSwatch> Catalog => catalog ??= BuildCatalog();
     public static AppearanceOverrides ActiveOverrides => activeOverrides;
 
+    public static ThemeSwatch SwatchFor(string? value)
+    {
+        string normalized = Normalize(value);
+        return Catalog.FirstOrDefault(s => s.Tag == normalized) ?? Catalog[0];
+    }
+
     public static string Normalize(string? value) => value switch
     {
         "spongebob" => Pineapple,

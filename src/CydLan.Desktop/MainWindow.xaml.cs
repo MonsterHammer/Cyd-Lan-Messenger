@@ -24,6 +24,7 @@ public partial class MainWindow : Window
     public MainWindow(MainViewModel model)
     {
         InitializeComponent(); this.model = model; DataContext = model;
+        InitMediaController();
         model.ScrollRequested += force => {
             bool atEnd = MessageScroller.ScrollableHeight - MessageScroller.VerticalOffset < 40;
             double offset = MessageScroller.VerticalOffset;
@@ -110,15 +111,20 @@ public partial class MainWindow : Window
         if (model.Preview && System.Windows.Application.Current is App app) await app.QuitAsync();
         else Hide();
     }
-    private void Chat_Click(object sender, RoutedEventArgs e) { model.TransfersOpen = false; model.Broadcasting = false; model.GroupsOpen = false; }
+    private void Chat_Click(object sender, RoutedEventArgs e) { model.TransfersOpen = false; model.MediaOpen = false; model.Broadcasting = false; model.GroupsOpen = false; }
     private void PeopleTab_Click(object sender, RoutedEventArgs e) => model.ShowRecentChats = false;
     private void RecentTab_Click(object sender, RoutedEventArgs e) => model.ShowRecentChats = true;
     private void Groups_Click(object sender, RoutedEventArgs e)
     {
-        model.TransfersOpen = false; model.GroupsOpen = true;
+        model.TransfersOpen = false; model.MediaOpen = false; model.GroupsOpen = true;
         if (model.SelectedGroup is null && model.Groups.Count > 0) model.SelectedGroup = model.Groups[0];
     }
-    private void SidebarPlus_Click(object sender, RoutedEventArgs e) { if (model.IsGroupsSection) NewGroup_Click(sender, e); else Settings_Click(sender, e); }
+    private void SidebarPlus_Click(object sender, RoutedEventArgs e)
+    {
+        if (model.IsMediaSection) AddMediaFiles_Click(sender, e);
+        else if (model.IsGroupsSection) NewGroup_Click(sender, e);
+        else Settings_Click(sender, e);
+    }
     private async void NewGroup_Click(object sender, RoutedEventArgs e)
     {
         var picker = new GroupPeopleWindow(model, "New group", [], askName: true);
@@ -177,6 +183,9 @@ public partial class MainWindow : Window
         {
             switch (action)
             {
+                case "Play":
+                    model.PlayPath(path, model.TransferFor(message)?.PeerName is { Length: > 0 } pn ? $"LAN · {pn}" : "LAN", isFromLan: true);
+                    break;
                 case "Open":
                     if (RunnableExtensions.Contains(Path.GetExtension(path).ToLowerInvariant())) goto case "Reveal";
                     Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
@@ -213,6 +222,11 @@ public partial class MainWindow : Window
                 case Key.F: SearchMessages_Click(this, new()); e.Handled = true; break;
                 case Key.V when Keyboard.FocusedElement is not System.Windows.Controls.TextBox: if (TryPasteAttachments()) { e.Handled = true; Composer.Focus(); } break;
             }
+        }
+        else if (e.Key == Key.Space && model.IsMediaSection && Keyboard.FocusedElement is not System.Windows.Controls.TextBox && Keyboard.FocusedElement is not System.Windows.Controls.Primitives.ButtonBase)
+        {
+            model.TogglePlayPause();
+            e.Handled = true;
         }
         else if (e.Key == Key.Escape)
         {
@@ -328,6 +342,25 @@ public partial class MainWindow : Window
         }
         DeleteChat_Click(sender, e);
     }
+    private void ConversationAvatar_Click(object sender, RoutedEventArgs e)
+    {
+        if (model.SelectedPeer is { } peer) ShowPeerProfile(peer);
+    }
+    private void RowAvatar_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: Peer peer })
+        {
+            model.SelectedPeer = peer;
+            ShowPeerProfile(peer);
+            e.Handled = true;
+        }
+    }
+    private void ViewRowProfile_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: Peer peer })
+            ShowPeerProfile(peer);
+    }
+    internal void ShowPeerProfile(Peer peer) => PopupHost.ShowModal(this, new PeerProfileWindow(peer, model));
     internal void ShowConnectionDetails() { if (model.HasPeer) DetailsPanel.Visibility = Visibility.Visible; UpdateCompactLayout(); }
     private void UpdateCompactLayout(bool animate = false)
     {
@@ -434,6 +467,19 @@ public partial class MainWindow : Window
     {
         if (sender is FrameworkElement { DataContext: ChatMessage message }) try { System.Windows.Clipboard.SetText(message.Text); } catch (System.Runtime.InteropServices.ExternalException) { }
     }
+    private async void ApplyLook_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: SharedLookInfo look })
+            await model.ApplyLookCodeAsync(look.Code);
+    }
+    private void CopyLook_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: SharedLookInfo look })
+        {
+            try { System.Windows.Clipboard.SetText(look.Code); model.Toast = "Copied"; }
+            catch (System.Runtime.InteropServices.ExternalException) { }
+        }
+    }
     private void AttachmentMenu_Click(object sender, RoutedEventArgs e)
     {
         var button = (FrameworkElement)sender;
@@ -502,16 +548,24 @@ public partial class MainWindow : Window
     }
     private void Window_DragOver(object sender, System.Windows.DragEventArgs e)
     {
-        bool usable = model.CanAttach && e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop);
+        bool fileDrop = e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop);
+        bool usable = fileDrop && (model.IsMediaSection || model.CanAttach);
         e.Effects = usable ? System.Windows.DragDropEffects.Copy : System.Windows.DragDropEffects.None;
         DropOverlay.Visibility = usable && model.ChatOpen ? Visibility.Visible : Visibility.Collapsed;
         e.Handled = true;
     }
-    private void Window_Drop(object sender, System.Windows.DragEventArgs e)
+    private async void Window_Drop(object sender, System.Windows.DragEventArgs e)
     {
         DropOverlay.Visibility = Visibility.Collapsed;
+        if (e.Data.GetData(System.Windows.DataFormats.FileDrop) is not string[] files) return;
+        if (model.IsMediaSection)
+        {
+            await model.AddMediaPathsAsync(files, autoPlayFirst: true);
+            e.Handled = true;
+            return;
+        }
         if (!model.CanAttach) { model.Toast = "No online contact selected"; return; }
-        if (e.Data.GetData(System.Windows.DataFormats.FileDrop) is string[] files) { model.TransfersOpen = false; AttachFiles(files); Composer.Focus(); e.Handled = true; }
+        model.TransfersOpen = false; model.MediaOpen = false; AttachFiles(files); Composer.Focus(); e.Handled = true;
     }
     private void RemoveAttachment_Click(object sender, RoutedEventArgs e) { if (((FrameworkElement)sender).DataContext is Attachment item) model.RemoveAttachment(item); }
     private void MessageImage_Click(object sender, MouseButtonEventArgs e)
@@ -573,10 +627,21 @@ public partial class MainWindow : Window
     private async void MessageAcceptFile_Click(object sender, RoutedEventArgs e) { if (((System.Windows.Controls.Button)sender).DataContext is ChatMessage message) await model.AcceptMessageFileAsync(message); }
     private async void MessageDeclineFile_Click(object sender, RoutedEventArgs e) { if (((System.Windows.Controls.Button)sender).DataContext is ChatMessage message) await model.DeclineMessageFileAsync(message); }
     private async void MessageCancelFile_Click(object sender, RoutedEventArgs e) { if (((System.Windows.Controls.Button)sender).DataContext is ChatMessage message) await model.CancelMessageFileAsync(message); }
-    internal SettingsWindow CreateSettingsWindow(string? page = null, bool rememberNavigation = true) =>
-        new(model, page ?? model.LastSettingsPage, model.LastAppearanceTab, rememberNavigation);
-    internal void OpenSettings(string? page = null, bool rememberNavigation = true) =>
-        PopupHost.ShowModal(this, CreateSettingsWindow(page, rememberNavigation));
+    internal SettingsWindow CreateSettingsWindow(string? page = null, bool rememberNavigation = true, string? appearanceTab = null) =>
+        new(model, page ?? model.LastSettingsPage, appearanceTab ?? model.LastAppearanceTab, rememberNavigation);
+    internal void OpenSettings(string? page = null, bool rememberNavigation = true, string? appearanceTab = null) =>
+        PopupHost.ShowModal(this, CreateSettingsWindow(page, rememberNavigation, appearanceTab));
+    internal void OpenAppearanceTab(string appearanceTab)
+    {
+        if (OwnedWindows.OfType<SettingsWindow>().FirstOrDefault() is { } existing)
+        {
+            existing.ShowPage("AppearancePage");
+            existing.ShowAppearanceTab(appearanceTab);
+            existing.Activate();
+            return;
+        }
+        OpenSettings("AppearancePage", rememberNavigation: true, appearanceTab: appearanceTab);
+    }
     private void Settings_Click(object sender, RoutedEventArgs e) => OpenSettings();
     private void Profile_Click(object sender, RoutedEventArgs e) => OpenSettings("AccountPage", rememberNavigation: false);
     public void SetScrim(bool visible)

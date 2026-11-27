@@ -291,6 +291,7 @@ internal static class Program
             await TestTargetAuraAsync(appearanceArtifacts);
             await TestCustomizationSuiteAsync(appearanceArtifacts);
             await TestFloatingLanSuiteAsync(appearanceArtifacts);
+            await TestMediaModuleSuiteAsync(appearanceArtifacts);
 
             var recentWindow = new MainWindow(preview);
             recentWindow.Show();
@@ -876,9 +877,31 @@ internal static class Program
                 await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
                 var previewImage = (System.Windows.Controls.Image)preferences.FindName("BackgroundPreview");
                 var opacityControl = (System.Windows.Controls.Slider)preferences.FindName("BackgroundOpacityBox");
+                var dimControl = (System.Windows.Controls.Slider)preferences.FindName("BackgroundDimBox");
+                var scaleControl = (System.Windows.Controls.Slider)preferences.FindName("BackgroundScaleBox");
+                var fitFill = (System.Windows.Controls.Primitives.ToggleButton)preferences.FindName("BgFitFill");
+                var anchorCenter = (System.Windows.Controls.Primitives.ToggleButton)preferences.FindName("BgAnchorCenter");
+                var anchorTopLeft = (System.Windows.Controls.Primitives.ToggleButton)preferences.FindName("BgAnchorTopLeft");
+                var anchorBottomRight = (System.Windows.Controls.Primitives.ToggleButton)preferences.FindName("BgAnchorBottomRight");
+                var anchorLabel = (System.Windows.Controls.TextBlock)preferences.FindName("BackgroundAnchorLabel");
+                var grayBox = (System.Windows.Controls.CheckBox)preferences.FindName("BackgroundGrayscaleBox");
                 Check(previewImage.IsVisible && previewImage.Source == background.Source && opacityControl.IsVisible &&
-                    opacityControl.Value == .4 && opacityControl.Template.FindName("PART_Track", opacityControl) is not null,
-                    "The background settings should preview the saved background with its own opacity control.");
+                    opacityControl.Maximum == 1.0 && opacityControl.Value == .4 &&
+                    dimControl.Value == 0 && scaleControl.Value == 1.0 &&
+                    fitFill.IsChecked == true && anchorCenter.IsChecked == true && anchorLabel.Text == "Center" &&
+                    grayBox.IsChecked == false &&
+                    opacityControl.Template.FindName("PART_Track", opacityControl) is not null,
+                    "The background settings should preview the saved background with its controls.");
+                anchorTopLeft.IsChecked = true;
+                await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+                Check(model.ChatBackgroundAnchor == BackgroundAnchor.TopLeft && anchorLabel.Text == "Top left",
+                    "Selecting the top-left anchor should update live preview and label.");
+                anchorBottomRight.IsChecked = true;
+                await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+                Check(model.ChatBackgroundAnchor == BackgroundAnchor.BottomRight && anchorLabel.Text == "Bottom right",
+                    "Selecting the bottom-right anchor should update live preview and label.");
+                anchorCenter.IsChecked = true;
+                await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
                 Capture(preferences, Path.Combine(artifacts, "customization-background-tested.png"));
                 Check(((FrameworkElement)preferences.FindName("FontBox")).IsVisible && previewImage.IsVisible,
                     "Font and background controls should share Appearance.");
@@ -1063,6 +1086,12 @@ internal static class Program
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
         Check(!window.IsActive && weather.All(effect => effect.ActiveFrameRate == 0 && effect.Progress == 0),
             "Ambient rendering should stop while another window has focus.");
+        AmbientEffect.SetAnimateWhenUnfocused(true);
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        if (SystemParameters.ClientAreaAnimation) await Until(() => weather.All(effect => effect.Progress > .005));
+        Check(!window.IsActive && (!SystemParameters.ClientAreaAnimation || weather.All(effect => effect.ActiveFrameRate > 0)),
+            "Ambient rendering should keep playing while unfocused when AnimateWhenUnfocused is enabled.");
+        AmbientEffect.SetAnimateWhenUnfocused(false);
         foreground.Close();
         window.Activate();
         window.WindowState = WindowState.Minimized;
@@ -1932,10 +1961,11 @@ internal static class Program
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
         Check(Math.Abs(AmbientEffect.SpeedMultiplier - 1.6) < .01, "Effect speed slider should live-update AmbientEffect.SpeedMultiplier.");
 
-        // 4. Customize tab: UI font, exact font px, window opacity, canvas gradient, background blur.
+        // 4. Customize tab: UI font, message font, exact font px, window opacity, canvas gradient, background image + opacity + blur.
         preferences.ShowAppearanceTab("Customize");
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
         ((System.Windows.Controls.ComboBox)preferences.FindName("UiFontBox")).SelectedItem = "Consolas";
+        ((System.Windows.Controls.ComboBox)preferences.FindName("FontBox")).SelectedItem = "Verdana";
         ((System.Windows.Controls.Slider)preferences.FindName("MessageFontPxBox")).Value = 19;
         ((System.Windows.Controls.Slider)preferences.FindName("WindowOpacityBox")).Value = .92;
         ((System.Windows.Controls.ListBox)preferences.FindName("ChatCanvasBox")).SelectedValue = ChatCanvasOverlay.Mesh;
@@ -1946,8 +1976,9 @@ internal static class Program
         ((System.Windows.Controls.CheckBox)preferences.FindName("SeamlessComposerBox")).IsChecked = true;
         ((System.Windows.Controls.Slider)preferences.FindName("BackgroundBlurBox")).Value = 8;
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
-        Check(((FontFamily)Application.Current.Resources["UiFont"]).Source.Contains("Consolas"),
-            "Interface font selector should update the UiFont resource live.");
+        Check(((FontFamily)Application.Current.Resources["UiFont"]).Source.Contains("Consolas") &&
+            ((FontFamily)Application.Current.Resources["MessageFontFamily"]).Source.Contains("Verdana"),
+            "Interface and message font selectors should update app resources live.");
         Check(Math.Abs(ThemeManager.ActiveOverrides.WindowOpacity - .92) < .005,
             "Window opacity slider should update active overrides.");
         Check(canvasLayer.IsVisible && canvasLayer.Kind == ChatCanvasGradientKind.Mesh && Math.Abs(canvasLayer.Intensity - .80) < .01 &&
@@ -1956,7 +1987,7 @@ internal static class Program
         Check(model.ChatBackgroundBlur == 8 && model.ChatBackgroundBlurEffect is System.Windows.Media.Effects.BlurEffect,
             "Background blur slider should live-preview a BlurEffect.");
 
-        // 5. Themes tab: Saved presets, Look code encode/decode, Reset, Load, Randomize.
+        // 5. Themes tab: Saved presets, Look code encode/decode (including fonts & background image), Reset, Load, Randomize.
         preferences.ShowAppearanceTab("Colors");
         ((System.Windows.Controls.ListBox)preferences.FindName("ColorFinishBox")).SelectedValue = ColorFinish.Velvet;
         ((System.Windows.Controls.Slider)preferences.FindName("ColorFinishIntensityBox")).Value = .80;
@@ -1981,10 +2012,124 @@ internal static class Program
             decoded.BubbleShape == AppearanceOptions.ShapePill &&
             decoded.CanvasGradient == ChatCanvasOverlay.Mesh &&
             decoded.SeamlessComposer == true &&
+            decoded.UiFont == "Consolas" &&
+            decoded.MsgFont == "Verdana" &&
             decoded.MsgSizePx == 19 &&
             decoded.Matrix == true && decoded.Constellation == true && decoded.Bokeh == true,
-            "Look code should round-trip all appearance overrides cleanly.");
+            "Look code should round-trip all appearance overrides including fonts cleanly.");
         Check(!AppearanceCodec.TryDecode("CYDLAN1:invalid!!!", out _), "Malformed look codes must be rejected safely.");
+
+        // Verify encoding + extracting a Look code carrying a 1280x720 background image + opacity + fonts within the chat message limit.
+        var bgVisual = new DrawingVisual();
+        using (var bgDc = bgVisual.RenderOpen())
+        {
+            bgDc.DrawRectangle(new LinearGradientBrush(Colors.MidnightBlue, Colors.MediumPurple, 35), null, new Rect(0, 0, 1280, 720));
+            bgDc.DrawEllipse(new SolidColorBrush(Color.FromArgb(140, 255, 190, 110)), null, new Point(920, 220), 210, 210);
+            bgDc.DrawRectangle(new SolidColorBrush(Color.FromArgb(120, 20, 40, 80)), null, new Rect(0, 440, 1280, 280));
+        }
+        var bgRender = new RenderTargetBitmap(1280, 720, 96, 96, PixelFormats.Pbgra32);
+        bgRender.Render(bgVisual);
+        bgRender.Freeze();
+        var bgSampleSettings = new AppSettings
+        {
+            Theme = ThemeManager.Midnight,
+            UiFont = "Consolas",
+            MessageFont = "Verdana",
+            MessageFontSizePx = 19,
+            ChatBackgroundOpacity = .42,
+            ChatBackgroundBlur = 6,
+            ChatBackgroundAnchor = BackgroundAnchor.BottomRight,
+            ChatBackgroundTransition = BackgroundSideTransition.Horizontal,
+            ChatBackgroundTransitionStrength = .80
+        };
+        string codeWithBg = AppearanceCodec.Encode(bgSampleSettings, bgRender);
+        Check(codeWithBg.Length <= AppearanceCodec.MaxCodeLength &&
+            AppearanceCodec.TryExtractLookCode("Try my theme\n" + codeWithBg, out var extractedCode, out var bgLook, out var extractedCaption) &&
+            extractedCode == codeWithBg &&
+            extractedCaption == "Try my theme" &&
+            bgLook.UiFont == "Consolas" &&
+            bgLook.MsgFont == "Verdana" &&
+            bgLook.BgAnchor == BackgroundAnchor.BottomRight &&
+            bgLook.BgFade == BackgroundSideTransition.Horizontal &&
+            Math.Abs((bgLook.BgFadeStrength ?? 0) - .80) < .01 &&
+            Math.Abs((bgLook.BgOpacity ?? 0) - .42) < .01 &&
+            AppearanceCodec.TryDecodeBackgroundImage(bgLook) is { PixelWidth: > 0, PixelHeight: > 0 },
+            "Look code must embed background image, anchor, opacity, blur, side transitions, and fonts cleanly inside chat message limits.");
+
+        // Verify 9-point BackgroundAnchor geometry math + live WPF viewport positioning + visual verification screenshots.
+        Check(BackgroundAnchor.Normalize("TL") == BackgroundAnchor.TopLeft &&
+            BackgroundAnchor.Normalize("unknown") == BackgroundAnchor.Center &&
+            BackgroundAnchor.CalculateRect(new Size(800, 600), new Size(400, 800), "fill", BackgroundAnchor.Top, 1.0) == new Rect(0, 0, 800, 1600) &&
+            BackgroundAnchor.CalculateRect(new Size(800, 600), new Size(400, 800), "fill", BackgroundAnchor.Center, 1.0) == new Rect(0, -500, 800, 1600) &&
+            BackgroundAnchor.CalculateRect(new Size(800, 600), new Size(400, 800), "fill", BackgroundAnchor.Bottom, 1.0) == new Rect(0, -1000, 800, 1600) &&
+            BackgroundAnchor.CalculateRect(new Size(800, 600), new Size(1200, 300), "fit", BackgroundAnchor.BottomRight, 1.0) == new Rect(0, 400, 800, 200) &&
+            BackgroundAnchor.CalculateRect(new Size(800, 600), new Size(200, 100), "center", BackgroundAnchor.TopRight, 1.5) == new Rect(500, 0, 300, 150) &&
+            BackgroundAnchor.CalculateRect(new Size(800, 600), new Size(800, 600), "stretch", BackgroundAnchor.BottomRight, 1.25) == new Rect(-200, -150, 1000, 750),
+            "BackgroundAnchor calculations must place overflow, fitted margins, original sizes, and zoomed backgrounds accurately.");
+
+        var tallVisual = new DrawingVisual();
+        using (var tdc = tallVisual.RenderOpen())
+        {
+            tdc.DrawRectangle(new LinearGradientBrush(Color.FromRgb(0x0F, 0x17, 0x2A), Color.FromRgb(0x31, 0x1B, 0x4D), 90), null, new Rect(0, 0, 480, 960));
+            tdc.DrawEllipse(new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x6B)), null, new Point(120, 120), 85, 85);
+            tdc.DrawRoundedRectangle(new SolidColorBrush(Color.FromRgb(0x38, 0xBD, 0xF8)), null, new Rect(220, 405, 190, 150), 24, 24);
+            tdc.DrawEllipse(new SolidColorBrush(Color.FromRgb(0xFB, 0xBF, 0x24)), null, new Point(360, 840), 85, 85);
+        }
+        var tallBmp = new RenderTargetBitmap(480, 960, 96, 96, PixelFormats.Pbgra32);
+        tallBmp.Render(tallVisual);
+        tallBmp.Freeze();
+
+        var anchorChatImage = (System.Windows.Controls.Image)window.FindName("ChatBackgroundImage");
+        var anchorChatViewport = (BackgroundImageViewport)VisualTreeHelper.GetParent(anchorChatImage);
+        var anchorPreviewImage = (System.Windows.Controls.Image)preferences.FindName("BackgroundPreview");
+        var anchorPreviewViewport = (BackgroundImageViewport)VisualTreeHelper.GetParent(anchorPreviewImage);
+
+        model.PreviewChatBackground(true, tallBmp, .85);
+        model.PreviewBackgroundOptions(0, 1.0, "fill", false, BackgroundAnchor.TopLeft);
+        AnimatedGifBehavior.SetFallbackSource(anchorPreviewImage, tallBmp);
+        ((System.Windows.Controls.Slider)preferences.FindName("BackgroundOpacityBox")).Value = .85;
+        ((FrameworkElement)preferences.FindName("BackgroundAdjustments")).Visibility = Visibility.Visible;
+        ((System.Windows.Controls.Primitives.ToggleButton)preferences.FindName("BgFitFill")).IsChecked = true;
+        ((System.Windows.Controls.Primitives.ToggleButton)preferences.FindName("BgAnchorTopLeft")).IsChecked = true;
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        double chatTopLeftY = anchorChatImage.TranslatePoint(new Point(0, 0), anchorChatViewport).Y;
+        Check(Math.Abs(chatTopLeftY) < 1.0 && anchorChatImage.ActualHeight > anchorChatViewport.ActualHeight + 50,
+            $"Top-left fill anchor should start at y=0 (was {chatTopLeftY:0.0}).");
+        Capture(window, Path.Combine(artifacts, "bg-anchor-chat-top-left.png"));
+
+        ((System.Windows.Controls.Primitives.ToggleButton)preferences.FindName("BgAnchorBottomRight")).IsChecked = true;
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        double chatBottomRightY = anchorChatImage.TranslatePoint(new Point(0, 0), anchorChatViewport).Y;
+        double previewBottomY = anchorPreviewImage.TranslatePoint(new Point(0, 0), anchorPreviewViewport).Y;
+        Check(chatBottomRightY < -50 && Math.Abs(chatBottomRightY + anchorChatImage.ActualHeight - anchorChatViewport.ActualHeight) < 1.5 &&
+            previewBottomY < -50 && Math.Abs(previewBottomY + anchorPreviewImage.ActualHeight - anchorPreviewViewport.ActualHeight) < 1.5,
+            $"Bottom-right fill anchor must pin bottom edge in both main chat and Settings preview.");
+        ((FrameworkElement)preferences.FindName("BgAnchorCenter")).BringIntoView();
+        ((FrameworkElement)preferences.FindName("BackgroundPreview")).BringIntoView();
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Capture(window, Path.Combine(artifacts, "bg-anchor-chat-bottom-right.png"));
+        Capture(preferences, Path.Combine(artifacts, "bg-anchor-settings-bottom-right.png"));
+
+        // Verify persisted anchor across LocalStore save + reload.
+        string anchorTempDir = Path.Combine(Path.GetTempPath(), "cydlan-anchor-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            await using (var roundTripVm = new MainViewModel(localStore: new LocalStore(anchorTempDir)))
+            {
+                await roundTripVm.SavePreferencesAsync(s =>
+                {
+                    s.ChatBackgroundFit = "fit";
+                    s.ChatBackgroundAnchor = BackgroundAnchor.BottomRight;
+                    s.ChatBackgroundScale = 1.35;
+                });
+            }
+            var reloaded = new LocalStore(anchorTempDir).LoadSettings();
+            Check(reloaded.ChatBackgroundAnchor == BackgroundAnchor.BottomRight && reloaded.ChatBackgroundFit == "fit",
+                "Background anchor must persist through LocalStore.");
+        }
+        finally { try { Directory.Delete(anchorTempDir, true); } catch { } }
+        model.PreviewChatBackground(false, null, null);
+        model.PreviewBackgroundOptions(null, null, null, null, null);
 
         ClickContentButton(preferences, "Reset");
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
@@ -2161,7 +2306,7 @@ internal static class Program
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
         Capture(petWindow, Path.Combine(artifacts, "floating-pet-ironman-tested.png"));
 
-        // 3. Toggle compact quick-chat popup, roam, send reply, and mark read.
+        // 3. Toggle compact quick-chat popup, verify active-chatters-only tab filter, send reply + shared Look card, and mark read.
         controller.ToggleQuickChat();
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
         Check(controller.QuickChatWindow is { IsVisible: true, ShowInTaskbar: false },
@@ -2170,6 +2315,22 @@ internal static class Program
         int quickExStyle = GetWindowLong(new WindowInteropHelper(quickChat).Handle, -20);
         Check((quickExStyle & 0x00000080) != 0 && (quickExStyle & 0x00040000) == 0,
             "Quick chat popup must have WS_EX_TOOLWINDOW and stay out of Alt+Tab.");
+
+        var quickPeersList = (System.Windows.Controls.ListBox)quickChat.FindName("QuickPeersList");
+        Check(quickPeersList.Items.Count == 2 &&
+            model.QuickChatPeers.Contains(model.Peers[0]) &&
+            model.QuickChatPeers.Contains(model.Peers[1]) &&
+            !model.QuickChatPeers.Contains(model.Peers[2]),
+            "Quick chat tabs must show active/unread chatters only instead of every online contact.");
+
+        model.Peers[2].Typing = "Typing…";
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(quickPeersList.Items.Count == 3 && model.QuickChatPeers.Contains(model.Peers[2]),
+            "An idle contact should appear in Quick chat tabs once they start typing.");
+        model.Peers[2].Typing = "";
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(quickPeersList.Items.Count == 2 && !model.QuickChatPeers.Contains(model.Peers[2]),
+            "Contacts with no active conversation should stay out of Quick chat tabs.");
 
         var roamBtn = (System.Windows.Controls.Button)quickChat.FindName("RoamButton");
         roamBtn.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
@@ -2187,7 +2348,41 @@ internal static class Program
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
         Check(model.Messages.Last().Text == "Quick reply from pet!" && model.Messages.Last().Delivery == "Preview only",
             "Quick chat composer should send directly through MainViewModel.");
+
+        // Send a Look code carrying a background image and custom fonts, then apply it directly from the chat card.
+        var lookBgVisual = new DrawingVisual();
+        using (var lookDc = lookBgVisual.RenderOpen())
+        {
+            lookDc.DrawRectangle(new LinearGradientBrush(Color.FromRgb(0x16, 0x26, 0x45), Color.FromRgb(0x52, 0x2B, 0x6B), 35), null, new Rect(0, 0, 800, 500));
+            lookDc.DrawEllipse(new SolidColorBrush(Color.FromArgb(145, 0xFF, 0xA8, 0x58)), null, new Point(590, 140), 130, 130);
+        }
+        var lookBgBmp = new RenderTargetBitmap(800, 500, 96, 96, PixelFormats.Pbgra32);
+        lookBgBmp.Render(lookBgVisual);
+        lookBgBmp.Freeze();
+        string sharedLook = AppearanceCodec.Encode(new AppSettings
+        {
+            Theme = ThemeManager.Midnight,
+            UiFont = "Consolas",
+            MessageFont = "Verdana",
+            ChatBackgroundOpacity = .40,
+            ChatBackgroundBlur = 2
+        }, lookBgBmp);
+        quickComposer.Text = sharedLook;
+        ClickNamed(quickChat, "Send message");
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        var quickApplyButton = FindButtons(quickChat, "Apply theme").LastOrDefault(b => b.IsVisible);
+        Check(quickApplyButton is not null, "Quick chat should render a compact shared theme card with an Apply button.");
+        quickApplyButton!.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(model.Settings.Theme == ThemeManager.Midnight &&
+            model.Settings.UiFont == "Consolas" &&
+            model.Settings.MessageFont == "Verdana" &&
+            model.ChatBackground is not null &&
+            ((FontFamily)Application.Current.Resources["MessageFontFamily"]).Source.Contains("Verdana") &&
+            FindButtons(window, "Apply theme").Any(b => b.IsVisible),
+            "Applying a shared Look card must apply its theme, fonts, and embedded background image.");
         Capture(quickChat, Path.Combine(artifacts, "floating-quickchat-tested.png"));
+        Capture(window, Path.Combine(artifacts, "shared-look-chat-tested.png"));
 
         // Verify context menu "Quick chat" stays open cleanly across input frames.
         quickChat.Hide();
@@ -2196,8 +2391,224 @@ internal static class Program
         ((System.Windows.Controls.MenuItem)menu.Items[0]).RaiseEvent(new RoutedEventArgs(System.Windows.Controls.MenuItem.ClickEvent));
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
         Check(quickChat.IsVisible, "Context menu Quick chat action must keep quick-chat open.");
+        quickChat.Hide();
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
 
-        // 4. Turning off Floating LAN closes both quick chat and pet cleanly.
+        // 4. Companion customization catalog, Look code roundtrip, live preview/Cancel/Save, and multi-style visual verification.
+        Check(FloatingPetStyle.CombinationCount >= 10_000,
+            $"Companion combination count must exceed 10,000 (actual: {FloatingPetStyle.CombinationCount}).");
+        var randomPet = FloatingPetStyle.Randomize(new Random(42));
+        var randomSettings = new AppSettings { Theme = ThemeManager.Midnight };
+        FloatingPetStyle.Apply(randomPet, randomSettings);
+        string petLookCode = AppearanceCodec.Encode(randomSettings);
+        Check(AppearanceCodec.TryDecode(petLookCode, out var decodedPetLook),
+            "Look code containing custom companion settings must encode and decode cleanly.");
+        var decodedPetSettings = new AppSettings();
+        AppearanceCodec.Apply(decodedPetLook, decodedPetSettings);
+        Check(PetAppearance.From(decodedPetSettings) == randomPet,
+            "Applying a Look code must restore all customized companion traits.");
+
+        // Verify disk roundtrip via LocalStore.
+        string tempStoreDir = Path.Combine(Path.GetTempPath(), "cydlan-pet-store-" + Guid.NewGuid().ToString("N")[..8]);
+        try
+        {
+            var store = new LocalStore(tempStoreDir);
+            store.SaveSettings(randomSettings);
+            var reloaded = store.LoadSettings();
+            Check(PetAppearance.From(reloaded) == randomPet,
+                "Saved companion customization must persist cleanly across LocalStore reload.");
+        }
+        finally
+        {
+            try { Directory.Delete(tempStoreDir, true); } catch { }
+        }
+
+        // Open Settings -> Appearance -> Companion studio and verify live preview + Cancel + Save + captures.
+        var beforeStudio = model.PetAppearance;
+        var studioSettings = window.CreateSettingsWindow("AppearancePage", rememberNavigation: false, appearanceTab: "Companion");
+        studioSettings.Owner = window;
+        studioSettings.Show();
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        var companionSection = (FrameworkElement)studioSettings.FindName("AppearanceCompanionSection");
+        Check(companionSection.IsVisible, "Opening Settings directly on Companion tab must display Companion studio.");
+
+        var presetBox = (System.Windows.Controls.Primitives.Selector)studioSettings.FindName("PetPresetBox");
+        presetBox.SelectedValue = "Wizard";
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(model.PetAppearance is { Body: "pear", Hat: "wizard", Back: "cape", Prop: "wand" },
+            "Selecting a companion preset must live-preview onto MainViewModel and FloatingPetWindow.");
+        Capture(studioSettings, Path.Combine(artifacts, "companion-studio-body.png"));
+        Capture(petWindow, Path.Combine(artifacts, "companion-pet-wizard.png"));
+
+        ((System.Windows.Controls.RadioButton)studioSettings.FindName("PetCatFace")).IsChecked = true;
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Capture(studioSettings, Path.Combine(artifacts, "companion-studio-face.png"));
+
+        ((System.Windows.Controls.RadioButton)studioSettings.FindName("PetCatGear")).IsChecked = true;
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Capture(studioSettings, Path.Combine(artifacts, "companion-studio-gear.png"));
+
+        ((System.Windows.Controls.RadioButton)studioSettings.FindName("PetCatColors")).IsChecked = true;
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Capture(studioSettings, Path.Combine(artifacts, "companion-studio-colors.png"));
+
+        ((System.Windows.Controls.RadioButton)studioSettings.FindName("PetCatMotion")).IsChecked = true;
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Capture(studioSettings, Path.Combine(artifacts, "companion-studio-vibe.png"));
+
+        ClickContentButton(studioSettings, "Cancel");
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(model.PetAppearance == beforeStudio,
+            "Canceling Settings must revert temporary companion live previews.");
+
+        // Customize from scratch, Save, and verify other archetypes visually too.
+        var saveSettings = window.CreateSettingsWindow("AppearancePage", rememberNavigation: false, appearanceTab: "Companion");
+        saveSettings.Owner = window;
+        saveSettings.Show();
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        ((System.Windows.Controls.ListBox)saveSettings.FindName("PetBodyBox")).SelectedValue = "star";
+        ((System.Windows.Controls.ListBox)saveSettings.FindName("PetPatternBox")).SelectedValue = "gradient";
+        ((System.Windows.Controls.ListBox)saveSettings.FindName("PetEarsBox")).SelectedValue = "bunny";
+        ((System.Windows.Controls.ListBox)saveSettings.FindName("PetFeetBox")).SelectedValue = "hover";
+        ((System.Windows.Controls.ListBox)saveSettings.FindName("PetEyesBox")).SelectedValue = "big";
+        ((System.Windows.Controls.ListBox)saveSettings.FindName("PetMouthBox")).SelectedValue = "fang";
+        ((System.Windows.Controls.ListBox)saveSettings.FindName("PetCheeksBox")).SelectedValue = "hearts";
+        ((System.Windows.Controls.ListBox)saveSettings.FindName("PetGlassesBox")).SelectedValue = "star";
+        ((System.Windows.Controls.ListBox)saveSettings.FindName("PetHatBox")).SelectedValue = "crown";
+        ((System.Windows.Controls.ListBox)saveSettings.FindName("PetOutfitBox")).SelectedValue = "hoodie";
+        ((System.Windows.Controls.ListBox)saveSettings.FindName("PetBackBox")).SelectedValue = "angel";
+        ((System.Windows.Controls.ListBox)saveSettings.FindName("PetPropBox")).SelectedValue = "sparkles";
+        ((System.Windows.Controls.ListBox)saveSettings.FindName("PetVibeBox")).SelectedValue = "zoomies";
+        ((System.Windows.Controls.Slider)saveSettings.FindName("PetSizeBox")).Value = 1.25;
+        ((System.Windows.Controls.ListBox)saveSettings.FindName("PetBodyColorBox")).SelectedValue = "#FCE7F3";
+        ((System.Windows.Controls.ListBox)saveSettings.FindName("PetAccentColorBox")).SelectedValue = "#EC4899";
+        ((System.Windows.Controls.ListBox)saveSettings.FindName("PetDetailColorBox")).SelectedValue = "#FACC15";
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Capture(petWindow, Path.Combine(artifacts, "companion-pet-custom.png"));
+        static System.Windows.Controls.RadioButton? FindTagRadio(DependencyObject root, string tag)
+        {
+            if (root is System.Windows.Controls.RadioButton rb && Equals(rb.Tag, tag)) return rb;
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+                if (FindTagRadio(VisualTreeHelper.GetChild(root, i), tag) is { } found) return found;
+            return null;
+        }
+
+        (FindTagRadio(saveSettings, "Face") ?? throw new Exception("Missing Companion Face tab.")).IsChecked = true;
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        var browsBox = (System.Windows.Controls.ListBox)saveSettings.FindName("PetBrowsBox");
+        browsBox.SelectedValue = "happy";
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(browsBox.IsVisible, "Companion Face tab must display Eyebrows selector.");
+        Capture(saveSettings, Path.Combine(artifacts, "companion-studio-face.png"));
+
+        (FindTagRadio(saveSettings, "Motion") ?? throw new Exception("Missing Companion Vibe tab.")).IsChecked = true;
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        var auraBox = (System.Windows.Controls.ListBox)saveSettings.FindName("PetAuraBox");
+        auraBox.SelectedValue = "stars";
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(auraBox.IsVisible, "Companion Vibe tab must display Aura selector.");
+        Capture(saveSettings, Path.Combine(artifacts, "companion-studio-vibe.png"));
+
+        ClickNamed(saveSettings, "Save");
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(model.Settings.PetBody == "star" && model.Settings.PetEars == "bunny" &&
+            model.Settings.PetBrows == "happy" && model.Settings.PetAura == "stars" &&
+            model.Settings.PetHat == "crown" && model.Settings.PetBack == "angel" &&
+            model.Settings.PetFeet == "hover" && model.Settings.PetPattern == "gradient" &&
+            model.Settings.PetBodyColor == "#FCE7F3" && Math.Abs(model.Settings.PetSize - 1.25) < .01,
+            "Saving companion settings must commit every customized field into Settings.");
+        Check(FloatingPetStyle.CombinationCount >= 10_000_000_000_000L &&
+            PetAppearance.FromWireCode(model.PetAppearance.ToWireCode()) == model.PetAppearance,
+            "Expanded companion catalog and wire roundtrip must work cleanly.");
+
+        model.PreviewPetAppearance(FloatingPetStyle.Presets.First(p => p.Name == "Mecha Ace").Appearance);
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Capture(petWindow, Path.Combine(artifacts, "companion-pet-mecha.png"));
+        model.PreviewPetAppearance(FloatingPetStyle.Presets.First(p => p.Name == "Cyber DJ").Appearance);
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Capture(petWindow, Path.Combine(artifacts, "companion-pet-cyberdj.png"));
+        model.PreviewPetAppearance(FloatingPetStyle.Presets.First(p => p.Name == "Shark").Appearance);
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Capture(petWindow, Path.Combine(artifacts, "companion-pet-shark.png"));
+        model.PreviewPetAppearance(null);
+
+        // 4b. Clicking profile avatar opens expanded profile showing Bio + CydLan companion,
+        // and omits companion UI for legacy LAN Messenger peers.
+        async Task OpenAndVerifyProfileAsync(Peer peer, string screenshotName, bool expectCompanion, bool adoptCompanion)
+        {
+            model.SelectedPeer = peer;
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            Exception? failure = null;
+            _ = Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(async () =>
+            {
+                PeerProfileWindow? modal = null;
+                try
+                {
+                    modal = System.Windows.Application.Current.Windows.OfType<PeerProfileWindow>().SingleOrDefault()
+                        ?? throw new Exception("Expanded peer profile window did not open.");
+                    await Task.Delay(90);
+                    Check(((System.Windows.Controls.TextBlock)modal.FindName("DisplayNameText")).Text == peer.Name,
+                        "Expanded profile must show the peer's display name.");
+                    Check(((System.Windows.Controls.TextBlock)modal.FindName("ClientText")).Text == peer.Version,
+                        "Expanded profile must show available client information.");
+                    var bioSection = (FrameworkElement)modal.FindName("BioSection");
+                    Check(bioSection.Visibility == (peer.HasAbout ? Visibility.Visible : Visibility.Collapsed),
+                        "Bio section visibility must match whether peer shared About text.");
+                    if (peer.HasAbout)
+                        Check(((System.Windows.Controls.TextBlock)modal.FindName("BioText")).Text == peer.About,
+                            "Bio text must match the peer's About text.");
+
+                    var companionSection = (FrameworkElement)modal.FindName("CompanionSection");
+                    Check(companionSection.Visibility == (expectCompanion ? Visibility.Visible : Visibility.Collapsed),
+                        expectCompanion
+                            ? "CydLan peers with a companion code must show their Companion character."
+                            : "Legacy LAN Messenger peers must hide Companion section and show only available fields.");
+
+                    if (expectCompanion)
+                    {
+                        var petVisual = (FloatingPetVisual)modal.FindName("PeerPetVisual");
+                        Check(petVisual.PetStyle == PetAppearance.FromWireCode(peer.PetCode),
+                            "Profile showcase must render the peer's exact custom companion.");
+                    }
+
+                    Capture(modal, Path.Combine(artifacts, screenshotName));
+
+                    if (adoptCompanion)
+                    {
+                        var useBtn = (System.Windows.Controls.Button)modal.FindName("UseCompanionButton");
+                        Check(useBtn.IsEnabled, "Use companion button must be enabled when peer companion differs.");
+                        useBtn.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+                        await Task.Delay(120);
+                        Check(model.PetAppearance == PetAppearance.FromWireCode(peer.PetCode),
+                            "Clicking Use companion must adopt the peer's companion.");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    failure = ex;
+                }
+                finally
+                {
+                    modal?.Close();
+                }
+            }));
+
+            var avatarButton = (System.Windows.Controls.Button)window.FindName("ConversationAvatarButton");
+            avatarButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            if (failure is not null) throw new Exception("Peer profile verification failed", failure);
+        }
+
+        var cydPeer = model.Peers.First(p => p.Id == "2");
+        Check(cydPeer.HasAbout && cydPeer.HasPetCode, "Preview CydLan peer must include About and PetCode.");
+        await OpenAndVerifyProfileAsync(cydPeer, "peer-profile-cydlan-tested.png", expectCompanion: true, adoptCompanion: true);
+
+        var legacyPeer = model.Peers.First(p => p.Id == "1");
+        Check(!LanService.IsCydLanVersion(legacyPeer.Version) && !legacyPeer.HasPetCode,
+            "Preview legacy peer must represent old LAN Messenger without PetCode.");
+        await OpenAndVerifyProfileAsync(legacyPeer, "peer-profile-legacy-tested.png", expectCompanion: false, adoptCompanion: false);
+
+        // 5. Turning off Floating LAN closes both quick chat and pet cleanly.
         model.UpdateFloatingState(enabled: false);
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
         Check(!petWindow.IsVisible && !quickChat.IsVisible,
@@ -2205,7 +2616,109 @@ internal static class Program
 
         window.Close();
         ThemeManager.Apply(ThemeManager.Light, AppearanceOverrides.Default);
-        Console.WriteLine("PASS  Tray-only Floating LAN pet, speech reaction, roam toggle, tool-window flags, and quick chat");
+        Console.WriteLine("PASS  Tray-only Floating LAN pet, companion studio customization, Look code persistence, and quick chat");
+    }
+
+    private static async Task TestMediaModuleSuiteAsync(string artifacts)
+    {
+        Check(MediaCatalog.IsAudioFile("song.mp3") && MediaCatalog.IsAudioFile("tone.wav") &&
+            MediaCatalog.IsVideoFile("clip.mp4") && MediaCatalog.IsVideoFile("demo.wmv") &&
+            !MediaCatalog.IsMediaFile("notes.txt") && !MediaCatalog.IsMediaFile("photo.png"),
+            "MediaCatalog extension detection must distinguish playable audio, video, and non-media files.");
+
+        string tempDir = Path.Combine(Path.GetTempPath(), "cydlan-media-test-" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(tempDir);
+        string wav1 = Path.Combine(tempDir, "Morning Synth.wav");
+        string wav2 = Path.Combine(tempDir, "Lan Lo-Fi Beat.wav");
+        WriteSampleWav(wav1, 1.5);
+        WriteSampleWav(wav2, 1.2);
+
+        try
+        {
+            await using var model = new MainViewModel(preview: true);
+            ThemeManager.Apply(ThemeManager.Midnight, AppearanceOverrides.Default);
+            var window = new MainWindow(model);
+            window.Show();
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+
+            var mediaNav = (System.Windows.Controls.Button)window.FindName("MediaNav");
+            mediaNav.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+
+            var mediaSection = (FrameworkElement)window.FindName("MediaSectionGrid");
+            var miniCard = (FrameworkElement)window.FindName("MiniPlayerCard");
+            var player = (System.Windows.Controls.MediaElement)window.FindName("MediaPlayerElement");
+            Check(model.IsMediaSection && mediaSection.IsVisible && model.NoMediaShown && !miniCard.IsVisible && player.Source is null,
+                "Media rail button should open the empty Media module with zero loaded player handle before playback.");
+            Capture(window, Path.Combine(artifacts, "media-empty-tested.png"));
+
+            await model.AddMediaPathsAsync([wav1, wav2], autoPlayFirst: true);
+            await Until(() => model.IsMediaPlaying && player.Source is not null);
+            await Task.Delay(250);
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+
+            Check(model.AllMediaCount == 2 && model.AudioMediaCount == 2 && model.VideoMediaCount == 0 &&
+                model.CurrentMedia?.Path == wav1 && model.IsCurrentAudio && model.IsCurrentAudioPlaying,
+                "Adding media files should populate the queue and load the player lazily.");
+
+            model.CycleMediaSpeed();
+            Check(model.MediaSpeedLabel == "1.25x" && Math.Abs(player.SpeedRatio - 1.25) < .01,
+                "Cycling media speed must update playback speed.");
+            model.MediaVolume = .45;
+            Check(Math.Abs(player.Volume - .45) < .01 && Math.Abs(model.Settings.MediaVolume - .45) < .01,
+                "Volume adjustment must update the active player and settings.");
+            Capture(window, Path.Combine(artifacts, "media-audio-playing-tested.png"));
+
+            model.NextMedia();
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            Check(model.CurrentMedia?.Path == wav2, "Next button must advance to the next track cleanly.");
+
+            // Return to Chats while music plays: sidebar Mini Player should appear without displacing chat.
+            var chatNav = (System.Windows.Controls.Button)window.FindName("ChatNav");
+            chatNav.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            Check(model.ChatOpen && model.ShowMiniPlayer && miniCard.IsVisible,
+                "Returning to Chats during playback must display the compact sidebar mini player.");
+            Capture(window, Path.Combine(artifacts, "media-miniplayer-chat-tested.png"));
+
+            model.TogglePlayPause();
+            Check(!model.IsMediaPlaying, "TogglePlayPause must pause playback.");
+            model.StopMedia();
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            Check(!model.HasCurrentMedia && !miniCard.IsVisible && player.Source is null,
+                "Stopping media must clear current track, hide mini player, and release MediaElement.Source.");
+
+            window.Close();
+            ThemeManager.Apply(ThemeManager.Light, AppearanceOverrides.Default);
+            Console.WriteLine("PASS  Lightweight Media module (rail stage, queue, lazy MediaElement, seek/speed/volume, mini player)");
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, true); } catch { }
+        }
+    }
+
+    private static void WriteSampleWav(string path, double seconds)
+    {
+        const int sampleRate = 8000;
+        int samples = (int)(sampleRate * seconds);
+        using var fs = File.Create(path);
+        using var bw = new BinaryWriter(fs);
+        bw.Write("RIFF"u8);
+        bw.Write(36 + samples * 2);
+        bw.Write("WAVE"u8);
+        bw.Write("fmt "u8);
+        bw.Write(16);
+        bw.Write((short)1);
+        bw.Write((short)1);
+        bw.Write(sampleRate);
+        bw.Write(sampleRate * 2);
+        bw.Write((short)2);
+        bw.Write((short)16);
+        bw.Write("data"u8);
+        bw.Write(samples * 2);
+        for (int i = 0; i < samples; i++)
+            bw.Write((short)(Math.Sin(i * 2.0 * Math.PI * 440.0 / sampleRate) * 2400));
     }
 
     private static void ClickContentButton(DependencyObject root, string content)
@@ -2249,6 +2762,7 @@ internal static class Program
             CustomAccentColor = "#EC4899", CustomEffectColor = "#00FFAA", CustomOutgoingBubbleColor = "#6366F1", CustomIncomingBubbleColor = "#3B82F6",
             BubbleStyle = AppearanceOptions.BubbleGlass, BubbleShape = AppearanceOptions.ShapeTail, ChatDensity = AppearanceOptions.DensityCompact,
             MessageFontSizePx = 18, ChatCanvasGradient = ChatCanvasOverlay.Aurora, ChatCanvasGradientIntensity = .75, ChatBackgroundBlur = 6,
+            ChatBackgroundTransition = BackgroundSideTransition.Left, ChatBackgroundTransitionStrength = .70,
             CornerStyle = AppearanceOptions.CornerRound, AvatarShape = AppearanceOptions.AvatarSquircle, OnlineRingEnabled = true,
             UiFont = "Consolas", WindowOpacity = .94, EffectSpeed = 1.4, MessageAnimation = MessageMotion.Slide,
             MatrixEnabled = true, MatrixIntensity = .7, ConstellationEnabled = true, ConstellationIntensity = .6, BokehEnabled = true, BokehIntensity = .8,
@@ -2291,6 +2805,7 @@ internal static class Program
             CustomAccentColor: "#EC4899", CustomEffectColor: "#00FFAA", CustomOutgoingBubbleColor: "#6366F1", CustomIncomingBubbleColor: "#3B82F6",
             BubbleStyle: "glass", BubbleShape: "tail", ChatDensity: "compact",
             MessageFontSizePx: 18, ChatCanvasGradient: "aurora", ChatCanvasGradientIntensity: .75, ChatBackgroundBlur: 6,
+            ChatBackgroundTransition: "left", ChatBackgroundTransitionStrength: .70,
             CornerStyle: "round", AvatarShape: "squircle", OnlineRingEnabled: true,
             UiFont: "Consolas", WindowOpacity: .94, EffectSpeed: 1.4, MessageAnimation: "slide",
             MatrixEnabled: true, MatrixIntensity: .7, ConstellationEnabled: true, ConstellationIntensity: .6, BokehEnabled: true, BokehIntensity: .8,
@@ -2351,6 +2866,10 @@ internal static class Program
             var (name, theme) = profiles[i];
             stores[i].SaveSettings(new() {
                 DisplayName = name, Theme = theme,
+                About = i == 0 ? "LAN designer" : "",
+                PetBody = i == 0 ? "heart" : "squircle",
+                PetBrows = i == 0 ? "focused" : "none",
+                PetAura = i == 0 ? "ring" : "none",
                 Port = ((IPEndPoint)reservations[i].Client.LocalEndPoint!).Port,
                 Notifications = false, Sounds = false
             });
@@ -2367,6 +2886,14 @@ internal static class Program
         await alice.ConnectByAddressAsync($"127.0.0.1:{carol.Settings.Port}");
         await bob.ConnectByAddressAsync($"127.0.0.1:{carol.Settings.Port}");
         await Until(() => accounts.All(account => account.OnlineCount == 2));
+        await Until(() =>
+        {
+            var p = bob.Peers.Single(peer => peer.Id == alice.Settings.UserId);
+            return p.About == "LAN designer" && p.HasPetCode;
+        });
+        var aliceFromBob = bob.Peers.Single(peer => peer.Id == alice.Settings.UserId);
+        Check(PetAppearance.FromWireCode(aliceFromBob.PetCode) is { Body: "heart", Brows: "focused", Aura: "ring" },
+            "Bob must receive Alice's custom companion setup over the desktop LAN session.");
         for (int i = 0; i < accounts.Length; i++)
         {
             var sender = accounts[i];

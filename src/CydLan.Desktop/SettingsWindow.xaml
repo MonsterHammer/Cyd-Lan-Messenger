@@ -341,6 +341,7 @@
                   <RadioButton x:Name="AppearanceHeadersTab" Content="Headers" Tag="Headers" Style="{StaticResource Tab}" GroupName="AppearanceSection" Checked="AppearanceTab_Checked" Margin="0,0,10,0" AutomationProperties.Name="Headers tab"/>
                   <RadioButton x:Name="AppearancePanelsTab" Content="Panels" Tag="Panels" Style="{StaticResource Tab}" GroupName="AppearanceSection" Checked="AppearanceTab_Checked" Margin="0,0,10,0" AutomationProperties.Name="Panels tab"/>
                   <RadioButton x:Name="AppearanceAuraTab" Content="Aura" Tag="Aura" Style="{StaticResource Tab}" GroupName="AppearanceSection" Checked="AppearanceTab_Checked" Margin="0,0,10,0" AutomationProperties.Name="Aura tab"/>
+                  <RadioButton x:Name="AppearanceCompanionTab" Content="Companion" Tag="Companion" Style="{StaticResource Tab}" GroupName="AppearanceSection" Checked="AppearanceTab_Checked" Margin="0,0,10,0" AutomationProperties.Name="Companion tab"/>
                   <RadioButton x:Name="AppearanceCustomizeTab" Content="Fonts &amp; bg" Tag="Customize" Style="{StaticResource Tab}" GroupName="AppearanceSection" Checked="AppearanceTab_Checked" AutomationProperties.Name="Fonts and background tab"/>
                 </WrapPanel>
               </Border>
@@ -450,7 +451,7 @@
               <TextBlock Text="Look code" Style="{StaticResource Label}"/>
               <Grid Margin="0,0,0,10">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <TextBox x:Name="LookCodeBox" MaxLength="8192" AutomationProperties.Name="Look code"/>
+                <TextBox x:Name="LookCodeBox" MaxLength="32000" AutomationProperties.Name="Look code"/>
                 <Button Grid.Column="1" Content="Copy code" Style="{StaticResource Secondary}" Margin="8,0,0,0" Click="CopyLookCode_Click"/>
                 <Button Grid.Column="2" Content="Import" Style="{StaticResource Secondary}" Margin="6,0,0,0" Click="ImportLookCode_Click"/>
               </Grid>
@@ -714,7 +715,8 @@
                     </Border>
                   </CheckBox>
                 </WrapPanel>
-                <CheckBox x:Name="AmbientOnSidebarBox" Content="Show on side panel" Margin="0,4,0,8"/>
+                <CheckBox x:Name="AmbientOnSidebarBox" Content="Show on side panel" Margin="0,4,0,6"/>
+                <CheckBox x:Name="AnimateWhenUnfocusedBox" Content="Animate when unfocused" Margin="0,0,0,10" Checked="AnimateUnfocused_Changed" Unchecked="AnimateUnfocused_Changed"/>
                 <DockPanel Margin="0,0,0,4">
                   <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=EffectSpeedBox, StringFormat={}{0:0.0}x}" Foreground="{DynamicResource Muted}"/>
                   <TextBlock Text="Effect speed" Style="{StaticResource Label}" Margin="0"/>
@@ -1825,6 +1827,118 @@
                   </StackPanel>
                 </Border>
               </StackPanel>
+              <StackPanel x:Name="AppearanceCompanionSection" Visibility="Collapsed">
+                <Border Background="{DynamicResource Canvas}" BorderBrush="{DynamicResource Line}" BorderThickness="1"
+                        CornerRadius="{DynamicResource PanelCorner}" Padding="10,9" Margin="0,0,0,10" ClipToBounds="True">
+                  <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="148"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <Border x:Name="PetStageBorder" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Line}" BorderThickness="1"
+                            CornerRadius="{DynamicResource ControlCorner}" Height="108" ClipToBounds="True" Cursor="Hand"
+                            MouseLeftButtonDown="PetStage_Click" MouseEnter="PetStage_MouseEnter" MouseLeave="PetStage_MouseLeave">
+                      <Grid>
+                        <Border Background="{DynamicResource ChatColorFinishBrush}" IsHitTestVisible="False"/>
+                        <local:FloatingPetVisual x:Name="PetStudioPreview" Width="138" Height="104" HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                                                 RenderTransformOrigin="0.5,0.92">
+                          <local:FloatingPetVisual.RenderTransform>
+                            <ScaleTransform ScaleX="1.22" ScaleY="1.22"/>
+                          </local:FloatingPetVisual.RenderTransform>
+                        </local:FloatingPetVisual>
+                      </Grid>
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="14,0,0,0">
+                      <DockPanel Margin="0,0,0,6">
+                        <TextBlock x:Name="PetComboSummary" DockPanel.Dock="Right" Foreground="{DynamicResource Muted}" FontSize="11" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                        <StackPanel Orientation="Horizontal">
+                          <CheckBox x:Name="PetFloatingBox" Content="Floating" Margin="0,0,12,0" Checked="PetFloating_Changed" Unchecked="PetFloating_Changed"/>
+                          <CheckBox x:Name="PetRoamBox" Content="Roam" Margin="0" Checked="PetRoam_Changed" Unchecked="PetRoam_Changed"/>
+                        </StackPanel>
+                      </DockPanel>
+                      <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="10"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <TextBlock Text="Preset" Style="{StaticResource Label}" VerticalAlignment="Center" Margin="0"/>
+                        <ComboBox x:Name="PetPresetBox" Grid.Column="2" SelectedValuePath="Name"
+                                  SelectionChanged="PetPreset_Changed" AutomationProperties.Name="Companion presets"/>
+                      </Grid>
+                      <WrapPanel>
+                        <Button x:Name="PetHopButton" Content="Hop" Style="{StaticResource Secondary}" Padding="10,5" Margin="0,0,6,0" Click="PetHop_Click" AutomationProperties.Name="Hop companion preview"/>
+                        <Button x:Name="PetRandomizeButton" Content="Randomize" Style="{StaticResource Primary}" Padding="11,5" Margin="0,0,6,0" Click="PetRandomize_Click" AutomationProperties.Name="Randomize companion"/>
+                        <Button x:Name="PetResetButton" Content="Reset" Style="{StaticResource Secondary}" Padding="10,5" Margin="0" Click="PetReset_Click" AutomationProperties.Name="Reset companion"/>
+                      </WrapPanel>
+                    </StackPanel>
+                  </Grid>
+                </Border>
+                <Border Background="{DynamicResource Surface}" CornerRadius="{DynamicResource ControlCorner}" Padding="3" Margin="0,0,0,10">
+                  <UniformGrid Columns="5">
+                    <RadioButton x:Name="PetCatBody" Content="Body" Tag="Body" Style="{StaticResource Segment}" GroupName="PetCategory" IsChecked="True" Checked="PetCategory_Checked" AutomationProperties.Name="Companion body category"/>
+                    <RadioButton x:Name="PetCatFace" Content="Face" Tag="Face" Style="{StaticResource Segment}" GroupName="PetCategory" Checked="PetCategory_Checked" AutomationProperties.Name="Companion face category"/>
+                    <RadioButton x:Name="PetCatGear" Content="Gear" Tag="Gear" Style="{StaticResource Segment}" GroupName="PetCategory" Checked="PetCategory_Checked" AutomationProperties.Name="Companion gear category"/>
+                    <RadioButton x:Name="PetCatColors" Content="Colors" Tag="Colors" Style="{StaticResource Segment}" GroupName="PetCategory" Checked="PetCategory_Checked" AutomationProperties.Name="Companion colors category"/>
+                    <RadioButton x:Name="PetCatMotion" Content="Vibe" Tag="Motion" Style="{StaticResource Segment}" GroupName="PetCategory" Checked="PetCategory_Checked" AutomationProperties.Name="Companion vibe category"/>
+                  </UniformGrid>
+                </Border>
+                <StackPanel x:Name="PetBodyPanel">
+                  <TextBlock Text="Shape" Style="{StaticResource Label}"/>
+                  <ListBox x:Name="PetBodyBox" Style="{StaticResource PillOptionGrid}" SelectedValuePath="Value" SelectionChanged="PetOption_Changed" Margin="0,0,0,10" AutomationProperties.Name="Companion body shape"/>
+                  <TextBlock Text="Pattern" Style="{StaticResource Label}"/>
+                  <ListBox x:Name="PetPatternBox" Style="{StaticResource PillOptionGrid}" SelectedValuePath="Value" SelectionChanged="PetOption_Changed" Margin="0,0,0,10" AutomationProperties.Name="Companion pattern"/>
+                  <TextBlock Text="Ears &amp; horns" Style="{StaticResource Label}"/>
+                  <ListBox x:Name="PetEarsBox" Style="{StaticResource PillOptionGrid}" SelectedValuePath="Value" SelectionChanged="PetOption_Changed" Margin="0,0,0,10" AutomationProperties.Name="Companion ears"/>
+                  <TextBlock Text="Feet" Style="{StaticResource Label}"/>
+                  <ListBox x:Name="PetFeetBox" Style="{StaticResource PillOptionGrid}" SelectedValuePath="Value" SelectionChanged="PetOption_Changed" Margin="0,0,0,6" AutomationProperties.Name="Companion feet"/>
+                </StackPanel>
+                <StackPanel x:Name="PetFacePanel" Visibility="Collapsed">
+                  <TextBlock Text="Eyes" Style="{StaticResource Label}"/>
+                  <ListBox x:Name="PetEyesBox" Style="{StaticResource PillOptionGrid}" SelectedValuePath="Value" SelectionChanged="PetOption_Changed" Margin="0,0,0,10" AutomationProperties.Name="Companion eyes"/>
+                  <TextBlock Text="Eyebrows" Style="{StaticResource Label}"/>
+                  <ListBox x:Name="PetBrowsBox" Style="{StaticResource PillOptionGrid}" SelectedValuePath="Value" SelectionChanged="PetOption_Changed" Margin="0,0,0,10" AutomationProperties.Name="Companion eyebrows"/>
+                  <TextBlock Text="Mouth" Style="{StaticResource Label}"/>
+                  <ListBox x:Name="PetMouthBox" Style="{StaticResource PillOptionGrid}" SelectedValuePath="Value" SelectionChanged="PetOption_Changed" Margin="0,0,0,10" AutomationProperties.Name="Companion mouth"/>
+                  <TextBlock Text="Cheeks" Style="{StaticResource Label}"/>
+                  <ListBox x:Name="PetCheeksBox" Style="{StaticResource PillOptionGrid}" SelectedValuePath="Value" SelectionChanged="PetOption_Changed" Margin="0,0,0,10" AutomationProperties.Name="Companion cheeks"/>
+                  <TextBlock Text="Glasses" Style="{StaticResource Label}"/>
+                  <ListBox x:Name="PetGlassesBox" Style="{StaticResource PillOptionGrid}" SelectedValuePath="Value" SelectionChanged="PetOption_Changed" Margin="0,0,0,6" AutomationProperties.Name="Companion glasses"/>
+                </StackPanel>
+                <StackPanel x:Name="PetGearPanel" Visibility="Collapsed">
+                  <TextBlock Text="Headwear" Style="{StaticResource Label}"/>
+                  <ListBox x:Name="PetHatBox" Style="{StaticResource PillOptionGrid}" SelectedValuePath="Value" SelectionChanged="PetOption_Changed" Margin="0,0,0,10" AutomationProperties.Name="Companion headwear"/>
+                  <TextBlock Text="Outfit" Style="{StaticResource Label}"/>
+                  <ListBox x:Name="PetOutfitBox" Style="{StaticResource PillOptionGrid}" SelectedValuePath="Value" SelectionChanged="PetOption_Changed" Margin="0,0,0,10" AutomationProperties.Name="Companion outfit"/>
+                  <TextBlock Text="Back &amp; wings" Style="{StaticResource Label}"/>
+                  <ListBox x:Name="PetBackBox" Style="{StaticResource PillOptionGrid}" SelectedValuePath="Value" SelectionChanged="PetOption_Changed" Margin="0,0,0,10" AutomationProperties.Name="Companion back accessory"/>
+                  <TextBlock Text="Held &amp; orbit" Style="{StaticResource Label}"/>
+                  <ListBox x:Name="PetPropBox" Style="{StaticResource PillOptionGrid}" SelectedValuePath="Value" SelectionChanged="PetOption_Changed" Margin="0,0,0,6" AutomationProperties.Name="Companion prop"/>
+                </StackPanel>
+                <StackPanel x:Name="PetColorsPanel" Visibility="Collapsed">
+                  <DockPanel Margin="0,0,0,6">
+                    <TextBox x:Name="PetBodyHexBox" DockPanel.Dock="Right" Width="92" MaxLength="9" Padding="8,4" FontSize="12" LostKeyboardFocus="PetHex_Committed" KeyDown="PetHex_KeyDown" AutomationProperties.Name="Companion body color hex"/>
+                    <TextBlock Text="Body color" Style="{StaticResource Label}" VerticalAlignment="Center" Margin="0"/>
+                  </DockPanel>
+                  <ListBox x:Name="PetBodyColorBox" Style="{StaticResource ColorChipGrid}" SelectedValuePath="Value" SelectionChanged="PetColor_Changed" Margin="0,0,0,12" AutomationProperties.Name="Companion body color"/>
+                  <DockPanel Margin="0,0,0,6">
+                    <TextBox x:Name="PetAccentHexBox" DockPanel.Dock="Right" Width="92" MaxLength="9" Padding="8,4" FontSize="12" LostKeyboardFocus="PetHex_Committed" KeyDown="PetHex_KeyDown" AutomationProperties.Name="Companion accent color hex"/>
+                    <TextBlock Text="Accent color" Style="{StaticResource Label}" VerticalAlignment="Center" Margin="0"/>
+                  </DockPanel>
+                  <ListBox x:Name="PetAccentColorBox" Style="{StaticResource ColorChipGrid}" SelectedValuePath="Value" SelectionChanged="PetColor_Changed" Margin="0,0,0,12" AutomationProperties.Name="Companion accent color"/>
+                  <DockPanel Margin="0,0,0,6">
+                    <TextBox x:Name="PetDetailHexBox" DockPanel.Dock="Right" Width="92" MaxLength="9" Padding="8,4" FontSize="12" LostKeyboardFocus="PetHex_Committed" KeyDown="PetHex_KeyDown" AutomationProperties.Name="Companion detail color hex"/>
+                    <TextBlock Text="Detail color" Style="{StaticResource Label}" VerticalAlignment="Center" Margin="0"/>
+                  </DockPanel>
+                  <ListBox x:Name="PetDetailColorBox" Style="{StaticResource ColorChipGrid}" SelectedValuePath="Value" SelectionChanged="PetColor_Changed" Margin="0,0,0,6" AutomationProperties.Name="Companion detail color"/>
+                </StackPanel>
+                <StackPanel x:Name="PetMotionPanel" Visibility="Collapsed">
+                  <TextBlock Text="Vibe" Style="{StaticResource Label}"/>
+                  <ListBox x:Name="PetVibeBox" Style="{StaticResource PillOptionGrid}" SelectedValuePath="Value" SelectionChanged="PetOption_Changed" Margin="0,0,0,12" AutomationProperties.Name="Companion vibe"/>
+                  <TextBlock Text="Aura" Style="{StaticResource Label}"/>
+                  <ListBox x:Name="PetAuraBox" Style="{StaticResource PillOptionGrid}" SelectedValuePath="Value" SelectionChanged="PetOption_Changed" Margin="0,0,0,12" AutomationProperties.Name="Companion aura"/>
+                  <DockPanel Margin="0,0,0,4">
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=PetSizeBox, StringFormat=P0}" Foreground="{DynamicResource Muted}"/>
+                    <TextBlock Text="Size" Style="{StaticResource Label}" Margin="0"/>
+                  </DockPanel>
+                  <Slider x:Name="PetSizeBox" Style="{StaticResource BackgroundSlider}" Minimum=".75" Maximum="1.35" TickFrequency=".05"
+                          SmallChange=".05" LargeChange=".15" IsSnapToTickEnabled="True" ValueChanged="PetSize_SliderChanged"
+                          AutomationProperties.Name="Companion size" Margin="0,0,0,6"/>
+                </StackPanel>
+              </StackPanel>
               <StackPanel x:Name="AppearanceCustomizeSection" Visibility="Collapsed">
                 <TextBlock Text="Interface font" Style="{StaticResource Label}"/>
                 <ComboBox x:Name="UiFontBox" MaxDropDownHeight="260" SelectionChanged="UiFont_Changed" Margin="0,0,0,12" AutomationProperties.Name="Interface font"/>
@@ -1928,23 +2042,204 @@
                   <Button x:Name="RemoveBackgroundButton" Content="Remove" Style="{StaticResource Secondary}" Margin="8,0,0,0" Click="RemoveBackground_Click"/>
                 </StackPanel>
                 <StackPanel x:Name="BackgroundAdjustments" Visibility="Collapsed">
+                  <StackPanel.Resources>
+                    <Style x:Key="AnchorCell" TargetType="RadioButton">
+                      <Setter Property="Width" Value="30"/>
+                      <Setter Property="Height" Value="24"/>
+                      <Setter Property="Margin" Value="1.5"/>
+                      <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
+                      <Setter Property="Cursor" Value="Hand"/>
+                      <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
+                      <Setter Property="Template">
+                        <Setter.Value>
+                          <ControlTemplate TargetType="RadioButton">
+                            <Border x:Name="Cell" Background="Transparent" BorderBrush="Transparent" BorderThickness="1"
+                                    CornerRadius="{DynamicResource SegmentCorner}">
+                              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                              <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Cell" Property="Background" Value="{DynamicResource Hover}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
+                              </Trigger>
+                              <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Cell" Property="Background" Value="{DynamicResource Accent}"/>
+                                <Setter TargetName="Cell" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource AccentInk}"/>
+                              </Trigger>
+                            </ControlTemplate.Triggers>
+                          </ControlTemplate>
+                        </Setter.Value>
+                      </Setter>
+                    </Style>
+                  </StackPanel.Resources>
                   <Grid Margin="0,0,0,6">
                     <TextBlock Text="Image opacity" Style="{StaticResource Label}"/>
                     <TextBlock Text="{Binding Value, ElementName=BackgroundOpacityBox, StringFormat=P0}" HorizontalAlignment="Right" Style="{StaticResource Label}"/>
                   </Grid>
-                  <Slider x:Name="BackgroundOpacityBox" Style="{StaticResource BackgroundSlider}" Minimum=".10" Maximum=".55" TickFrequency=".05"
-                          SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True" AutomationProperties.Name="Background image opacity" Margin="0,0,0,10"/>
+                  <Slider x:Name="BackgroundOpacityBox" Style="{StaticResource BackgroundSlider}" Minimum=".10" Maximum="1.0" TickFrequency=".05"
+                          SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True" ValueChanged="BackgroundOpacity_SliderChanged"
+                          AutomationProperties.Name="Background image opacity" Margin="0,0,0,10"/>
+                  <Grid Margin="0,0,0,6">
+                    <TextBlock Text="Backdrop dim" Style="{StaticResource Label}"/>
+                    <TextBlock Text="{Binding Value, ElementName=BackgroundDimBox, StringFormat=P0}" HorizontalAlignment="Right" Style="{StaticResource Label}"/>
+                  </Grid>
+                  <Slider x:Name="BackgroundDimBox" Style="{StaticResource BackgroundSlider}" Minimum="0" Maximum=".80" TickFrequency=".05"
+                          SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True" ValueChanged="BackgroundOptions_SliderChanged"
+                          AutomationProperties.Name="Background dim" Margin="0,0,0,10"/>
                   <Grid Margin="0,0,0,6">
                     <TextBlock Text="Image blur" Style="{StaticResource Label}"/>
                     <TextBlock Text="{Binding Value, ElementName=BackgroundBlurBox, StringFormat={}{0:0} px}" HorizontalAlignment="Right" Style="{StaticResource Label}"/>
                   </Grid>
                   <Slider x:Name="BackgroundBlurBox" Style="{StaticResource BackgroundSlider}" Minimum="0" Maximum="24" TickFrequency="1"
                           SmallChange="1" LargeChange="4" IsSnapToTickEnabled="True" ValueChanged="BackgroundBlur_SliderChanged"
-                          AutomationProperties.Name="Background image blur" Margin="0,0,0,14"/>
+                          AutomationProperties.Name="Background image blur" Margin="0,0,0,10"/>
+                  <Grid Margin="0,0,0,6">
+                    <TextBlock Text="Image scale" Style="{StaticResource Label}"/>
+                    <TextBlock Text="{Binding Value, ElementName=BackgroundScaleBox, StringFormat=P0}" HorizontalAlignment="Right" Style="{StaticResource Label}"/>
+                  </Grid>
+                  <Slider x:Name="BackgroundScaleBox" Style="{StaticResource BackgroundSlider}" Minimum="1.0" Maximum="1.6" TickFrequency=".05"
+                          SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True" ValueChanged="BackgroundOptions_SliderChanged"
+                          AutomationProperties.Name="Background image scale" Margin="0,0,0,10"/>
+                  <TextBlock Text="Image fit" Style="{StaticResource Label}" Margin="0,0,0,6"/>
+                  <Border Background="{DynamicResource Surface}" CornerRadius="{DynamicResource ControlCorner}" Padding="3" Margin="0,0,0,10">
+                    <UniformGrid Columns="4">
+                      <RadioButton x:Name="BgFitFill" Content="Fill" Tag="fill" Style="{StaticResource Segment}" GroupName="BgFit" Checked="BackgroundFit_Checked"/>
+                      <RadioButton x:Name="BgFitFit" Content="Fit" Tag="fit" Style="{StaticResource Segment}" GroupName="BgFit" Checked="BackgroundFit_Checked"/>
+                      <RadioButton x:Name="BgFitStretch" Content="Stretch" Tag="stretch" Style="{StaticResource Segment}" GroupName="BgFit" Checked="BackgroundFit_Checked"/>
+                      <RadioButton x:Name="BgFitCenter" Content="Center" Tag="center" Style="{StaticResource Segment}" GroupName="BgFit" Checked="BackgroundFit_Checked"/>
+                    </UniformGrid>
+                  </Border>
+                  <Grid Margin="0,0,0,6">
+                    <TextBlock Text="Anchor" Style="{StaticResource Label}"/>
+                    <TextBlock x:Name="BackgroundAnchorLabel" HorizontalAlignment="Right" Style="{StaticResource Label}" Text="Center"/>
+                  </Grid>
+                  <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                    <Border Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Line}" BorderThickness="1"
+                            CornerRadius="{DynamicResource ControlCorner}" Padding="3">
+                      <UniformGrid Columns="3" Rows="3">
+                        <RadioButton x:Name="BgAnchorTopLeft" Tag="top-left" Style="{StaticResource AnchorCell}" GroupName="BgAnchor"
+                                     Checked="BackgroundAnchor_Checked" AutomationProperties.Name="Top left">
+                          <local:Glyph Data="M17,17 L7,7 M14,7 H7 V14" Size="11" StrokeThickness="1.8"/>
+                        </RadioButton>
+                        <RadioButton x:Name="BgAnchorTop" Tag="top" Style="{StaticResource AnchorCell}" GroupName="BgAnchor"
+                                     Checked="BackgroundAnchor_Checked" AutomationProperties.Name="Top">
+                          <local:Glyph Data="M12,18 V6 M7,11 L12,6 L17,11" Size="11" StrokeThickness="1.8"/>
+                        </RadioButton>
+                        <RadioButton x:Name="BgAnchorTopRight" Tag="top-right" Style="{StaticResource AnchorCell}" GroupName="BgAnchor"
+                                     Checked="BackgroundAnchor_Checked" AutomationProperties.Name="Top right">
+                          <local:Glyph Data="M7,17 L17,7 M10,7 H17 V14" Size="11" StrokeThickness="1.8"/>
+                        </RadioButton>
+                        <RadioButton x:Name="BgAnchorLeft" Tag="left" Style="{StaticResource AnchorCell}" GroupName="BgAnchor"
+                                     Checked="BackgroundAnchor_Checked" AutomationProperties.Name="Left">
+                          <local:Glyph Data="M18,12 H6 M11,7 L6,12 L11,17" Size="11" StrokeThickness="1.8"/>
+                        </RadioButton>
+                        <RadioButton x:Name="BgAnchorCenter" Tag="center" Style="{StaticResource AnchorCell}" GroupName="BgAnchor"
+                                     Checked="BackgroundAnchor_Checked" AutomationProperties.Name="Center">
+                          <local:Glyph Data="M15,12 A3,3 0 1 1 9,12 A3,3 0 1 1 15,12 Z" Size="11" StrokeThickness="2.0"/>
+                        </RadioButton>
+                        <RadioButton x:Name="BgAnchorRight" Tag="right" Style="{StaticResource AnchorCell}" GroupName="BgAnchor"
+                                     Checked="BackgroundAnchor_Checked" AutomationProperties.Name="Right">
+                          <local:Glyph Data="M6,12 H18 M13,7 L18,12 L13,17" Size="11" StrokeThickness="1.8"/>
+                        </RadioButton>
+                        <RadioButton x:Name="BgAnchorBottomLeft" Tag="bottom-left" Style="{StaticResource AnchorCell}" GroupName="BgAnchor"
+                                     Checked="BackgroundAnchor_Checked" AutomationProperties.Name="Bottom left">
+                          <local:Glyph Data="M17,7 L7,17 M7,10 V17 H14" Size="11" StrokeThickness="1.8"/>
+                        </RadioButton>
+                        <RadioButton x:Name="BgAnchorBottom" Tag="bottom" Style="{StaticResource AnchorCell}" GroupName="BgAnchor"
+                                     Checked="BackgroundAnchor_Checked" AutomationProperties.Name="Bottom">
+                          <local:Glyph Data="M12,6 V18 M7,13 L12,18 L17,13" Size="11" StrokeThickness="1.8"/>
+                        </RadioButton>
+                        <RadioButton x:Name="BgAnchorBottomRight" Tag="bottom-right" Style="{StaticResource AnchorCell}" GroupName="BgAnchor"
+                                     Checked="BackgroundAnchor_Checked" AutomationProperties.Name="Bottom right">
+                          <local:Glyph Data="M7,7 L17,17 M17,10 V17 H10" Size="11" StrokeThickness="1.8"/>
+                        </RadioButton>
+                      </UniformGrid>
+                    </Border>
+                    <CheckBox x:Name="BackgroundGrayscaleBox" Content="Grayscale" VerticalAlignment="Center" Margin="18,0,0,0"
+                              Checked="BackgroundGrayscale_Changed" Unchecked="BackgroundGrayscale_Changed"/>
+                  </StackPanel>
+                  <TextBlock Text="Side transitions" Style="{StaticResource Label}" Margin="0,0,0,8"/>
+                  <ListBox x:Name="BackgroundTransitionBox" Style="{StaticResource SwatchGrid}" SelectedValuePath="Value"
+                           SelectionChanged="BackgroundTransition_Changed"
+                           ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                           Margin="0,0,0,6" AutomationProperties.Name="Background side transitions">
+                    <ListBox.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ListBox.ItemsPanel>
+                    <ListBox.ItemContainerStyle>
+                      <Style TargetType="ListBoxItem">
+                        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                        <Setter Property="Margin" Value="0,0,8,8"/>
+                        <Setter Property="Padding" Value="0"/>
+                        <Setter Property="Cursor" Value="Hand"/>
+                        <Setter Property="AutomationProperties.Name" Value="{Binding Name, Mode=OneTime}"/>
+                        <Setter Property="Template">
+                          <Setter.Value>
+                            <ControlTemplate TargetType="ListBoxItem">
+                              <Border x:Name="Frame" Width="116" Height="56" CornerRadius="{DynamicResource ControlCorner}"
+                                      BorderBrush="{DynamicResource Line}" BorderThickness="1.5" Background="{DynamicResource Canvas}"
+                                      local:Rounded.Radius="{Binding CornerRadius.TopLeft, RelativeSource={RelativeSource Self}}" ClipToBounds="True">
+                                <Grid>
+                                  <ContentPresenter/>
+                                  <Border x:Name="SelectedBadge" Width="16" Height="16" CornerRadius="8" Background="{DynamicResource Accent}"
+                                          HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,5,5,0" Visibility="Collapsed">
+                                    <local:Glyph Data="{DynamicResource IconCheck}" Size="9" StrokeThickness="2.2" Foreground="{DynamicResource AccentInk}"/>
+                                  </Border>
+                                </Grid>
+                              </Border>
+                              <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource Muted}"/></Trigger>
+                                <Trigger Property="IsSelected" Value="True">
+                                  <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                                  <Setter TargetName="Frame" Property="BorderThickness" Value="2"/>
+                                  <Setter TargetName="SelectedBadge" Property="Visibility" Value="Visible"/>
+                                </Trigger>
+                              </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                          </Setter.Value>
+                        </Setter>
+                      </Style>
+                    </ListBox.ItemContainerStyle>
+                    <ListBox.ItemTemplate>
+                      <DataTemplate DataType="{x:Type local:BackgroundTransitionSwatch}">
+                        <Grid>
+                          <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="21"/></Grid.RowDefinitions>
+                          <local:BackgroundTransitionPreview Kind="{Binding Kind, Mode=OneTime}"/>
+                          <Border Grid.Row="1" Background="{DynamicResource Sidebar}" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Padding="7,0">
+                            <TextBlock Text="{Binding Name, Mode=OneTime}" Foreground="{DynamicResource Ink}" FontSize="10.5" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                          </Border>
+                        </Grid>
+                      </DataTemplate>
+                    </ListBox.ItemTemplate>
+                  </ListBox>
+                  <StackPanel Margin="0,2,0,10">
+                    <StackPanel.Style>
+                      <Style TargetType="StackPanel">
+                        <Setter Property="Visibility" Value="Visible"/>
+                        <Style.Triggers>
+                          <DataTrigger Binding="{Binding SelectedValue, ElementName=BackgroundTransitionBox}" Value="off"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+                          <DataTrigger Binding="{Binding SelectedValue, ElementName=BackgroundTransitionBox}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+                        </Style.Triggers>
+                      </Style>
+                    </StackPanel.Style>
+                    <DockPanel Margin="0,0,0,4">
+                      <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=BackgroundTransitionStrengthBox, StringFormat=P0}" Foreground="{DynamicResource Muted}"/>
+                      <TextBlock Text="Transition softness" Style="{StaticResource Label}" Margin="0"/>
+                    </DockPanel>
+                    <Slider x:Name="BackgroundTransitionStrengthBox" Style="{StaticResource BackgroundSlider}" Minimum=".1" Maximum="1" TickFrequency=".05"
+                            SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True" ValueChanged="BackgroundTransition_SliderChanged"
+                            AutomationProperties.Name="Background transition softness"/>
+                  </StackPanel>
                   <Border Background="{DynamicResource Canvas}" BorderBrush="{DynamicResource Line}" BorderThickness="1"
                           CornerRadius="{DynamicResource PanelCorner}" Height="142" ClipToBounds="True">
-                    <Image x:Name="BackgroundPreview" Stretch="UniformToFill" Opacity="{Binding Value, ElementName=BackgroundOpacityBox}"
-                           AutomationProperties.Name="Chat background preview"/>
+                    <Grid x:Name="BackgroundPreviewHorizontalMask">
+                      <Grid x:Name="BackgroundPreviewVerticalMask">
+                        <local:BackgroundImageViewport x:Name="BackgroundPreviewViewport">
+                          <Image x:Name="BackgroundPreview" Stretch="Fill" Opacity="{Binding Value, ElementName=BackgroundOpacityBox}"
+                                 AutomationProperties.Name="Chat background preview"/>
+                        </local:BackgroundImageViewport>
+                        <Border x:Name="BackgroundPreviewDimOverlay" Background="{DynamicResource Canvas}" Opacity="{Binding Value, ElementName=BackgroundDimBox}" IsHitTestVisible="False"/>
+                      </Grid>
+                    </Grid>
                   </Border>
                 </StackPanel>
                 <TextBlock x:Name="BackgroundError" Foreground="{DynamicResource Danger}" TextWrapping="Wrap" Margin="0,8,0,0"/>
