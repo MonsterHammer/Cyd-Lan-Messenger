@@ -6,7 +6,7 @@ using Point = System.Windows.Point;
 
 namespace CydLan.Desktop;
 
-public enum ChatCanvasGradientKind { Off, Vignette, Spotlight, Mesh, Diagonal, Aurora }
+public enum ChatCanvasGradientKind { Off, Vignette, Spotlight, Mesh, Diagonal, Aurora, FullBurst, ArcCore }
 
 public sealed record ChatCanvasSwatch(string Value, string Name, ChatCanvasGradientKind Kind);
 
@@ -19,6 +19,8 @@ public sealed class ChatCanvasOverlay : FrameworkElement
     public const string Mesh = "mesh";
     public const string Diagonal = "diagonal";
     public const string Aurora = "aurora";
+    public const string FullBurst = "fullburst";
+    public const string ArcCore = "arccore";
 
     public static IReadOnlyList<ChatCanvasSwatch> Catalog { get; } =
     [
@@ -27,7 +29,9 @@ public sealed class ChatCanvasOverlay : FrameworkElement
         new(Spotlight, "Spotlight", ChatCanvasGradientKind.Spotlight),
         new(Mesh, "Mesh glow", ChatCanvasGradientKind.Mesh),
         new(Diagonal, "Diagonal", ChatCanvasGradientKind.Diagonal),
-        new(Aurora, "Aurora dusk", ChatCanvasGradientKind.Aurora)
+        new(Aurora, "Aurora dusk", ChatCanvasGradientKind.Aurora),
+        new(FullBurst, "Beam burst", ChatCanvasGradientKind.FullBurst),
+        new(ArcCore, "Arc core", ChatCanvasGradientKind.ArcCore)
     ];
 
     public static readonly DependencyProperty GradientProperty = DependencyProperty.Register(
@@ -73,7 +77,7 @@ public sealed class ChatCanvasOverlay : FrameworkElement
     }
 
     public static string Normalize(string? value) =>
-        value is Vignette or Spotlight or Mesh or Diagonal or Aurora ? value : Off;
+        value is Vignette or Spotlight or Mesh or Diagonal or Aurora or FullBurst or ArcCore ? value : Off;
 
     public static ChatCanvasGradientKind KindFor(string? value) => Normalize(value) switch
     {
@@ -82,6 +86,8 @@ public sealed class ChatCanvasOverlay : FrameworkElement
         Mesh => ChatCanvasGradientKind.Mesh,
         Diagonal => ChatCanvasGradientKind.Diagonal,
         Aurora => ChatCanvasGradientKind.Aurora,
+        FullBurst => ChatCanvasGradientKind.FullBurst,
+        ArcCore => ChatCanvasGradientKind.ArcCore,
         _ => ChatCanvasGradientKind.Off
     };
 
@@ -168,6 +174,25 @@ public sealed class ChatCanvasOverlay : FrameworkElement
                 layerB = Radial(new Point(.30, .06), .75, .42,
                     (WithAlpha(EffectPalette.Blend(Tint, Color.FromRgb(90, 235, 210), .45), (byte)Math.Round(46 * intensity * scale)), 0),
                     (WithAlpha(Tint, 0), 1));
+                break;
+            case ChatCanvasGradientKind.FullBurst:
+                layerA = Linear(new Point(0, 0), new Point(1, 1),
+                    (WithAlpha(Color.FromRgb(0x38, 0xBD, 0xF8), (byte)Math.Round(46 * intensity * scale)), 0),
+                    (WithAlpha(Color.FromRgb(0x1D, 0x4E, 0xD8), (byte)Math.Round(18 * intensity * scale)), .48),
+                    (WithAlpha(Color.FromRgb(0xE1, 0x1D, 0x48), (byte)Math.Round(34 * intensity * scale)), 1));
+                layerB = Radial(new Point(.84, .16), .64, .64,
+                    (WithAlpha(Color.FromRgb(0x38, 0xBD, 0xF8), (byte)Math.Round(48 * intensity * scale)), 0),
+                    (WithAlpha(Color.FromRgb(0x1D, 0x4E, 0xD8), 0), 1));
+                break;
+            case ChatCanvasGradientKind.ArcCore:
+                layerA = Radial(new Point(.5, .46), .62, .62,
+                    (WithAlpha(Color.FromRgb(0x38, 0xBD, 0xF8), (byte)Math.Round(52 * intensity * scale)), 0),
+                    (WithAlpha(Color.FromRgb(0xF5, 0xB7, 0x00), (byte)Math.Round(24 * intensity * scale)), .46),
+                    (WithAlpha(Color.FromRgb(0x7F, 0x1D, 0x1D), (byte)Math.Round(60 * intensity)), 1));
+                layerB = Linear(new Point(0, 0), new Point(1, 1),
+                    (WithAlpha(Color.FromRgb(0xF5, 0xB7, 0x00), (byte)Math.Round(22 * intensity)), 0),
+                    (WithAlpha(Color.FromRgb(0xF5, 0xB7, 0x00), 0), .5),
+                    (WithAlpha(Color.FromRgb(0xB9, 0x1C, 0x1C), (byte)Math.Round(28 * intensity)), 1));
                 break;
         }
     }

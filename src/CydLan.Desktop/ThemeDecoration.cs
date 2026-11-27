@@ -14,7 +14,8 @@ public enum DecorationDesign
     None, Sakura, Steampunk, Forest, Paper, Anime, Aurora, Arcade, Pixel, Ocean, Lavender, Ember, Sand,
     Cyberpunk, Midnight, Sunset, Mint, Matcha, Frost,
     Obsidian, Nord, Synthwave, Crimson, Emerald, Rose, Espresso, Cobalt, Sage, Amber,
-    Pineapple, CoralStar, NoirPink, Vampire, VoltSpark, KingdomRed, Bubblegum, RibbonBlush, NoirGold, WebCrimson, Jester, Cipher
+    Pineapple, CoralStar, NoirPink, Vampire, VoltSpark, KingdomRed, Bubblegum, RibbonBlush, NoirGold, WebCrimson, Jester, Cipher,
+    GundamFreedom, IronMan
 }
 
 /// <summary>Draws optional static theme details across the rail, side panel, title bar, header, and composer.</summary>
@@ -704,7 +705,109 @@ public sealed class ThemeDecoration : FrameworkElement
             case (DecorationDesign.Vampire or DecorationDesign.NoirGold or DecorationDesign.WebCrimson or DecorationDesign.Jester or DecorationDesign.Cipher, DecorationZone.Composer):
                 DrawCornerBrackets(dc, width, height, 10, accentLine, margin: 3);
                 break;
+
+            case (DecorationDesign.GundamFreedom, DecorationZone.Sidebar):
+                dc.DrawRectangle(subtleWash, null, bounds);
+                DrawMechaWings(dc, width - 30, height - 24, 1.15);
+                DrawVFin(dc, width - 22, 18, .9);
+                break;
+            case (DecorationDesign.GundamFreedom, DecorationZone.Rail):
+                dc.DrawRectangle(subtleWash, null, bounds);
+                DrawVFin(dc, width / 2, height * .55, .95);
+                dc.DrawLine(FreedomBeamPen, new Point(width - 2.5, 14), new Point(width - 2.5, height - 14));
+                break;
+            case (DecorationDesign.GundamFreedom, DecorationZone.Title):
+                DrawVFin(dc, width - 48, height / 2 + 1, 1.0);
+                DrawMechaWings(dc, width - 24, height / 2 + 2, .7);
+                break;
+            case (DecorationDesign.GundamFreedom, DecorationZone.Header):
+                dc.DrawRectangle(headerWash, null, bounds);
+                DrawMechaWings(dc, Math.Max(200, width - 196), height * .46, 1.2);
+                dc.DrawLine(FreedomBeamPen, new Point(16, height - 2), new Point(width * .62, height - 2));
+                dc.DrawLine(FreedomCrimsonPen, new Point(width * .64, height - 2), new Point(width - 16, height - 2));
+                break;
+            case (DecorationDesign.GundamFreedom, DecorationZone.Composer):
+                DrawCornerBrackets(dc, width, height, 10, FreedomBeamPen, margin: 3);
+                dc.DrawLine(FreedomCrimsonPen, new Point(14, 2.5), new Point(44, 2.5));
+                break;
+
+            case (DecorationDesign.IronMan, DecorationZone.Sidebar):
+                dc.DrawRectangle(subtleWash, null, bounds);
+                DrawArcReactor(dc, width - 28, height - 28, 12);
+                DrawCornerBrackets(dc, width, height, 11, IronGoldPen, margin: 4);
+                break;
+            case (DecorationDesign.IronMan, DecorationZone.Rail):
+                dc.DrawRectangle(subtleWash, null, bounds);
+                DrawArcReactor(dc, width / 2, height * .55, 8.5);
+                break;
+            case (DecorationDesign.IronMan, DecorationZone.Title):
+                DrawArcReactor(dc, width - 30, height / 2, 7.5);
+                dc.DrawLine(IronGoldPen, new Point(8, height - 2.5), new Point(width - 46, height - 2.5));
+                break;
+            case (DecorationDesign.IronMan, DecorationZone.Header):
+                dc.DrawRectangle(headerWash, null, bounds);
+                DrawArcReactor(dc, Math.Max(200, width - 196), height * .48, 13);
+                dc.DrawLine(IronGoldPen, new Point(16, height - 2.5), new Point(width - 66, height - 2.5));
+                dc.DrawLine(IronArcPen, new Point(width - 62, height - 2.5), new Point(width - 16, height - 2.5));
+                break;
+            case (DecorationDesign.IronMan, DecorationZone.Composer):
+                DrawCornerBrackets(dc, width, height, 10, IronGoldPen, margin: 3);
+                dc.DrawEllipse(null, IronArcPen, new Point(width - 12, 10), 3, 3);
+                break;
         }
+    }
+
+    private static readonly Pen FreedomBeamPen = Stroke(0x882563EB, 1.3);
+    private static readonly Pen FreedomCrimsonPen = Stroke(0x90E11D48, 1.25);
+    private static readonly Pen FreedomGoldPen = Stroke(0xAAEAAB08, 1.35);
+    private static readonly Pen IronGoldPen = Stroke(0x9AF5B700, 1.25);
+    private static readonly Pen IronArcPen = Stroke(0xB038BDF8, 1.3);
+    private static readonly Brush IronArcGlow = Solid(0x4538BDF8);
+    private static readonly Geometry VFin = Shape("M-11,-5 L0,1 L11,-5 L6,2 L0,5 L-6,2 Z");
+    private static readonly Geometry WingPair = Shape("M0,0 L-16,-9 L-10,0 L-15,5 L-3,3 Z M0,0 L16,-9 L10,0 L15,5 L3,3 Z");
+
+    private void DrawVFin(DrawingContext dc, double x, double y, double scale)
+    {
+        dc.PushTransform(new TranslateTransform(x, y));
+        dc.PushTransform(new ScaleTransform(scale, scale));
+        dc.DrawGeometry(accentFill, FreedomGoldPen, VFin);
+        dc.Pop();
+        dc.Pop();
+    }
+
+    private void DrawMechaWings(DrawingContext dc, double x, double y, double scale)
+    {
+        dc.PushTransform(new TranslateTransform(x, y));
+        dc.PushTransform(new ScaleTransform(scale, scale));
+        dc.DrawGeometry(glowFill, FreedomBeamPen, WingPair);
+        dc.DrawLine(FreedomCrimsonPen, new Point(-6, 1), new Point(-13, 5));
+        dc.DrawLine(FreedomCrimsonPen, new Point(6, 1), new Point(13, 5));
+        dc.Pop();
+        dc.Pop();
+    }
+
+    private static void DrawArcReactor(DrawingContext dc, double x, double y, double radius)
+    {
+        var center = new Point(x, y);
+        dc.DrawEllipse(IronArcGlow, IronArcPen, center, radius, radius);
+        dc.DrawEllipse(null, IronGoldPen, center, radius * .62, radius * .62);
+        for (int i = 0; i < 6; i++)
+        {
+            double angle = i * Math.PI / 3;
+            dc.DrawLine(IronArcPen,
+                new Point(x + Math.Cos(angle) * radius * .65, y + Math.Sin(angle) * radius * .65),
+                new Point(x + Math.Cos(angle) * radius * .98, y + Math.Sin(angle) * radius * .98));
+        }
+        var core = new StreamGeometry();
+        using (var ctx = core.Open())
+        {
+            double r = radius * .44;
+            ctx.BeginFigure(new Point(x - r, y - r * .55), isFilled: true, isClosed: true);
+            ctx.LineTo(new Point(x + r, y - r * .55), isStroked: true, isSmoothJoin: false);
+            ctx.LineTo(new Point(x, y + r * .88), isStroked: true, isSmoothJoin: false);
+        }
+        core.Freeze();
+        dc.DrawGeometry(IronArcGlow, IronArcPen, core);
     }
 
     private void DrawSakuraTwig(DrawingContext dc, double x, double y)
@@ -864,4 +967,82 @@ public sealed class ThemeDecoration : FrameworkElement
 
     private static Color WithAlpha(Color c, byte a) => Color.FromArgb(a, c.R, c.G, c.B);
     private static Color Argb(uint color) => Color.FromArgb((byte)(color >> 24), (byte)(color >> 16), (byte)(color >> 8), (byte)color);
+}
+
+/// <summary>Draws corner mecha or arc-reactor filigree inside styled chat bubbles without overlapping text.</summary>
+public sealed class BubbleDecoration : FrameworkElement
+{
+    public static readonly DependencyProperty DesignProperty = DependencyProperty.Register(
+        nameof(Design), typeof(DecorationDesign), typeof(BubbleDecoration),
+        new FrameworkPropertyMetadata(DecorationDesign.None, FrameworkPropertyMetadataOptions.AffectsRender));
+    public static readonly DependencyProperty IsOutgoingProperty = DependencyProperty.Register(
+        nameof(IsOutgoing), typeof(bool), typeof(BubbleDecoration),
+        new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));
+
+    private static readonly Pen FreedomBlue = MakePen(0x781D4ED8, 1.25);
+    private static readonly Pen FreedomGold = MakePen(0x90EAB308, 1.25);
+    private static readonly Pen FreedomCrimson = MakePen(0x88E11D48, 1.25);
+    private static readonly Pen IronGold = MakePen(0xA8F5B700, 1.25);
+    private static readonly Pen IronCyan = MakePen(0xB838BDF8, 1.25);
+    private static readonly Brush IronCore = MakeBrush(0x3838BDF8);
+
+    public DecorationDesign Design { get => (DecorationDesign)GetValue(DesignProperty); set => SetValue(DesignProperty, value); }
+    public bool IsOutgoing { get => (bool)GetValue(IsOutgoingProperty); set => SetValue(IsOutgoingProperty, value); }
+
+    public BubbleDecoration()
+    {
+        IsHitTestVisible = false;
+        ClipToBounds = true;
+        SetResourceReference(DesignProperty, "BubbleDecorationDesign");
+        SetResourceReference(VisibilityProperty, "BubbleDecorationVisibility");
+    }
+
+    protected override void OnRender(DrawingContext dc)
+    {
+        base.OnRender(dc);
+        double w = ActualWidth, h = ActualHeight;
+        if (w < 24 || h < 18) return;
+
+        switch (Design)
+        {
+            case DecorationDesign.GundamFreedom:
+            {
+                double topX = IsOutgoing ? w - 4.5 : 4.5;
+                double dir = IsOutgoing ? -1 : 1;
+                dc.DrawLine(FreedomBlue, new Point(topX, 4), new Point(topX + dir * 10, 4));
+                dc.DrawLine(FreedomBlue, new Point(topX, 4), new Point(topX, 11));
+                dc.DrawLine(FreedomGold, new Point(topX + dir * 2.5, 6.5), new Point(topX + dir * 8.5, 6.5));
+                double botX = IsOutgoing ? 5.5 : w - 5.5;
+                double bDir = -dir;
+                dc.DrawLine(FreedomCrimson, new Point(botX, h - 4), new Point(botX + bDir * 9, h - 4));
+                break;
+            }
+            case DecorationDesign.IronMan:
+            {
+                var cx = IsOutgoing ? w - 9.5 : 9.5;
+                var center = new Point(cx, 9.5);
+                dc.DrawEllipse(IronCore, IronCyan, center, 4.2, 4.2);
+                dc.DrawEllipse(null, IronGold, center, 2.2, 2.2);
+                double footX = IsOutgoing ? 5 : w - 5;
+                double fDir = IsOutgoing ? 1 : -1;
+                dc.DrawLine(IronGold, new Point(footX, h - 4), new Point(footX + fDir * 10, h - 4));
+                dc.DrawLine(IronGold, new Point(footX, h - 4), new Point(footX, h - 10));
+                break;
+            }
+        }
+    }
+
+    private static Brush MakeBrush(uint argb)
+    {
+        var b = new SolidColorBrush(Color.FromArgb((byte)(argb >> 24), (byte)(argb >> 16), (byte)(argb >> 8), (byte)argb));
+        b.Freeze();
+        return b;
+    }
+
+    private static Pen MakePen(uint argb, double thickness)
+    {
+        var p = new Pen(MakeBrush(argb), thickness) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round };
+        p.Freeze();
+        return p;
+    }
 }

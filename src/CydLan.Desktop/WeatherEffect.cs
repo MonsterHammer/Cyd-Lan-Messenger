@@ -8,7 +8,7 @@ using Point = System.Windows.Point;
 
 namespace CydLan.Desktop;
 
-public enum WeatherEffectKind { Fireflies, Rain, Snow, Starfield, Bubbles, Embers, Matrix, Constellation, Bokeh }
+public enum WeatherEffectKind { Fireflies, Rain, Snow, Starfield, Bubbles, Embers, Matrix, Constellation, Bokeh, WingPlumes, Repulsor }
 
 public sealed class WeatherEffect : AmbientEffect
 {
@@ -22,13 +22,21 @@ public sealed class WeatherEffect : AmbientEffect
     private static readonly Lazy<RainTrack[]> RainTracks = new(BuildRainTracks);
     private static readonly Dictionary<Color, BitmapSource[]> FireflySpriteCache = [];
     private static readonly Dictionary<Color, BitmapSource[]> BokehSpriteCache = [];
+    private static readonly Lazy<Brush[]> FreedomCyanFills = new(() => BuildTintedFills(Color.FromRgb(0x38, 0xBD, 0xF8)));
+    private static readonly Lazy<Brush[]> FreedomCrimsonFills = new(() => BuildTintedFills(Color.FromRgb(0xE1, 0x1D, 0x48)));
+    private static readonly Lazy<Pen[]> FreedomCyanPens = new(() => BuildTintedPens(Color.FromRgb(0x38, 0xBD, 0xF8), 1.35));
+    private static readonly Lazy<Pen[]> FreedomCobaltPens = new(() => BuildTintedPens(Color.FromRgb(0x1D, 0x4E, 0xD8), 1.25));
+    private static readonly Lazy<Pen[]> StarkGoldPens = new(() => BuildTintedPens(Color.FromRgb(0xF5, 0xB7, 0x00), 1.2));
+    private static readonly Lazy<Brush[]> StarkGoldFills = new(() => BuildTintedFills(Color.FromRgb(0xF5, 0xB7, 0x00)));
+    private static readonly Lazy<BitmapSource[]> ArcCyanSprites = new(() => BuildColorFireflySprites(Color.FromRgb(0x38, 0xBD, 0xF8)));
+    private static readonly Geometry WingFeather = Geometry.Parse("M-8,-1.5 L3,-3.2 L10,0 L3,2.6 L-5,1.2 Z");
     private BitmapSource[]? fireflySprites;
     private BitmapSource[]? bokehSprites;
     private Pen[]? streakPens;
     private Brush[]? tintFills;
     public WeatherEffectKind Kind { get => (WeatherEffectKind)GetValue(KindProperty); set => SetValue(KindProperty, value); }
 
-    protected override int FrameRate => Kind is WeatherEffectKind.Rain or WeatherEffectKind.Matrix ? 30 : base.FrameRate;
+    protected override int FrameRate => Kind is WeatherEffectKind.Rain or WeatherEffectKind.Matrix or WeatherEffectKind.WingPlumes or WeatherEffectKind.Repulsor ? 30 : base.FrameRate;
     protected override void OnTintChanged() { fireflySprites = null; bokehSprites = null; streakPens = null; tintFills = null; }
 
     protected override void OnRender(DrawingContext dc)
@@ -42,6 +50,8 @@ public sealed class WeatherEffect : AmbientEffect
             case WeatherEffectKind.Matrix: DrawMatrix(dc, intensity); return;
             case WeatherEffectKind.Constellation: DrawConstellation(dc, intensity); return;
             case WeatherEffectKind.Bokeh: DrawBokeh(dc, intensity); return;
+            case WeatherEffectKind.WingPlumes: DrawWingPlumes(dc, intensity); return;
+            case WeatherEffectKind.Repulsor: DrawRepulsor(dc, intensity); return;
         }
         int count = (int)Math.Clamp(ActualWidth * ActualHeight / 6100 * intensity, 5, IsLargeSurface ? 24 : 32);
         for (int i = 0; i < count; i++)
@@ -113,6 +123,165 @@ public sealed class WeatherEffect : AmbientEffect
                 dc.DrawLine(StreakPen((1 - t) * (.45 + .50 * intensity)), new Point(sx - 28, sy - 14), new Point(sx, sy));
             }
         }
+    }
+
+    private void DrawWingPlumes(DrawingContext dc, double intensity)
+    {
+        var cyanFills = FreedomCyanFills.Value;
+        var crimsonFills = FreedomCrimsonFills.Value;
+        var cyanPens = FreedomCyanPens.Value;
+        var cobaltPens = FreedomCobaltPens.Value;
+        var cyanGlow = ArcCyanSprites.Value;
+
+        double width = ActualWidth, height = ActualHeight;
+        int plumes = (int)Math.Clamp(width * height / 9500 * intensity, 7, IsLargeSurface ? 22 : 28);
+        for (int i = 0; i < plumes; i++)
+        {
+            double lane = Fraction((i + 1) * .61803398875);
+            double offset = Fraction((i + 1) * .41421356237);
+            double size = .75 + .55 * Fraction(i * .754877666);
+            double progress = Fraction(offset + Time * (1.2 + (i % 3) * .35));
+            double fade = Fade(progress);
+            double x = width * (1.08 - progress * 1.18) + Math.Sin(progress * Math.Tau + lane * 4) * 14;
+            double y = height * (.08 + .82 * lane) + progress * height * .26 - height * .10;
+            double angle = -24 + Math.Sin((Time * 2 + lane) * Math.Tau) * 11;
+
+            var m = Matrix.Identity;
+            m.Scale(size * 1.15, size * 1.15);
+            m.Rotate(angle);
+            m.Translate(x, y);
+            dc.PushTransform(new MatrixTransform(m));
+            var fill = (i % 5 == 0 ? crimsonFills : cyanFills)[EffectPalette.OpacityIndex(fade * (.28 + .42 * intensity))];
+            var pen = (i % 3 == 0 ? cobaltPens : cyanPens)[EffectPalette.OpacityIndex(fade * (.36 + .50 * intensity))];
+            dc.DrawGeometry(fill, pen, WingFeather);
+            dc.Pop();
+
+            if (i % 4 == 0)
+            {
+                double glowR = 11 * size;
+                dc.DrawImage(cyanGlow[EffectPalette.OpacityIndex(fade * (.25 + .35 * intensity))],
+                    new Rect(x - glowR, y - glowR, glowR * 2, glowR * 2));
+            }
+        }
+
+        // Occasional HiMAT high-speed beam flare crossing diagonal
+        double sweep = (Time * 3) % 1;
+        if (sweep < .42)
+        {
+            double u = sweep / .42;
+            double sx = width * (.92 - u * .85);
+            double sy = height * (.12 + u * .55);
+            dc.DrawLine(cyanPens[EffectPalette.OpacityIndex(Math.Sin(u * Math.PI) * (.42 + .52 * intensity))],
+                new Point(sx + 34, sy - 16), new Point(sx, sy));
+        }
+    }
+
+    private void DrawRepulsor(DrawingContext dc, double intensity)
+    {
+        var arcSprites = ArcCyanSprites.Value;
+        var cyanPens = FreedomCyanPens.Value;
+        var goldPens = StarkGoldPens.Value;
+        var goldFills = StarkGoldFills.Value;
+        var cyanFills = FreedomCyanFills.Value;
+        fireflySprites ??= BuildFireflySprites();
+
+        double width = ActualWidth, height = ActualHeight;
+        int sparks = (int)Math.Clamp(width * height / 8800 * intensity, 7, IsLargeSurface ? 22 : 28);
+        for (int i = 0; i < sparks; i++)
+        {
+            double lane = Fraction((i + 1) * .61803398875);
+            double offset = Fraction((i + 1) * .381966011);
+            double rise = Fraction(offset + Time * (1.4 + (i % 3) * .45));
+            double fade = Fade(rise);
+            double x = 14 + (width - 28) * lane + Math.Sin((rise * 2 + lane) * Math.Tau) * 8;
+            double y = (1 - rise) * (height + 20) - 10;
+
+            if (i % 3 == 0)
+            {
+                double r = 4.2 + (i % 2) * 2.2;
+                double pulse = .55 + .45 * Math.Sin(Time * Math.Tau * 3 + i);
+                dc.DrawImage(arcSprites[EffectPalette.OpacityIndex(fade * pulse * (.34 + .46 * intensity))],
+                    new Rect(x - r * 2.1, y - r * 2.1, r * 4.2, r * 4.2));
+                dc.DrawEllipse(null, cyanPens[EffectPalette.OpacityIndex(fade * (.42 + .48 * intensity))], new Point(x, y), r, r);
+            }
+            else
+            {
+                double size = 1.3 + (i % 3) * .45;
+                var fill = (i % 2 == 0 ? goldFills : cyanFills)[EffectPalette.OpacityIndex(fade * (.44 + .52 * intensity))];
+                dc.DrawEllipse(fill, null, new Point(x, y), size, size);
+                dc.DrawLine(goldPens[EffectPalette.OpacityIndex(fade * (.28 + .42 * intensity))],
+                    new Point(x, y), new Point(x, y + 7));
+            }
+        }
+
+        // HUD repulsor calibration pulse near focal zone
+        double centerX = width * .82;
+        double centerY = height * .26;
+        double ringPhase = (Time * 2) % 1;
+        double ringR = 14 + ringPhase * 28;
+        dc.DrawEllipse(null, cyanPens[EffectPalette.OpacityIndex(Math.Sin(ringPhase * Math.PI) * (.32 + .45 * intensity))],
+            new Point(centerX, centerY), ringR, ringR);
+        dc.DrawEllipse(null, goldPens[EffectPalette.OpacityIndex(.26 * intensity)],
+            new Point(centerX, centerY), 12, 12);
+    }
+
+    private static Brush[] BuildTintedFills(Color color)
+    {
+        var fills = new Brush[EffectPalette.OpacityLevels];
+        var bright = EffectPalette.Blend(color, Colors.White, .30);
+        for (int i = 0; i < fills.Length; i++)
+        {
+            var b = new SolidColorBrush(EffectPalette.WithOpacity(bright, i));
+            b.Freeze();
+            fills[i] = b;
+        }
+        return fills;
+    }
+
+    private static Pen[] BuildTintedPens(Color color, double thickness)
+    {
+        var pens = new Pen[EffectPalette.OpacityLevels];
+        for (int i = 0; i < pens.Length; i++)
+        {
+            var b = new SolidColorBrush(EffectPalette.WithOpacity(color, i));
+            b.Freeze();
+            var p = new Pen(b, thickness) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round };
+            p.Freeze();
+            pens[i] = p;
+        }
+        return pens;
+    }
+
+    private static BitmapSource[] BuildColorFireflySprites(Color tint)
+    {
+        const int size = 32, stride = size * 4;
+        var sprites = new BitmapSource[EffectPalette.OpacityLevels];
+        for (int index = 0; index < sprites.Length; index++)
+        {
+            var pixels = new byte[size * stride];
+            double strength = index / (double)(sprites.Length - 1);
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    double dx = (x + .5) / size * 2 - 1, dy = (y + .5) / size * 2 - 1;
+                    double distance = Math.Sqrt(dx * dx + dy * dy);
+                    double glow = Math.Max(0, 1 - distance);
+                    double center = Math.Clamp(1 - distance * 5, 0, 1);
+                    byte alpha = (byte)(255 * strength * Math.Min(1, glow * glow * .8 + center * .45));
+                    var color = EffectPalette.Blend(tint, Colors.White, center * .55);
+                    int offset = y * stride + x * 4;
+                    pixels[offset] = (byte)(color.B * alpha / 255);
+                    pixels[offset + 1] = (byte)(color.G * alpha / 255);
+                    pixels[offset + 2] = (byte)(color.R * alpha / 255);
+                    pixels[offset + 3] = alpha;
+                }
+            }
+            var sprite = BitmapSource.Create(size, size, 96, 96, PixelFormats.Pbgra32, null, pixels, stride);
+            sprite.Freeze();
+            sprites[index] = sprite;
+        }
+        return sprites;
     }
 
     private Brush TintFill(double opacity)

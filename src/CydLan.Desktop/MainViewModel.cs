@@ -140,6 +140,8 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     /// <summary>The user has clicked or typed in the composer of the open conversation; until then its messages stay unread.</summary>
     public bool Replying { get => replying; set { replying = value; MarkConversationRead(); } }
     public event Action<(string Sender, string Text)?>? Notify;
+    public event Action<string, string, string?>? PetActivity;
+    public event Action? FloatingStateChanged;
     public event Action<bool>? ScrollRequested;
     public Peer? SelectedPeer
     {
@@ -218,6 +220,10 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     }
     private void AttachmentsSwitched() { Changed(nameof(Attachments)); Changed(nameof(HasAttachments)); Changed(nameof(CanSend)); }
     public int OnlineCount => Peers.Count(p => p.Online);
+    public int TotalUnread => Peers.Sum(p => p.Unread) + Groups.Sum(g => g.Unread);
+    public bool HasUnread => TotalUnread > 0;
+    public bool FloatingLanEnabled => Settings.FloatingLanEnabled;
+    public bool FloatingLanRoam => Settings.FloatingLanRoam;
     public string ProfileName => Settings.DisplayName;
     public string ProfileInitial => Settings.DisplayName.Length > 0 ? Settings.DisplayName[..1].ToUpperInvariant() : "C";
     public string ProfileAvatar => Settings.AvatarPath;
@@ -303,7 +309,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
                 RefreshRecentChats();
                 if (SelectedPeer?.Id != peer.Id || !IsConversationSection || !Replying) peer.Unread++;
                 peer.Typing = "";
-                RefreshMessages(); Changed(nameof(PeopleSummary)); Save(); NotifyIncoming(peer.Name, message.Text);
+                RefreshMessages(); Changed(nameof(PeopleSummary)); Changed(nameof(TotalUnread)); Changed(nameof(HasUnread)); Save(); NotifyIncoming(peer.Name, message.Text, peer.Id);
             });
             lan.TypingChanged += (id, typing) => UI(() => { if (Peers.FirstOrDefault(p => p.Id == id) is { } p) p.Typing = typing; });
             lan.TransferChanged += transfer => UI(() => OnTransferChanged(transfer));
@@ -351,13 +357,14 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         if (!Replying) return;
         if (IsConversationSection && SelectedPeer is { } peer) peer.Unread = 0;
         if (IsGroupsSection && SelectedGroup is { } group) group.Unread = 0;
+        Changed(nameof(TotalUnread)); Changed(nameof(HasUnread));
     }
     private void PeerChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (sender == SelectedPeer) { Changed(nameof(ChatSubtitle)); Changed(nameof(ChatTitle)); ComposeChanged(); }
-        if (e.PropertyName == nameof(Peer.Unread)) Changed(nameof(PeopleSummary));
+        if (e.PropertyName == nameof(Peer.Unread)) { Changed(nameof(PeopleSummary)); Changed(nameof(TotalUnread)); Changed(nameof(HasUnread)); }
     }
-    private void UpdateCounts() { Changed(nameof(OnlineCount)); Changed(nameof(LocalAddress)); Changed(nameof(DeviceLabel)); Changed(nameof(NetworkEndpoint)); Changed(nameof(PeopleSummary)); ComposeChanged(); Changed(nameof(ChatSubtitle)); People.Refresh(); if (Search.Length > 0) RefreshRecentChats(); }
+    private void UpdateCounts() { Changed(nameof(OnlineCount)); Changed(nameof(TotalUnread)); Changed(nameof(HasUnread)); Changed(nameof(LocalAddress)); Changed(nameof(DeviceLabel)); Changed(nameof(NetworkEndpoint)); Changed(nameof(PeopleSummary)); ComposeChanged(); Changed(nameof(ChatSubtitle)); People.Refresh(); if (Search.Length > 0) RefreshRecentChats(); }
     private void QueueRosterRefresh()
     {
         if (disposed || queuedRosterRefresh is { Status: DispatcherOperationStatus.Pending }) return;
@@ -516,6 +523,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
                 if (message.FolderAttachment) message.FileName = transfer.Name;
                 message.TransferId = transfer.Id; transferMessages[transfer.Id] = message;
                 message.Delivery = DeliveryFor(transfer);
+                message.CanCancel = transfer.CanCancel;
             }
             catch (Exception e) when (e is IOException or System.Net.Sockets.SocketException or OperationCanceledException or InvalidOperationException)
             { log?.Write("attachment.offer_failed", e, ("peer", peer.Id)); message.Delivery = "Failed"; Toast = e.Message; }
@@ -542,14 +550,14 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         _ => t.State,
     };
     private static bool IsFinished(string state) => state is "Received" or "Sent · receipt unavailable" or "Declined" or "Cancelled" or "Aborted" or "Interrupted" || state.StartsWith("Failed", StringComparison.Ordinal);
-    /// <summary>Withdraws an offer the other person has not accepted yet.</summary>
+    /// <summary>Withdraws a pending offer or cancels an active transfer.</summary>
     public async Task CancelOfferAsync(FileTransfer transfer)
     {
         if (lan is null) return;
         try { await lan.CancelFileAsync(transfer); }
         catch (InvalidOperationException)
         {
-            if (transfer.State == "Waiting for approval")
+            if (transfer.CanCancel)
             {
                 transfer.State = "Cancelled";
                 OnTransferChanged(transfer);
@@ -578,7 +586,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
             if (!transfer.Outgoing)
             {
                 if (!transfer.Inline || !Settings.AutoAcceptFiles)
-                    NotifyIncoming(transfer.PeerName, "Wants to send you " + transfer.Name);
+                    NotifyIncoming(transfer.PeerName, "Wants to send you " + transfer.Name, transfer.PeerId);
                 // Offered files and images belong in the conversation timeline so the recipient can accept or decline.
                 if (Peers.FirstOrDefault(p => p.Id == transfer.PeerId) is { } sender && !transferMessages.ContainsKey(transfer.Id))
                 {
@@ -587,15 +595,18 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
                     sender.Preview = transfer.Name; sender.Typing = "";
                     RefreshRecentChats();
                     if (SelectedPeer?.Id != sender.Id || !IsConversationSection || !Replying) sender.Unread++;
-                    RefreshMessages(); Changed(nameof(PeopleSummary)); Save();
+                    RefreshMessages(); Changed(nameof(PeopleSummary)); Changed(nameof(TotalUnread)); Changed(nameof(HasUnread)); Save();
                 }
             }
         }
+        else if (!transfer.Outgoing && stateChanged && transfer.State is "Received" or "Cancelled")
+            Changed(nameof(TotalUnread));
         if (stateChanged) RefreshActiveTransfers();
         if (transferMessages.TryGetValue(transfer.Id, out var sent))
         {
             var delivery = DeliveryFor(transfer);
             if (sent.Delivery != delivery) sent.Delivery = delivery;
+            if (sent.CanCancel != transfer.CanCancel) sent.CanCancel = transfer.CanCancel;
         }
         if (IsFinished(transfer.State)) Save();
         var peer = Peers.FirstOrDefault(p => p.Id == transfer.PeerId);
@@ -631,7 +642,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
                 peer.Preview = "Photo"; peer.Typing = "";
                 RefreshRecentChats();
                 if (SelectedPeer?.Id != peer.Id || !IsConversationSection || !Replying) peer.Unread++;
-                RefreshMessages(); Changed(nameof(PeopleSummary)); Save(); NotifyIncoming(peer.Name, "Sent you a photo");
+                RefreshMessages(); Changed(nameof(PeopleSummary)); Changed(nameof(TotalUnread)); Changed(nameof(HasUnread)); Save(); NotifyIncoming(peer.Name, "Sent you a photo");
             }
         }
     }
@@ -698,6 +709,17 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
             return;
         }
         message.Delivery = TransferFor(message) is { } stale ? DeliveryFor(stale) : "Declined";
+        Save();
+    }
+    public async Task CancelMessageFileAsync(ChatMessage message)
+    {
+        if (TransferFor(message) is { } transfer && transfer.CanCancel)
+        {
+            await CancelOfferAsync(transfer);
+            return;
+        }
+        message.CanCancel = false;
+        if (TransferFor(message) is { } stale) message.Delivery = DeliveryFor(stale);
         Save();
     }
     // ---------------- Group chat (LAN Messenger "chat rooms") ----------------
@@ -788,6 +810,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
                 break;
         }
         if (group is not null && group == SelectedGroup) { Changed(nameof(ChatSubtitle)); Changed(nameof(SelectedGroupMembers)); ComposeChanged(); }
+        Changed(nameof(TotalUnread)); Changed(nameof(HasUnread));
         Save();
     }
     private static void AddMember(GroupChat group, string id) { if (!group.Members.Contains(id)) { group.Members.Add(id); group.MembersChanged(); } }
@@ -825,6 +848,10 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     public double ConstellationIntensity => Math.Clamp(Settings.ConstellationIntensity, .1, 1);
     public bool BokehEnabled => Settings.BokehEnabled;
     public double BokehIntensity => Math.Clamp(Settings.BokehIntensity, .1, 1);
+    public bool WingPlumesEnabled => Settings.WingPlumesEnabled;
+    public double WingPlumesIntensity => Math.Clamp(Settings.WingPlumesIntensity, .1, 1);
+    public bool RepulsorEnabled => Settings.RepulsorEnabled;
+    public double RepulsorIntensity => Math.Clamp(Settings.RepulsorIntensity, .1, 1);
     public double EffectSpeed => double.IsFinite(Settings.EffectSpeed) ? Math.Clamp(Settings.EffectSpeed, .4, 2.0) : 1.0;
     public double WindowOpacity => double.IsFinite(Settings.WindowOpacity) ? Math.Clamp(Settings.WindowOpacity, .80, 1.0) : 1.0;
     public double EffectiveMessageFontSize => Settings.MessageFontSizePx is { } px && double.IsFinite(px)
@@ -884,6 +911,10 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     public double TitleAuroraIntensity => Math.Clamp(Settings.TitleAuroraIntensity, .1, 1);
     public bool TitleWaveEnabled => Settings.TitleWaveEnabled;
     public double TitleWaveIntensity => Math.Clamp(Settings.TitleWaveIntensity, .1, 1);
+    public bool TitleWingsEnabled => Settings.TitleWingsEnabled;
+    public double TitleWingsIntensity => Math.Clamp(Settings.TitleWingsIntensity, .1, 1);
+    public bool TitleReactorEnabled => Settings.TitleReactorEnabled;
+    public double TitleReactorIntensity => Math.Clamp(Settings.TitleReactorIntensity, .1, 1);
     public bool HeaderPrismEnabled => Settings.HeaderPrismEnabled;
     public double HeaderPrismIntensity => Math.Clamp(Settings.HeaderPrismIntensity, .1, 1);
     public bool HeaderRipplesEnabled => Settings.HeaderRipplesEnabled;
@@ -898,6 +929,10 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     public double HeaderSilkIntensity => Math.Clamp(Settings.HeaderSilkIntensity, .1, 1);
     public bool HeaderPlasmaEnabled => Settings.HeaderPlasmaEnabled;
     public double HeaderPlasmaIntensity => Math.Clamp(Settings.HeaderPlasmaIntensity, .1, 1);
+    public bool HeaderBurstEnabled => Settings.HeaderBurstEnabled;
+    public double HeaderBurstIntensity => Math.Clamp(Settings.HeaderBurstIntensity, .1, 1);
+    public bool HeaderArcEnabled => Settings.HeaderArcEnabled;
+    public double HeaderArcIntensity => Math.Clamp(Settings.HeaderArcIntensity, .1, 1);
     public bool RailBeaconEnabled => Settings.RailBeaconEnabled;
     public double RailBeaconIntensity => Math.Clamp(Settings.RailBeaconIntensity, .1, 1);
     public bool RailStreamEnabled => Settings.RailStreamEnabled;
@@ -914,6 +949,10 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     public double RailPlasmaIntensity => Math.Clamp(Settings.RailPlasmaIntensity, .1, 1);
     public bool RailCascadeEnabled => Settings.RailCascadeEnabled;
     public double RailCascadeIntensity => Math.Clamp(Settings.RailCascadeIntensity, .1, 1);
+    public bool RailWingsEnabled => Settings.RailWingsEnabled;
+    public double RailWingsIntensity => Math.Clamp(Settings.RailWingsIntensity, .1, 1);
+    public bool RailArcEnabled => Settings.RailArcEnabled;
+    public double RailArcIntensity => Math.Clamp(Settings.RailArcIntensity, .1, 1);
     public bool SidebarMotesEnabled => Settings.SidebarMotesEnabled;
     public double SidebarMotesIntensity => Math.Clamp(Settings.SidebarMotesIntensity, .1, 1);
     public bool SidebarGlowEnabled => Settings.SidebarGlowEnabled;
@@ -932,6 +971,10 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     public double SidebarRipplesIntensity => Math.Clamp(Settings.SidebarRipplesIntensity, .1, 1);
     public bool SidebarCircuitEnabled => Settings.SidebarCircuitEnabled;
     public double SidebarCircuitIntensity => Math.Clamp(Settings.SidebarCircuitIntensity, .1, 1);
+    public bool SidebarWingsEnabled => Settings.SidebarWingsEnabled;
+    public double SidebarWingsIntensity => Math.Clamp(Settings.SidebarWingsIntensity, .1, 1);
+    public bool SidebarHudEnabled => Settings.SidebarHudEnabled;
+    public double SidebarHudIntensity => Math.Clamp(Settings.SidebarHudIntensity, .1, 1);
     public double StarfieldIntensity => Math.Clamp(Settings.StarfieldIntensity, .1, 1);
     public double BubblesIntensity => Math.Clamp(Settings.BubblesIntensity, .1, 1);
     public double EmbersIntensity => Math.Clamp(Settings.EmbersIntensity, .1, 1);
@@ -958,6 +1001,8 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     public bool SidebarMatrixVisible => Settings.MatrixEnabled && Settings.AmbientOnSidebarEnabled;
     public bool SidebarConstellationVisible => Settings.ConstellationEnabled && Settings.AmbientOnSidebarEnabled;
     public bool SidebarBokehVisible => Settings.BokehEnabled && Settings.AmbientOnSidebarEnabled;
+    public bool SidebarWingPlumesVisible => Settings.WingPlumesEnabled && Settings.AmbientOnSidebarEnabled;
+    public bool SidebarRepulsorVisible => Settings.RepulsorEnabled && Settings.AmbientOnSidebarEnabled;
 
     public void PreviewChromeTexture(string? texture, double? intensity)
     {
@@ -1030,6 +1075,10 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         Changed(nameof(ConstellationIntensity));
         Changed(nameof(BokehEnabled));
         Changed(nameof(BokehIntensity));
+        Changed(nameof(WingPlumesEnabled));
+        Changed(nameof(WingPlumesIntensity));
+        Changed(nameof(RepulsorEnabled));
+        Changed(nameof(RepulsorIntensity));
         Changed(nameof(EffectSpeed));
         Changed(nameof(WindowOpacity));
         Changed(nameof(EffectiveMessageFontSize));
@@ -1054,6 +1103,10 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         Changed(nameof(TitleAuroraIntensity));
         Changed(nameof(TitleWaveEnabled));
         Changed(nameof(TitleWaveIntensity));
+        Changed(nameof(TitleWingsEnabled));
+        Changed(nameof(TitleWingsIntensity));
+        Changed(nameof(TitleReactorEnabled));
+        Changed(nameof(TitleReactorIntensity));
         Changed(nameof(HeaderPrismEnabled));
         Changed(nameof(HeaderPrismIntensity));
         Changed(nameof(HeaderRipplesEnabled));
@@ -1068,6 +1121,10 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         Changed(nameof(HeaderSilkIntensity));
         Changed(nameof(HeaderPlasmaEnabled));
         Changed(nameof(HeaderPlasmaIntensity));
+        Changed(nameof(HeaderBurstEnabled));
+        Changed(nameof(HeaderBurstIntensity));
+        Changed(nameof(HeaderArcEnabled));
+        Changed(nameof(HeaderArcIntensity));
         Changed(nameof(RailBeaconEnabled));
         Changed(nameof(RailBeaconIntensity));
         Changed(nameof(RailStreamEnabled));
@@ -1084,6 +1141,10 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         Changed(nameof(RailPlasmaIntensity));
         Changed(nameof(RailCascadeEnabled));
         Changed(nameof(RailCascadeIntensity));
+        Changed(nameof(RailWingsEnabled));
+        Changed(nameof(RailWingsIntensity));
+        Changed(nameof(RailArcEnabled));
+        Changed(nameof(RailArcIntensity));
         Changed(nameof(SidebarMotesEnabled));
         Changed(nameof(SidebarMotesIntensity));
         Changed(nameof(SidebarGlowEnabled));
@@ -1102,6 +1163,10 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         Changed(nameof(SidebarRipplesIntensity));
         Changed(nameof(SidebarCircuitEnabled));
         Changed(nameof(SidebarCircuitIntensity));
+        Changed(nameof(SidebarWingsEnabled));
+        Changed(nameof(SidebarWingsIntensity));
+        Changed(nameof(SidebarHudEnabled));
+        Changed(nameof(SidebarHudIntensity));
         Changed(nameof(StarfieldIntensity));
         Changed(nameof(BubblesIntensity));
         Changed(nameof(EmbersIntensity));
@@ -1144,6 +1209,8 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         Changed(nameof(SidebarMatrixVisible));
         Changed(nameof(SidebarConstellationVisible));
         Changed(nameof(SidebarBokehVisible));
+        Changed(nameof(SidebarWingPlumesVisible));
+        Changed(nameof(SidebarRepulsorVisible));
         Changed(nameof(Settings));
         ButtonEffects.Configure(
             Settings.ButtonGlowEnabled, ButtonGlowIntensity,
@@ -1170,6 +1237,8 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
         bool avatarChanged = previousAvatar != Settings.AvatarPath;
         if (avatarChanged && previousAvatar.StartsWith(Path.Combine(ImagesDirectory, "profile"), StringComparison.OrdinalIgnoreCase)) TryDelete(previousAvatar);
         Settings.Theme = ThemeManager.Normalize(Settings.Theme);
+        Settings.ColorFinish = ColorFinish.Normalize(Settings.ColorFinish);
+        Settings.ColorFinishIntensity = Math.Clamp(double.IsFinite(Settings.ColorFinishIntensity) ? Settings.ColorFinishIntensity : .65, .1, 1);
         Settings.CustomAccentColor = AppearanceOptions.NormalizeHex(Settings.CustomAccentColor);
         Settings.CustomEffectColor = AppearanceOptions.NormalizeHex(Settings.CustomEffectColor);
         Settings.CustomOutgoingBubbleColor = AppearanceOptions.NormalizeHex(Settings.CustomOutgoingBubbleColor);
@@ -1210,7 +1279,24 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
     public bool ShouldAlert => Settings.Notifications && !(Settings.Status == "busy" && !Settings.AlertsWhenBusy) && !(Settings.Status == "dnd" && !Settings.AlertsWhenDnd);
     public bool ShouldShowNotificationPopup => ShouldAlert && Settings.NotificationPreviews;
     public bool ShouldPlaySound => Settings.Sounds && !(Settings.Status == "busy" && !Settings.SoundsWhenBusy) && !(Settings.Status == "dnd" && !Settings.SoundsWhenDnd);
-    internal void NotifyIncoming(string sender, string text) => Notify?.Invoke(ShouldShowNotificationPopup ? (sender, text) : null);
+    internal void NotifyIncoming(string sender, string text, string? peerId = null)
+    {
+        Notify?.Invoke(ShouldShowNotificationPopup ? (sender, text) : null);
+        if (ShouldAlert)
+            PetActivity?.Invoke(sender, ShouldShowNotificationPopup ? text : "New message", peerId);
+    }
+
+    public void UpdateFloatingState(bool? enabled = null, bool? roam = null, double? left = null, double? top = null)
+    {
+        if (enabled is { } e) Settings.FloatingLanEnabled = e;
+        if (roam is { } r) Settings.FloatingLanRoam = r;
+        if (left is { } l && double.IsFinite(l)) Settings.FloatingLanLeft = Math.Round(l, 1);
+        if (top is { } t && double.IsFinite(t)) Settings.FloatingLanTop = Math.Round(t, 1);
+        Changed(nameof(FloatingLanEnabled));
+        Changed(nameof(FloatingLanRoam));
+        if (!Preview) store?.SaveSettings(Settings);
+        FloatingStateChanged?.Invoke();
+    }
     public void ClearMessageHistory() => DeleteMessages(_ => true);
     /// <summary>Deletes the open chat's messages (one person or one group) from this computer.</summary>
     public void DeleteConversation()
@@ -1231,7 +1317,7 @@ public sealed class MainViewModel : Observable, IAsyncDisposable
             if (!history.Any(m => string.Equals(m.ImagePath, image, StringComparison.OrdinalIgnoreCase))) TryDelete(image);
         foreach (var peer in Peers.Where(p => !history.Any(m => m.GroupId.Length == 0 && m.PeerId == p.Id))) { peer.Preview = ""; peer.Unread = 0; }
         foreach (var group in Groups.Where(g => !history.Any(m => m.GroupId == g.Id))) { group.Preview = ""; group.Unread = 0; }
-        RefreshMessages(); Changed(nameof(PeopleSummary)); Save();
+        RefreshMessages(); Changed(nameof(PeopleSummary)); Changed(nameof(TotalUnread)); Changed(nameof(HasUnread)); Save();
     }
     public void ClearTransferHistory()
     {

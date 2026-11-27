@@ -572,6 +572,7 @@ public partial class MainWindow : Window
     private async void DeclineFile_Click(object sender, RoutedEventArgs e) { if (((System.Windows.Controls.Button)sender).DataContext is FileTransfer transfer) await model.DeclineFileAsync(transfer); }
     private async void MessageAcceptFile_Click(object sender, RoutedEventArgs e) { if (((System.Windows.Controls.Button)sender).DataContext is ChatMessage message) await model.AcceptMessageFileAsync(message); }
     private async void MessageDeclineFile_Click(object sender, RoutedEventArgs e) { if (((System.Windows.Controls.Button)sender).DataContext is ChatMessage message) await model.DeclineMessageFileAsync(message); }
+    private async void MessageCancelFile_Click(object sender, RoutedEventArgs e) { if (((System.Windows.Controls.Button)sender).DataContext is ChatMessage message) await model.CancelMessageFileAsync(message); }
     internal SettingsWindow CreateSettingsWindow(string? page = null, bool rememberNavigation = true) =>
         new(model, page ?? model.LastSettingsPage, model.LastAppearanceTab, rememberNavigation);
     internal void OpenSettings(string? page = null, bool rememberNavigation = true) =>

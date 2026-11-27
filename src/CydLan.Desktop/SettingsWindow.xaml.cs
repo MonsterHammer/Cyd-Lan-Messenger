@@ -75,6 +75,7 @@ public partial class SettingsWindow : Window
         savedPresets = (s.SavedPresets ?? []).Select(p => new AppearancePreset { Id = p.Id, Name = p.Name, Code = p.Code }).ToList();
 
         applyingAppearance = true;
+        ColorFinishBox.ItemsSource = ColorFinish.Catalog;
         AccentColorBox.ItemsSource = AppearanceOptions.AccentSwatches;
         EffectColorBox.ItemsSource = AppearanceOptions.EffectSwatches;
         OutgoingBubbleColorBox.ItemsSource = AppearanceOptions.BubbleSwatches;
@@ -139,6 +140,7 @@ public partial class SettingsWindow : Window
             updatingThemeFilter = true;
             applyingAppearance = true;
             ThemeBox.ItemsSource = null;
+            ColorFinishBox.ItemsSource = null;
             AccentColorBox.ItemsSource = null;
             EffectColorBox.ItemsSource = null;
             OutgoingBubbleColorBox.ItemsSource = null;
@@ -173,6 +175,8 @@ public partial class SettingsWindow : Window
         }
         ThemeDetailsBox.IsChecked = s.ThemeDetailsEnabled;
 
+        ColorFinishBox.SelectedValue = ColorFinish.Normalize(s.ColorFinish);
+        ColorFinishIntensityBox.Value = ClampUnit(s.ColorFinishIntensity, .65);
         SetColorChannel(AccentColorBox, AccentHexBox, ref accentHex, s.CustomAccentColor);
         SetColorChannel(EffectColorBox, EffectHexBox, ref effectHex, s.CustomEffectColor);
         SetColorChannel(OutgoingBubbleColorBox, OutgoingBubbleHexBox, ref outgoingBubbleHex, s.CustomOutgoingBubbleColor);
@@ -228,6 +232,10 @@ public partial class SettingsWindow : Window
         ConstellationIntensityBox.Value = ClampUnit(s.ConstellationIntensity, .65);
         BokehBox.IsChecked = s.BokehEnabled;
         BokehIntensityBox.Value = ClampUnit(s.BokehIntensity, .65);
+        WingPlumesBox.IsChecked = s.WingPlumesEnabled;
+        WingPlumesIntensityBox.Value = ClampUnit(s.WingPlumesIntensity, .65);
+        RepulsorBox.IsChecked = s.RepulsorEnabled;
+        RepulsorIntensityBox.Value = ClampUnit(s.RepulsorIntensity, .65);
         EffectSpeedBox.Value = double.IsFinite(s.EffectSpeed) ? Math.Clamp(s.EffectSpeed, .4, 2.0) : 1.0;
         InkBloomIntensityBox.Value = ClampUnit(s.InkBloomIntensity, .65);
         SendPulseBox.IsChecked = s.SendPulseEnabled;
@@ -252,6 +260,10 @@ public partial class SettingsWindow : Window
         TitleAuroraIntensityBox.Value = ClampUnit(s.TitleAuroraIntensity, .65);
         TitleWaveBox.IsChecked = s.TitleWaveEnabled;
         TitleWaveIntensityBox.Value = ClampUnit(s.TitleWaveIntensity, .65);
+        TitleWingsBox.IsChecked = s.TitleWingsEnabled;
+        TitleWingsIntensityBox.Value = ClampUnit(s.TitleWingsIntensity, .65);
+        TitleReactorBox.IsChecked = s.TitleReactorEnabled;
+        TitleReactorIntensityBox.Value = ClampUnit(s.TitleReactorIntensity, .65);
         HeaderPrismBox.IsChecked = s.HeaderPrismEnabled;
         HeaderPrismIntensityBox.Value = ClampUnit(s.HeaderPrismIntensity, .65);
         HeaderRipplesBox.IsChecked = s.HeaderRipplesEnabled;
@@ -266,6 +278,10 @@ public partial class SettingsWindow : Window
         HeaderSilkIntensityBox.Value = ClampUnit(s.HeaderSilkIntensity, .65);
         HeaderPlasmaBox.IsChecked = s.HeaderPlasmaEnabled;
         HeaderPlasmaIntensityBox.Value = ClampUnit(s.HeaderPlasmaIntensity, .65);
+        HeaderBurstBox.IsChecked = s.HeaderBurstEnabled;
+        HeaderBurstIntensityBox.Value = ClampUnit(s.HeaderBurstIntensity, .65);
+        HeaderArcBox.IsChecked = s.HeaderArcEnabled;
+        HeaderArcIntensityBox.Value = ClampUnit(s.HeaderArcIntensity, .65);
 
         RailBeaconBox.IsChecked = s.RailBeaconEnabled;
         RailBeaconIntensityBox.Value = ClampUnit(s.RailBeaconIntensity, .65);
@@ -283,6 +299,10 @@ public partial class SettingsWindow : Window
         RailPlasmaIntensityBox.Value = ClampUnit(s.RailPlasmaIntensity, .65);
         RailCascadeBox.IsChecked = s.RailCascadeEnabled;
         RailCascadeIntensityBox.Value = ClampUnit(s.RailCascadeIntensity, .65);
+        RailWingsBox.IsChecked = s.RailWingsEnabled;
+        RailWingsIntensityBox.Value = ClampUnit(s.RailWingsIntensity, .65);
+        RailArcBox.IsChecked = s.RailArcEnabled;
+        RailArcIntensityBox.Value = ClampUnit(s.RailArcIntensity, .65);
 
         SidebarMotesBox.IsChecked = s.SidebarMotesEnabled;
         SidebarMotesIntensityBox.Value = ClampUnit(s.SidebarMotesIntensity, .65);
@@ -302,6 +322,10 @@ public partial class SettingsWindow : Window
         SidebarRipplesIntensityBox.Value = ClampUnit(s.SidebarRipplesIntensity, .65);
         SidebarCircuitBox.IsChecked = s.SidebarCircuitEnabled;
         SidebarCircuitIntensityBox.Value = ClampUnit(s.SidebarCircuitIntensity, .65);
+        SidebarWingsBox.IsChecked = s.SidebarWingsEnabled;
+        SidebarWingsIntensityBox.Value = ClampUnit(s.SidebarWingsIntensity, .65);
+        SidebarHudBox.IsChecked = s.SidebarHudEnabled;
+        SidebarHudIntensityBox.Value = ClampUnit(s.SidebarHudIntensity, .65);
 
         ButtonGlowBox.IsChecked = s.ButtonGlowEnabled;
         ButtonGlowIntensityBox.Value = ClampUnit(s.ButtonGlowIntensity, .65);
@@ -347,6 +371,8 @@ public partial class SettingsWindow : Window
     {
         s.Theme = SelectedTheme;
         s.ThemeDetailsEnabled = ThemeDetailsBox.IsChecked == true;
+        s.ColorFinish = ColorFinish.Normalize(ColorFinishBox.SelectedValue as string);
+        s.ColorFinishIntensity = ColorFinishIntensityBox.Value;
         s.CustomAccentColor = accentHex;
         s.CustomEffectColor = effectHex;
         s.CustomOutgoingBubbleColor = outgoingBubbleHex;
@@ -396,6 +422,10 @@ public partial class SettingsWindow : Window
         s.ConstellationIntensity = ConstellationIntensityBox.Value;
         s.BokehEnabled = BokehBox.IsChecked == true;
         s.BokehIntensity = BokehIntensityBox.Value;
+        s.WingPlumesEnabled = WingPlumesBox.IsChecked == true;
+        s.WingPlumesIntensity = WingPlumesIntensityBox.Value;
+        s.RepulsorEnabled = RepulsorBox.IsChecked == true;
+        s.RepulsorIntensity = RepulsorIntensityBox.Value;
         s.InkBloomIntensity = InkBloomIntensityBox.Value;
         s.SendPulseEnabled = SendPulseBox.IsChecked == true;
         s.SendPulseIntensity = SendPulseIntensityBox.Value;
@@ -418,6 +448,10 @@ public partial class SettingsWindow : Window
         s.TitleAuroraIntensity = TitleAuroraIntensityBox.Value;
         s.TitleWaveEnabled = TitleWaveBox.IsChecked == true;
         s.TitleWaveIntensity = TitleWaveIntensityBox.Value;
+        s.TitleWingsEnabled = TitleWingsBox.IsChecked == true;
+        s.TitleWingsIntensity = TitleWingsIntensityBox.Value;
+        s.TitleReactorEnabled = TitleReactorBox.IsChecked == true;
+        s.TitleReactorIntensity = TitleReactorIntensityBox.Value;
         s.HeaderPrismEnabled = HeaderPrismBox.IsChecked == true;
         s.HeaderPrismIntensity = HeaderPrismIntensityBox.Value;
         s.HeaderRipplesEnabled = HeaderRipplesBox.IsChecked == true;
@@ -432,6 +466,10 @@ public partial class SettingsWindow : Window
         s.HeaderSilkIntensity = HeaderSilkIntensityBox.Value;
         s.HeaderPlasmaEnabled = HeaderPlasmaBox.IsChecked == true;
         s.HeaderPlasmaIntensity = HeaderPlasmaIntensityBox.Value;
+        s.HeaderBurstEnabled = HeaderBurstBox.IsChecked == true;
+        s.HeaderBurstIntensity = HeaderBurstIntensityBox.Value;
+        s.HeaderArcEnabled = HeaderArcBox.IsChecked == true;
+        s.HeaderArcIntensity = HeaderArcIntensityBox.Value;
         s.RailBeaconEnabled = RailBeaconBox.IsChecked == true;
         s.RailBeaconIntensity = RailBeaconIntensityBox.Value;
         s.RailStreamEnabled = RailStreamBox.IsChecked == true;
@@ -448,6 +486,10 @@ public partial class SettingsWindow : Window
         s.RailPlasmaIntensity = RailPlasmaIntensityBox.Value;
         s.RailCascadeEnabled = RailCascadeBox.IsChecked == true;
         s.RailCascadeIntensity = RailCascadeIntensityBox.Value;
+        s.RailWingsEnabled = RailWingsBox.IsChecked == true;
+        s.RailWingsIntensity = RailWingsIntensityBox.Value;
+        s.RailArcEnabled = RailArcBox.IsChecked == true;
+        s.RailArcIntensity = RailArcIntensityBox.Value;
         s.SidebarMotesEnabled = SidebarMotesBox.IsChecked == true;
         s.SidebarMotesIntensity = SidebarMotesIntensityBox.Value;
         s.SidebarGlowEnabled = SidebarGlowBox.IsChecked == true;
@@ -466,6 +508,10 @@ public partial class SettingsWindow : Window
         s.SidebarRipplesIntensity = SidebarRipplesIntensityBox.Value;
         s.SidebarCircuitEnabled = SidebarCircuitBox.IsChecked == true;
         s.SidebarCircuitIntensity = SidebarCircuitIntensityBox.Value;
+        s.SidebarWingsEnabled = SidebarWingsBox.IsChecked == true;
+        s.SidebarWingsIntensity = SidebarWingsIntensityBox.Value;
+        s.SidebarHudEnabled = SidebarHudBox.IsChecked == true;
+        s.SidebarHudIntensity = SidebarHudIntensityBox.Value;
         s.ButtonGlowEnabled = ButtonGlowBox.IsChecked == true;
         s.ButtonGlowIntensity = ButtonGlowIntensityBox.Value;
         s.ButtonSheenEnabled = ButtonSheenBox.IsChecked == true;
@@ -520,7 +566,9 @@ public partial class SettingsWindow : Window
         SelectedUiFont,
         WindowOpacityBox.Value,
         SelectedChatSurfaceMode,
-        chatBackgroundHex);
+        chatBackgroundHex,
+        ColorFinish.Normalize(ColorFinishBox.SelectedValue as string),
+        ColorFinishIntensityBox.Value);
 
     private void ApplyLiveThemeOverrides()
     {
@@ -631,6 +679,8 @@ public partial class SettingsWindow : Window
     }
 
     private void StyleOverride_Changed(object sender, SelectionChangedEventArgs e) => ApplyLiveThemeOverrides();
+    private void ColorFinish_Changed(object sender, SelectionChangedEventArgs e) => ApplyLiveThemeOverrides();
+    private void ColorFinish_SliderChanged(object sender, RoutedPropertyChangedEventArgs<double> e) => ApplyLiveThemeOverrides();
     private void Density_Checked(object sender, RoutedEventArgs e) => ApplyLiveThemeOverrides();
     private void AvatarOption_Changed(object sender, RoutedEventArgs e) => ApplyLiveThemeOverrides();
     private void UiFont_Changed(object sender, SelectionChangedEventArgs e) => ApplyLiveThemeOverrides();

@@ -42,6 +42,7 @@ public partial class TrayMenuWindow : Window
     private void Open_Click(object sender, RoutedEventArgs e) { CloseOnce(); App.ShowWindow(mainWindow); }
     private void Transfers_Click(object sender, RoutedEventArgs e) { model.TransfersOpen = true; CloseOnce(); App.ShowWindow(mainWindow); }
     private void Settings_Click(object sender, RoutedEventArgs e) { CloseOnce(); App.ShowWindow(mainWindow); mainWindow.OpenSettings(); }
+    private void Floating_Click(object sender, RoutedEventArgs e) { model.UpdateFloatingState(enabled: !model.FloatingLanEnabled); CloseOnce(); }
     private async void Quit_Click(object sender, RoutedEventArgs e) { CloseOnce(); await ((App)System.Windows.Application.Current).QuitAsync(); }
 
     [StructLayout(LayoutKind.Sequential)]

@@ -25,7 +25,9 @@ public sealed record AppearanceOverrides(
     string UiFont,
     double WindowOpacity,
     string ChatSurfaceMode = AppearanceOptions.ChatSurfaceSeparate,
-    string CustomChatBackgroundColor = "")
+    string CustomChatBackgroundColor = "",
+    string ColorFinish = Desktop.ColorFinish.Off,
+    double ColorFinishIntensity = .65)
 {
     public static AppearanceOverrides Default { get; } = new(
         "", "", "", "",
@@ -37,7 +39,9 @@ public sealed record AppearanceOverrides(
         "",
         1.0,
         AppearanceOptions.ChatSurfaceSeparate,
-        "");
+        "",
+        Desktop.ColorFinish.Off,
+        .65);
 
     public static AppearanceOverrides From(AppSettings s) => new(
         AppearanceOptions.NormalizeHex(s.CustomAccentColor),
@@ -52,7 +56,9 @@ public sealed record AppearanceOverrides(
         (s.UiFont ?? "").Trim(),
         double.IsFinite(s.WindowOpacity) ? Math.Clamp(s.WindowOpacity, .80, 1.0) : 1.0,
         AppearanceOptions.NormalizeChatSurfaceMode(s.ChatSurfaceMode),
-        AppearanceOptions.NormalizeHex(s.CustomChatBackgroundColor));
+        AppearanceOptions.NormalizeHex(s.CustomChatBackgroundColor),
+        Desktop.ColorFinish.Normalize(s.ColorFinish),
+        double.IsFinite(s.ColorFinishIntensity) ? Math.Clamp(s.ColorFinishIntensity, .1, 1.0) : .65);
 }
 
 /// <summary>Normalization, curated swatch catalogs, and Win32 layered window opacity support.</summary>
@@ -60,7 +66,7 @@ public static class AppearanceOptions
 {
     public const string Default = "default";
     public const string ChatSurfaceSeparate = "separate", ChatSurfaceTheme = "theme";
-    public const string BubbleSoft = "soft", BubbleSolid = "solid", BubbleOutlined = "outlined", BubbleGlass = "glass", BubbleGradient = "gradient", BubbleMinimal = "minimal";
+    public const string BubbleSoft = "soft", BubbleSolid = "solid", BubbleOutlined = "outlined", BubbleGlass = "glass", BubbleGradient = "gradient", BubbleMinimal = "minimal", BubbleMecha = "mecha", BubbleReactor = "reactor";
     public const string ShapeSharp = "sharp", ShapeSubtle = "subtle", ShapeRounded = "rounded", ShapePill = "pill", ShapeTail = "tail";
     public const string DensityCompact = "compact", DensityCozy = "cozy", DensitySpacious = "spacious";
     public const string CornerSharp = "sharp", CornerCrisp = "crisp", CornerSmooth = "smooth", CornerRound = "round";
@@ -78,7 +84,9 @@ public static class AppearanceOptions
         new(BubbleOutlined, "Outlined"),
         new(BubbleGlass, "Glass"),
         new(BubbleGradient, "Gradient"),
-        new(BubbleMinimal, "Minimal")
+        new(BubbleMinimal, "Minimal"),
+        new(BubbleMecha, "Mecha"),
+        new(BubbleReactor, "Arc core")
     ];
 
     public static IReadOnlyList<StyleOption> BubbleShapes { get; } =
@@ -113,7 +121,7 @@ public static class AppearanceOptions
         value == ChatSurfaceTheme ? ChatSurfaceTheme : ChatSurfaceSeparate;
 
     public static string NormalizeBubbleStyle(string? value) =>
-        value is BubbleSolid or BubbleOutlined or BubbleGlass or BubbleGradient or BubbleMinimal ? value : BubbleSoft;
+        value is BubbleSolid or BubbleOutlined or BubbleGlass or BubbleGradient or BubbleMinimal or BubbleMecha or BubbleReactor ? value : BubbleSoft;
 
     public static string NormalizeBubbleShape(string? value) =>
         value is ShapeSharp or ShapeSubtle or ShapeRounded or ShapePill or ShapeTail ? value : Default;

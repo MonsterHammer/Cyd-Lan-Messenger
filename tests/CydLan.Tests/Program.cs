@@ -49,6 +49,7 @@ var tests = new (string Name, Func<Task> Run)[] {
     ("Concurrent bidirectional chat and duplicate suppression", TestConcurrentChat),
     ("Separate-process peers: Unicode replies and binary files both ways", NetworkExperiment.RunAsync),
     ("File offers, approval, binary transfer and empty files", TestFiles),
+    ("Active file and folder transfer cancellation and pre-start EOF handling", TestCancelTransfers),
     ("Local persistence, stable identity and corrupt history recovery", TestStore)
 };
 int failures = 0;
@@ -603,6 +604,97 @@ static async Task TestFiles()
     }
     finally { DeleteTestDirectory(directory); }
 }
+static async Task TestCancelTransfers()
+{
+    var a = Settings("Cancel Sender"); var b = Settings("Cancel Receiver");
+    await using var one = new LanService(a); await using var two = new LanService(b);
+    var offers = new ConcurrentQueue<FileTransfer>(); int online = 0;
+    one.PeerOnline += _ => Interlocked.Increment(ref online); two.PeerOnline += _ => Interlocked.Increment(ref online);
+    two.TransferChanged += t => { if (t.State == "Waiting for approval") offers.Enqueue(t); };
+    await one.StartAsync(false, IPAddress.Loopback); await two.StartAsync(false, IPAddress.Loopback);
+    await one.ConnectAsync(b.UserId, "127.0.0.1", two.ListeningPort); await Until(() => online == 2);
+    var directory = Path.Combine(Path.GetTempPath(), "CydLan-cancel-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(directory);
+    try
+    {
+        // 1. Pre-START receiver failure closes the TCP stream without START: sender reports a clear error instead of raw EndOfStreamException text.
+        string blockingFile = Path.Combine(directory, "blocker");
+        await File.WriteAllTextAsync(blockingFile, "not a directory");
+        string smallSource = Path.Combine(directory, "small.bin");
+        await File.WriteAllBytesAsync(smallSource, [1, 2, 3, 4]);
+        var blockedOutgoing = await one.OfferFileAsync(b.UserId, smallSource);
+        await Until(() => !offers.IsEmpty);
+        Check(offers.TryDequeue(out var blockedIncoming), "Blocked offer should arrive.");
+        await two.AcceptFileAsync(blockedIncoming!, Path.Combine(blockingFile, "child.bin"));
+        await Until(() => blockedOutgoing.State.StartsWith("Failed", StringComparison.Ordinal) && blockedIncoming!.State.StartsWith("Failed", StringComparison.Ordinal));
+        Check(!blockedOutgoing.State.Contains("Unable to read beyond the end of the stream", StringComparison.Ordinal),
+            $"Sender should report a clear pre-start failure instead of '{blockedOutgoing.State}'.");
+
+        // 2. Active single-file cancel by RECEIVER during Transferring (and while large file streams).
+        string bigSource = Path.Combine(directory, "big.bin");
+        using (var fs = File.Create(bigSource)) fs.SetLength(128L * 1024 * 1024);
+        var recvStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        void OnReceiverTransfer(FileTransfer t) { if (!t.Outgoing && t.Name == "big.bin" && t.State == "Transferring") recvStarted.TrySetResult(); }
+        two.TransferChanged += OnReceiverTransfer;
+        try
+        {
+            var outgoingRecvCancel = await one.OfferFileAsync(b.UserId, bigSource);
+            await Until(() => !offers.IsEmpty);
+            Check(offers.TryDequeue(out var incomingRecvCancel), "Receiver should receive offer for big.bin.");
+            string recvTarget = Path.Combine(directory, "recv-cancelled.bin");
+            await two.AcceptFileAsync(incomingRecvCancel!, recvTarget);
+            await recvStarted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            if (incomingRecvCancel!.State is "Accepted" or "Connecting" or "Transferring")
+                await two.CancelFileAsync(incomingRecvCancel);
+            await Until(() => incomingRecvCancel.State == "Cancelled" && (outgoingRecvCancel.State == "Aborted" || outgoingRecvCancel.State.StartsWith("Failed", StringComparison.Ordinal)));
+            Check(incomingRecvCancel.State == "Cancelled", $"Expected receiver Cancelled, got {incomingRecvCancel.State}.");
+            Check(outgoingRecvCancel.State == "Aborted", $"Expected sender Aborted, got {outgoingRecvCancel.State}.");
+            Check(!File.Exists(recvTarget) && !Directory.EnumerateFiles(directory, "*.partial").Any(),
+                "Cancelled receive must not leave a partial or destination file.");
+        }
+        finally { two.TransferChanged -= OnReceiverTransfer; }
+
+        // 3. Active single-file cancel by SENDER during Transferring.
+        var sendStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        void OnSenderTransfer(FileTransfer t) { if (t.Outgoing && t.Name == "big.bin" && t.State == "Transferring") sendStarted.TrySetResult(); }
+        one.TransferChanged += OnSenderTransfer;
+        try
+        {
+            var outgoingSendCancel = await one.OfferFileAsync(b.UserId, bigSource);
+            await Until(() => !offers.IsEmpty);
+            Check(offers.TryDequeue(out var incomingSendCancel), "Receiver should receive second offer for big.bin.");
+            string sendCancelTarget = Path.Combine(directory, "send-cancelled.bin");
+            await two.AcceptFileAsync(incomingSendCancel!, sendCancelTarget);
+            await sendStarted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            await one.CancelFileAsync(outgoingSendCancel);
+            await Until(() => outgoingSendCancel.State == "Cancelled" && incomingSendCancel!.State == "Aborted");
+            Check(!File.Exists(sendCancelTarget) && !Directory.EnumerateFiles(directory, "*.partial").Any(),
+                "Sender-cancelled transfer must remove any staging partial file.");
+        }
+        finally { one.TransferChanged -= OnSenderTransfer; }
+
+        // 4. Active native folder cancel by receiver.
+        var folderRoot = Directory.CreateDirectory(Path.Combine(directory, "BigFolder"));
+        using (var fs = File.Create(Path.Combine(folderRoot.FullName, "part1.bin"))) fs.SetLength(64L * 1024 * 1024);
+        using (var fs = File.Create(Path.Combine(folderRoot.FullName, "part2.bin"))) fs.SetLength(64L * 1024 * 1024);
+        var folderStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        void OnFolderTransfer(FileTransfer t) { if (!t.Outgoing && t.Folder && t.State == "Transferring") folderStarted.TrySetResult(); }
+        two.TransferChanged += OnFolderTransfer;
+        try
+        {
+            var outgoingFolder = await one.OfferFolderAsync(b.UserId, folderRoot.FullName);
+            await Until(() => !offers.IsEmpty);
+            Check(offers.TryDequeue(out var incomingFolder) && incomingFolder!.Folder, "Native folder offer should arrive.");
+            await two.AcceptFileIntoAsync(incomingFolder!, directory);
+            await folderStarted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            await two.CancelFileAsync(incomingFolder!);
+            await Until(() => incomingFolder!.State == "Cancelled" && outgoingFolder.State == "Aborted");
+            Check(!Directory.Exists(Path.Combine(directory, "BigFolder [1]")) && !Directory.EnumerateDirectories(directory, "*.partial").Any(),
+                "Cancelled folder transfer must clean up partial staging directories.");
+        }
+        finally { two.TransferChanged -= OnFolderTransfer; }
+    }
+    finally { DeleteTestDirectory(directory); }
+}
 static async Task TestDiscoveryReconnect()
 {
     var a = Settings("Discovery A"); var b = Settings("Discovery B");
@@ -632,10 +724,30 @@ static async Task TestDiscoveryReconnect()
 }
 static async Task TestPortCoexistence()
 {
-    var occupied = new TcpListener(IPAddress.Loopback, 0); occupied.Start();
+    TcpListener? occupied = null;
+    int port = 0;
+    for (int candidatePort = 50410; candidatePort <= 60800; candidatePort += 137)
+    {
+        var tcp = new TcpListener(IPAddress.Loopback, candidatePort);
+        try
+        {
+            tcp.Start();
+            using var udp = new UdpClient(AddressFamily.InterNetwork);
+            udp.ExclusiveAddressUse = false;
+            udp.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+            udp.Client.Bind(new IPEndPoint(IPAddress.Loopback, candidatePort));
+            occupied = tcp;
+            port = candidatePort;
+            break;
+        }
+        catch (SocketException)
+        {
+            tcp.Stop();
+        }
+    }
+    Check(occupied is not null, "Could not allocate a dual TCP/UDP test port.");
     try
     {
-        int port = ((IPEndPoint)occupied.LocalEndpoint).Port;
         var a = Settings("Coexisting"); a.Port = port;
         var b = Settings("Discoverer");
         await using var one = new LanService(a); await using var two = new LanService(b);
@@ -646,7 +758,7 @@ static async Task TestPortCoexistence()
         await Until(() => online == 1);
         Check(await two.SendChatAsync(a.UserId, "Hello alternate port", "701"), "Discovery must route to the advertised fallback TCP port.");
     }
-    finally { occupied.Stop(); }
+    finally { occupied?.Stop(); }
 }
 static async Task TestLegacyDualStackPort()
 {

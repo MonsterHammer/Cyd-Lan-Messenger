@@ -98,8 +98,8 @@ internal static class Program
             Check(popupOption is { IsVisible: true, IsEnabled: true, IsChecked: false }, "Popup previews should be an unchecked option by default.");
             prefs.ShowPage("AppearancePage");
             var themeBox = (System.Windows.Controls.ListBox)prefs.FindName("ThemeBox");
-            Check(ThemeManager.Catalog.Count == 43 && themeBox.Items.Count == 43,
-                $"Expected 43 theme sample boxes (42 themes + Match Windows), found {ThemeManager.Catalog.Count}/{themeBox.Items.Count}.");
+            Check(ThemeManager.Catalog.Count == 45 && themeBox.Items.Count == 45,
+                $"Expected 45 theme sample boxes (44 themes + Match Windows), found {ThemeManager.Catalog.Count}/{themeBox.Items.Count}.");
             var chatButton = (System.Windows.Controls.Button)themed.FindName("ChatNav");
             var chatGlyph = (Glyph)chatButton.Content;
             var standardGlyph = chatGlyph.Data;
@@ -153,7 +153,8 @@ internal static class Program
                 ("espresso", "#FF2D1E14"), ("cobalt", "#FF151E33"), ("sage", "#FF1A2921"), ("amber", "#FF2C2111"),
                 ("pineapple", "#FF332609"), ("coralstar", "#FF341522"), ("noirpink", "#FFFFF0F7"), ("vampire", "#FFF9ECEF"),
                 ("voltspark", "#FF2E2307"), ("kingdomred", "#FF18223A"), ("bubblegum", "#FF351126"), ("ribbonblush", "#FF2C1720"),
-                ("noirgold", "#FFF3F5F8"), ("webcrimson", "#FFF4F6FF"), ("jester", "#FFF5F0FF"), ("cipher", "#FFD9FFE6")
+                ("noirgold", "#FFF3F5F8"), ("webcrimson", "#FFF4F6FF"), ("jester", "#FFF5F0FF"), ("cipher", "#FFD9FFE6"),
+                ("gundamfreedom", "#FF0F172A"), ("ironman", "#FFFFF7EB")
             })
             {
                 themeBox.SelectedValue = mode;
@@ -289,6 +290,7 @@ internal static class Program
             await TestChromeTexturesAsync(appearanceArtifacts);
             await TestTargetAuraAsync(appearanceArtifacts);
             await TestCustomizationSuiteAsync(appearanceArtifacts);
+            await TestFloatingLanSuiteAsync(appearanceArtifacts);
 
             var recentWindow = new MainWindow(preview);
             recentWindow.Show();
@@ -482,8 +484,21 @@ internal static class Program
 
         string directory = Path.Combine(Path.GetTempPath(), "CydLan-desktop-" + Guid.NewGuid().ToString("N"));
         var store = new LocalStore(directory);
-        var reservation = new TcpListener(IPAddress.Loopback, 0); reservation.Start();
-        int port = ((IPEndPoint)reservation.LocalEndpoint).Port; reservation.Stop();
+        int port = 0;
+        for (int candidatePort = 50420; candidatePort <= 60800; candidatePort += 137)
+        {
+            var tcp = new TcpListener(IPAddress.Loopback, candidatePort);
+            try
+            {
+                tcp.Start();
+                using var udp = new UdpClient(new IPEndPoint(IPAddress.Loopback, candidatePort));
+                port = candidatePort;
+                break;
+            }
+            catch (SocketException) { }
+            finally { tcp.Stop(); }
+        }
+        Check(port != 0, "Could not reserve a dual TCP/UDP desktop test port.");
         store.SaveSettings(new() { DisplayName = "Home desktop", Port = port });
         var remoteSettings = new AppSettings { DisplayName = "Experiment peer", Port = 0 };
         try
@@ -717,6 +732,21 @@ internal static class Program
                 await model.CancelOfferAsync(model.Transfers.First(t => t.Outgoing && t.State == "Waiting for approval"));
                 await Until(() => cancelledBubble.Delivery == "Cancelled");
                 await Until(() => { lock (peerTransfers) return peerTransfers.Last().State == "Cancelled"; });
+                string activeCancelDoc = Path.Combine(directory, "active-cancel.bin");
+                using (var fs = File.Create(activeCancelDoc)) fs.SetLength(128L * 1024 * 1024);
+                int beforeActive; lock (peerTransfers) beforeActive = peerTransfers.Count;
+                Check(model.AddAttachment(activeCancelDoc) is null, "Large file should attach.");
+                await model.SendAsync();
+                var activeCancelBubble = model.Messages.Last(m => m.HasFile);
+                await Until(() => { lock (peerTransfers) return peerTransfers.Count > beforeActive; });
+                FileTransfer activePeerOffer; lock (peerTransfers) activePeerOffer = peerTransfers.Last();
+                string activeCancelTarget = Path.Combine(directory, "active-cancel-received.bin");
+                await peer.AcceptFileAsync(activePeerOffer, activeCancelTarget);
+                await Until(() => model.TransferFor(activeCancelBubble)?.State is "Connecting" or "Transferring");
+                await model.CancelMessageFileAsync(activeCancelBubble);
+                await Until(() => activeCancelBubble.Delivery == "Cancelled" && activePeerOffer.State == "Aborted");
+                Check(!activeCancelBubble.CanCancel && !File.Exists(activeCancelTarget) && !Directory.EnumerateFiles(directory, "*.partial").Any(),
+                    "Active cancellation from the UI view-model should cancel both sides and clean partial files.");
                 Console.WriteLine("PASS  File bubbles show waiting, declined, accepted/sent and cancelled");
 
                 // Group chat speaks LAN Messenger's wire format: groupmessage + thread + groupmsgop, no acknowledgements.
@@ -775,32 +805,61 @@ internal static class Program
                 Check(background.Source is not null && background.Opacity == .4 && !background.IsHitTestVisible &&
                     ((FontFamily)Application.Current.Resources["MessageFontFamily"]).Source.Contains("Consolas"),
                     "Background and font choices should apply independently in chat.");
+                var activeBubble = new ChatMessage
+                {
+                    Id = "bubble-cancel-test", PeerId = model.SelectedPeer!.Id, Outgoing = true,
+                    FileName = "Test attachment.bin", TransferId = "progress-ui-test", Delivery = "Accepted", CanCancel = true
+                };
+                model.Messages.Add(activeBubble);
                 var loading = new FileTransfer
                 {
                     Id = "progress-ui-test", PeerId = model.SelectedPeer!.Id, Name = "Test attachment.bin",
-                    Size = 100, State = "Accepted"
+                    Size = 100, Outgoing = false, State = "Accepted"
                 };
                 model.Transfers.Insert(0, loading);
                 await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
                 var progress = FindTransferProgress(window, loading);
                 Check(progress is { IsVisible: true, IsIndeterminate: true }, "Accepted attachments should show connecting progress in chat.");
+                Check(FindButtons(window, "Cancel transfer").Count(b => b.IsVisible) >= 2,
+                    "Active transfers should show Cancel buttons in both the conversation bubble and active bar.");
                 loading.TransferredBytes = 40;
                 loading.Progress = 40;
                 loading.State = "Transferring";
+                activeBubble.Delivery = "Sending 40% · 0 KB / 0.1 KB";
                 await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
                 Check(progress is { IsIndeterminate: false, Value: 40 } &&
                     loading.ActiveLabel.StartsWith("Receiving 40%", StringComparison.Ordinal) &&
                     FindText(window, loading.ActiveLabel) is { IsVisible: true },
                     "An incoming attachment should show its live byte progress.");
-                loading.State = "Received";
-                await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
-                Check(progress is { IsVisible: false }, "Completed attachments should stop showing loading.");
-                model.Transfers.Remove(loading);
                 string artifacts = Path.GetFullPath("artifacts"); Directory.CreateDirectory(artifacts);
+                Capture(window, Path.Combine(artifacts, "active-transfer-cancel-tested.png"));
+                loading.State = "Received";
+                activeBubble.Delivery = "Sent";
+                activeBubble.CanCancel = false;
+                await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+                Check(progress is { IsVisible: false } && FindButtons(window, "Cancel transfer").All(b => !b.IsVisible),
+                    "Completed attachments should stop showing loading and hide Cancel buttons.");
+                model.Transfers.Remove(loading);
+                model.Messages.Remove(activeBubble);
                 Capture(window, Path.Combine(artifacts, "live-chat-tested.png"));
                 ClickNamed(window, "Files in this conversation");
                 await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
                 Check(((FrameworkElement)window.FindName("FilesPanel")).IsVisible, "The files button should open the files panel.");
+                model.Transfers.Insert(0, loading);
+                loading.State = "Transferring";
+                await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+                Check(FindButtons((FrameworkElement)window.FindName("FilesPanel"), "Cancel transfer").Any(b => b.IsVisible),
+                    "Files panel should show a Cancel button while a transfer is active.");
+                Capture(window, Path.Combine(artifacts, "files-panel-cancel-tested.png"));
+                model.TransfersOpen = true;
+                await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+                Check(FindButtons((FrameworkElement)window.FindName("TransfersList"), "Cancel transfer").Any(b => b.IsVisible),
+                    "Transfers page should show a Cancel button while a transfer is active.");
+                Capture(window, Path.Combine(artifacts, "transfers-page-cancel-tested.png"));
+                model.TransfersOpen = false;
+                loading.State = "Received";
+                model.Transfers.Remove(loading);
+                await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
                 Capture(window, Path.Combine(artifacts, "files-panel-tested.png"));
                 ClickNamed(window, "Contact details");
                 await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
@@ -1058,7 +1117,7 @@ internal static class Program
         var scroller = (System.Windows.Controls.ScrollViewer)preferences.FindName("PreferencesScroller");
         var themeBox = (System.Windows.Controls.ListBox)preferences.FindName("ThemeBox");
         var checkbox = (System.Windows.Controls.CheckBox)preferences.FindName("ThemeDetailsBox");
-        Check(themeBox.IsVisible && themeBox.Items.Count == 43, "The visual theme sample boxes should be shown directly in Appearance.");
+        Check(themeBox.IsVisible && themeBox.Items.Count == 45, "The visual theme sample boxes should be shown directly in Appearance.");
         preferences.UpdateLayout();
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
         var firstCard = (FrameworkElement)themeBox.ItemContainerGenerator.ContainerFromIndex(0);
@@ -1078,11 +1137,11 @@ internal static class Program
 
         ((System.Windows.Controls.RadioButton)preferences.FindName("ThemeFilterDark")).IsChecked = true;
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
-        Check(themeBox.Items.Count == 22, $"Expected 22 dark themes, got {themeBox.Items.Count}.");
+        Check(themeBox.Items.Count == 23, $"Expected 23 dark themes, got {themeBox.Items.Count}.");
         ((System.Windows.Controls.RadioButton)preferences.FindName("ThemeFilterLight")).IsChecked = true;
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
-        Check(themeBox.Items.Count == 20 && (string?)themeBox.SelectedValue == ThemeManager.Sakura,
-            $"Expected 20 light themes keeping Sakura selected, got {themeBox.Items.Count} / {themeBox.SelectedValue}.");
+        Check(themeBox.Items.Count == 21 && (string?)themeBox.SelectedValue == ThemeManager.Sakura,
+            $"Expected 21 light themes keeping Sakura selected, got {themeBox.Items.Count} / {themeBox.SelectedValue}.");
         Capture(preferences, Path.Combine(artifacts, "appearance-theme-light-filter-tested.png"));
 
         foreach (var (tab, file) in new[]
@@ -1135,7 +1194,8 @@ internal static class Program
             (ThemeManager.VoltSpark, DecorationDesign.VoltSpark), (ThemeManager.KingdomRed, DecorationDesign.KingdomRed),
             (ThemeManager.Bubblegum, DecorationDesign.Bubblegum), (ThemeManager.RibbonBlush, DecorationDesign.RibbonBlush),
             (ThemeManager.NoirGold, DecorationDesign.NoirGold), (ThemeManager.WebCrimson, DecorationDesign.WebCrimson),
-            (ThemeManager.Jester, DecorationDesign.Jester), (ThemeManager.Cipher, DecorationDesign.Cipher)
+            (ThemeManager.Jester, DecorationDesign.Jester), (ThemeManager.Cipher, DecorationDesign.Cipher),
+            (ThemeManager.GundamFreedom, DecorationDesign.GundamFreedom), (ThemeManager.IronMan, DecorationDesign.IronMan)
         })
         {
             ThemeManager.Apply(theme);
@@ -1145,7 +1205,7 @@ internal static class Program
             if (theme is ThemeManager.Sakura or ThemeManager.Steampunk or ThemeManager.Forest or ThemeManager.Paper or
                 ThemeManager.Anime or ThemeManager.Aurora or ThemeManager.Arcade or ThemeManager.Ocean or
                 ThemeManager.Cyberpunk or ThemeManager.Midnight or ThemeManager.Sunset or ThemeManager.Mint or
-                ThemeManager.Matcha or ThemeManager.Frost)
+                ThemeManager.Matcha or ThemeManager.Frost or ThemeManager.GundamFreedom or ThemeManager.IronMan)
                 Capture(window, Path.Combine(artifacts, $"theme-{theme}-details-tested.png"));
         }
         await model.SavePreferencesAsync(settings => settings.ThemeDetailsEnabled = false);
@@ -1170,6 +1230,8 @@ internal static class Program
         var headerNebula = (HeaderEffect)window.FindName("ConversationHeaderNebula");
         var headerSilk = (HeaderEffect)window.FindName("ConversationHeaderSilk");
         var headerPlasma = (HeaderEffect)window.FindName("ConversationHeaderPlasma");
+        var headerBurst = (HeaderEffect)window.FindName("ConversationHeaderBurst");
+        var headerArc = (HeaderEffect)window.FindName("ConversationHeaderArc");
         var titleSparkles = (HeaderEffect)window.FindName("TitleBarSparkles");
         var titleShimmer = (HeaderEffect)window.FindName("TitleBarShimmer");
         var titleComet = (HeaderEffect)window.FindName("TitleBarComet");
@@ -1177,7 +1239,9 @@ internal static class Program
         var titleLaser = (HeaderEffect)window.FindName("TitleBarLaser");
         var titleAurora = (HeaderEffect)window.FindName("TitleBarAurora");
         var titleWave = (HeaderEffect)window.FindName("TitleBarWave");
-        var titleEffects = new[] { titleSparkles, titleShimmer, titleComet, titleEqualizer, titleLaser, titleAurora, titleWave };
+        var titleWings = (HeaderEffect)window.FindName("TitleBarWings");
+        var titleReactor = (HeaderEffect)window.FindName("TitleBarReactor");
+        var titleEffects = new[] { titleSparkles, titleShimmer, titleComet, titleEqualizer, titleLaser, titleAurora, titleWave, titleWings, titleReactor };
         Check(titleEffects.All(effect => effect.Margin == new Thickness(0)),
             "All Title bar effects must span the entire title bar edge-to-edge without clipping to the middle.");
         var railBeacon = (RailEffect)window.FindName("RailBeaconEffect");
@@ -1188,6 +1252,8 @@ internal static class Program
         var railPulse = (RailEffect)window.FindName("RailPulseEffect");
         var railPlasma = (RailEffect)window.FindName("RailPlasmaEffect");
         var railCascade = (RailEffect)window.FindName("RailCascadeEffect");
+        var railWings = (RailEffect)window.FindName("RailWingsEffect");
+        var railArc = (RailEffect)window.FindName("RailArcEffect");
         var sidebarMotes = (SidebarEffect)window.FindName("SidebarMotesEffect");
         var sidebarGlow = (SidebarEffect)window.FindName("SidebarEdgeGlowEffect");
         var sidebarPrism = (SidebarEffect)window.FindName("SidebarPrismEffect");
@@ -1197,21 +1263,27 @@ internal static class Program
         var sidebarWaves = (SidebarEffect)window.FindName("SidebarWavesEffect");
         var sidebarRipples = (SidebarEffect)window.FindName("SidebarRipplesEffect");
         var sidebarCircuit = (SidebarEffect)window.FindName("SidebarCircuitEffect");
+        var sidebarWings = (SidebarEffect)window.FindName("SidebarWingsEffect");
+        var sidebarHud = (SidebarEffect)window.FindName("SidebarHudEffect");
         var sidebarRain = (WeatherEffect)window.FindName("SidebarRain");
         var sidebarStarfield = (WeatherEffect)window.FindName("SidebarStarfield");
         var sidebarBubbles = (WeatherEffect)window.FindName("SidebarBubbles");
         var sidebarEmbers = (WeatherEffect)window.FindName("SidebarEmbers");
+        var sidebarWingPlumes = (WeatherEffect)window.FindName("SidebarWingPlumes");
+        var sidebarRepulsor = (WeatherEffect)window.FindName("SidebarRepulsor");
         var contentStarfield = (WeatherEffect)window.FindName("ConversationStarfield");
         var contentBubbles = (WeatherEffect)window.FindName("ConversationBubbles");
         var contentEmbers = (WeatherEffect)window.FindName("ConversationEmbers");
+        var contentWingPlumes = (WeatherEffect)window.FindName("ConversationWingPlumes");
+        var contentRepulsor = (WeatherEffect)window.FindName("ConversationRepulsor");
         var ambientEffects = new AmbientEffect[]
         {
-            headerAurora, headerPulse, headerPrism, headerRipples, headerCircuit, headerStarlight, headerNebula, headerSilk, headerPlasma,
-            titleSparkles, titleShimmer, titleComet, titleEqualizer, titleLaser, titleAurora, titleWave,
-            railBeacon, railStream, railStardust, railScan, railAurora, railPulse, railPlasma, railCascade,
-            sidebarMotes, sidebarGlow, sidebarPrism, sidebarSweep, sidebarAurora, sidebarNebula, sidebarWaves, sidebarRipples, sidebarCircuit,
-            sidebarRain, sidebarStarfield, sidebarBubbles, sidebarEmbers,
-            contentStarfield, contentBubbles, contentEmbers
+            headerAurora, headerPulse, headerPrism, headerRipples, headerCircuit, headerStarlight, headerNebula, headerSilk, headerPlasma, headerBurst, headerArc,
+            titleSparkles, titleShimmer, titleComet, titleEqualizer, titleLaser, titleAurora, titleWave, titleWings, titleReactor,
+            railBeacon, railStream, railStardust, railScan, railAurora, railPulse, railPlasma, railCascade, railWings, railArc,
+            sidebarMotes, sidebarGlow, sidebarPrism, sidebarSweep, sidebarAurora, sidebarNebula, sidebarWaves, sidebarRipples, sidebarCircuit, sidebarWings, sidebarHud,
+            sidebarRain, sidebarStarfield, sidebarBubbles, sidebarEmbers, sidebarWingPlumes, sidebarRepulsor,
+            contentStarfield, contentBubbles, contentEmbers, contentWingPlumes, contentRepulsor
         };
         Check(ambientEffects.All(effect => !effect.IsVisible) &&
             !ButtonEffects.GlowEnabled && !ButtonEffects.SheenEnabled && !ButtonEffects.BounceEnabled && !ButtonEffects.RingEnabled &&
@@ -1227,14 +1299,14 @@ internal static class Program
         var defaultPreviews = new (string Tab, string[] Previews)[]
         {
             ("Headers", ["EnginePreview", "TitleSparklesPreview", "TitleShimmerPreview", "TitleCometPreview", "TitleEqualizerPreview", "TitleLaserPreview",
-                "TitleAuroraPreview", "TitleWavePreview",
+                "TitleAuroraPreview", "TitleWavePreview", "TitleWingsPreview", "TitleReactorPreview",
                 "HeaderAuroraPreview", "HeaderPulsePreview", "HeaderPrismPreview", "HeaderRipplesPreview", "HeaderCircuitPreview", "HeaderStarlightPreview",
-                "HeaderNebulaPreview", "HeaderSilkPreview", "HeaderPlasmaPreview"]),
+                "HeaderNebulaPreview", "HeaderSilkPreview", "HeaderPlasmaPreview", "HeaderBurstPreview", "HeaderArcPreview"]),
             ("Panels", ["RailBeaconPreview", "RailStreamPreview", "RailStardustPreview", "RailScanPreview",
-                "RailAuroraPreview", "RailPulsePreview", "RailPlasmaPreview", "RailCascadePreview",
+                "RailAuroraPreview", "RailPulsePreview", "RailPlasmaPreview", "RailCascadePreview", "RailWingsPreview", "RailArcPreview",
                 "SidebarMotesPreview", "SidebarGlowPreview", "SidebarPrismPreview", "SidebarSweepPreview",
-                "SidebarAuroraPreview", "SidebarNebulaPreview", "SidebarWavesPreview", "SidebarRipplesPreview", "SidebarCircuitPreview"]),
-            ("Ambient", ["PetalsPreview", "StarfieldPreview", "BubblesPreview", "EmbersPreview"]),
+                "SidebarAuroraPreview", "SidebarNebulaPreview", "SidebarWavesPreview", "SidebarRipplesPreview", "SidebarCircuitPreview", "SidebarWingsPreview", "SidebarHudPreview"]),
+            ("Ambient", ["PetalsPreview", "StarfieldPreview", "BubblesPreview", "EmbersPreview", "WingPlumesPreview", "RepulsorPreview"]),
             ("Aura", ["ButtonPreviewPrimary", "ButtonPreviewNav", "ButtonPreviewSend"])
         };
         foreach (var (tab, previews) in defaultPreviews)
@@ -1251,24 +1323,25 @@ internal static class Program
 
         foreach (string name in new[]
         {
-            "HeaderAurora", "HeaderPulse", "HeaderPrism", "HeaderRipples", "HeaderCircuit", "HeaderStarlight", "HeaderNebula", "HeaderSilk", "HeaderPlasma",
-            "TitleSparkles", "TitleShimmer", "TitleComet", "TitleEqualizer", "TitleLaser", "TitleAurora", "TitleWave",
-            "RailBeacon", "RailStream", "RailStardust", "RailScan", "RailAurora", "RailPulse", "RailPlasma", "RailCascade",
-            "SidebarMotes", "SidebarGlow", "SidebarPrism", "SidebarSweep", "SidebarAurora", "SidebarNebula", "SidebarWaves", "SidebarRipples", "SidebarCircuit",
-            "Rain", "Starfield", "Bubbles", "Embers", "AmbientOnSidebar",
+            "HeaderAurora", "HeaderPulse", "HeaderPrism", "HeaderRipples", "HeaderCircuit", "HeaderStarlight", "HeaderNebula", "HeaderSilk", "HeaderPlasma", "HeaderBurst", "HeaderArc",
+            "TitleSparkles", "TitleShimmer", "TitleComet", "TitleEqualizer", "TitleLaser", "TitleAurora", "TitleWave", "TitleWings", "TitleReactor",
+            "RailBeacon", "RailStream", "RailStardust", "RailScan", "RailAurora", "RailPulse", "RailPlasma", "RailCascade", "RailWings", "RailArc",
+            "SidebarMotes", "SidebarGlow", "SidebarPrism", "SidebarSweep", "SidebarAurora", "SidebarNebula", "SidebarWaves", "SidebarRipples", "SidebarCircuit", "SidebarWings", "SidebarHud",
+            "Rain", "Starfield", "Bubbles", "Embers", "WingPlumes", "Repulsor", "AmbientOnSidebar",
             "ButtonGlow", "ButtonSheen", "ButtonBounce", "ButtonRing", "ButtonPulse", "ButtonLift", "ButtonSpark"
         })
             ((System.Windows.Controls.CheckBox)preferences.FindName(name + "Box")).IsChecked = true;
         foreach (var (name, value) in new[]
         {
             ("HeaderAurora", .8), ("HeaderPulse", .7), ("HeaderPrism", .75), ("HeaderRipples", .7), ("HeaderCircuit", .8), ("HeaderStarlight", .65),
-            ("HeaderNebula", .85), ("HeaderSilk", .75), ("HeaderPlasma", .8),
+            ("HeaderNebula", .85), ("HeaderSilk", .75), ("HeaderPlasma", .8), ("HeaderBurst", .85), ("HeaderArc", .8),
             ("TitleSparkles", .55), ("TitleShimmer", .7), ("TitleComet", .75), ("TitleEqualizer", .8), ("TitleLaser", .85), ("TitleAurora", .8), ("TitleWave", .75),
+            ("TitleWings", .8), ("TitleReactor", .85),
             ("RailBeacon", .75), ("RailStream", .7), ("RailStardust", .65), ("RailScan", .6),
-            ("RailAurora", .8), ("RailPulse", .75), ("RailPlasma", .7), ("RailCascade", .8),
+            ("RailAurora", .8), ("RailPulse", .75), ("RailPlasma", .7), ("RailCascade", .8), ("RailWings", .75), ("RailArc", .85),
             ("SidebarMotes", .75), ("SidebarGlow", .65), ("SidebarPrism", .7), ("SidebarSweep", .65),
-            ("SidebarAurora", .8), ("SidebarNebula", .75), ("SidebarWaves", .7), ("SidebarRipples", .75), ("SidebarCircuit", .8),
-            ("Starfield", .8), ("Bubbles", .7), ("Embers", .75),
+            ("SidebarAurora", .8), ("SidebarNebula", .75), ("SidebarWaves", .7), ("SidebarRipples", .75), ("SidebarCircuit", .8), ("SidebarWings", .8), ("SidebarHud", .85),
+            ("Starfield", .8), ("Bubbles", .7), ("Embers", .75), ("WingPlumes", .8), ("Repulsor", .85),
             ("ButtonGlow", .85), ("ButtonSheen", .8), ("ButtonBounce", .7), ("ButtonRing", .85),
             ("ButtonPulse", .75), ("ButtonLift", .7), ("ButtonSpark", .85)
         })
@@ -1287,14 +1360,18 @@ internal static class Program
         Check(ambientEffects.All(effect => effect.IsVisible && !effect.IsHitTestVisible && effect.Tint == ThemeAccent()) &&
             headerAurora.Intensity == .8 && headerPulse.Intensity == .7 && headerPrism.Intensity == .75 && headerRipples.Intensity == .7 &&
             headerCircuit.Intensity == .8 && headerStarlight.Intensity == .65 &&
-            headerNebula.Intensity == .85 && headerSilk.Intensity == .75 && headerPlasma.Intensity == .8 &&
+            headerNebula.Intensity == .85 && headerSilk.Intensity == .75 && headerPlasma.Intensity == .8 && headerBurst.Intensity == .85 && headerArc.Intensity == .8 &&
             titleSparkles.Intensity == .55 && titleShimmer.Intensity == .7 && titleComet.Intensity == .75 &&
             titleEqualizer.Intensity == .8 && titleLaser.Intensity == .85 && titleAurora.Intensity == .8 && titleWave.Intensity == .75 &&
+            titleWings.Intensity == .8 && titleReactor.Intensity == .85 &&
             railBeacon.Intensity == .75 && railStream.Intensity == .7 && railStardust.Intensity == .65 && railScan.Intensity == .6 &&
             railAurora.Intensity == .8 && railPulse.Intensity == .75 && railPlasma.Intensity == .7 && railCascade.Intensity == .8 &&
+            railWings.Intensity == .75 && railArc.Intensity == .85 &&
             sidebarMotes.Intensity == .75 && sidebarGlow.Intensity == .65 && sidebarPrism.Intensity == .7 && sidebarSweep.Intensity == .65 &&
             sidebarAurora.Intensity == .8 && sidebarNebula.Intensity == .75 && sidebarWaves.Intensity == .7 && sidebarRipples.Intensity == .75 && sidebarCircuit.Intensity == .8 &&
+            sidebarWings.Intensity == .8 && sidebarHud.Intensity == .85 &&
             contentStarfield.Intensity == .8 && contentBubbles.Intensity == .7 && contentEmbers.Intensity == .75 &&
+            contentWingPlumes.Intensity == .8 && contentRepulsor.Intensity == .85 &&
             ButtonEffects.GlowEnabled && ButtonEffects.SheenEnabled && ButtonEffects.BounceEnabled && ButtonEffects.RingEnabled &&
             ButtonEffects.PulseEnabled && ButtonEffects.LiftEnabled && ButtonEffects.SparkEnabled,
             "All UI zone effects should activate with independent intensities and the active theme colour.");
@@ -1348,6 +1425,79 @@ internal static class Program
         Check(((System.Windows.Controls.Border)window.FindName("ChatSurfaceLayer")).Background == Brushes.Transparent,
             "Match theme chat surface mode should let the themed chrome and texture flow cleanly through the chat area.");
         Capture(window, Path.Combine(artifacts, "header-nebula-title-laser-tested.png"));
+        model.Messages.Clear();
+        model.Messages.Add(new ChatMessage { PeerId = model.SelectedPeer!.Id, Outgoing = false, Text = "METEOR system online. All wing binders green." });
+        model.Messages.Add(new ChatMessage { PeerId = model.SelectedPeer!.Id, Outgoing = true, Text = "HiMAT Full Burst ready — locking targets.", Delivery = "Delivered" });
+        model.Messages.Add(new ChatMessage { PeerId = model.SelectedPeer!.Id, Outgoing = false, FileName = "WingSchematics.pdf", Delivery = "Received" });
+        model.Messages.Add(new ChatMessage { PeerId = model.SelectedPeer!.Id, Outgoing = true, FileName = "MarkLXXXVSpecs.pdf", Delivery = "Sent" });
+        model.Messages.Add(new ChatMessage { PeerId = model.SelectedPeer!.Id, Outgoing = false, Text = "Repulsor diagnostics nominal at 100%." });
+        await model.SavePreferencesAsync(s =>
+        {
+            AppearanceCodec.ResetDefaults(s);
+            s.Theme = ThemeManager.GundamFreedom;
+            s.ThemeDetailsEnabled = true;
+            s.ChromeTexture = ChromeTexture.FreedomWings;
+            s.ChromeTextureIntensity = .85;
+            s.ChatSurfaceMode = AppearanceOptions.ChatSurfaceTheme;
+            s.ChatCanvasGradient = ChatCanvasOverlay.FullBurst;
+            s.ChatCanvasGradientIntensity = .80;
+            s.WingPlumesEnabled = true;
+            s.WingPlumesIntensity = .85;
+            s.AmbientOnSidebarEnabled = true;
+            s.TitleWingsEnabled = true;
+            s.TitleWingsIntensity = .85;
+            s.HeaderBurstEnabled = true;
+            s.HeaderBurstIntensity = .85;
+            s.RailWingsEnabled = true;
+            s.RailWingsIntensity = .85;
+            s.SidebarWingsEnabled = true;
+            s.SidebarWingsIntensity = .85;
+            s.TargetAura = TargetAura.WingFlare;
+            s.TargetAuraIntensity = .85;
+            s.TypingEffect = "theme";
+        });
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        if (SystemParameters.ClientAreaAnimation) await Until(() => titleWings.Progress > .005 && headerBurst.Progress > .005 && railWings.Progress > .005 && sidebarWings.Progress > .005 && contentWingPlumes.Progress > .005);
+        Check((DecorationDesign)Application.Current.Resources["BubbleDecorationDesign"] == DecorationDesign.GundamFreedom &&
+            Application.Current.Resources["OutgoingBubbleBackground"] is LinearGradientBrush &&
+            ChatEffects.Resolve("theme", ThemeManager.GundamFreedom, true) == "feathers",
+            "Gundam Freedom should activate mecha gradient bubbles, bubble corner markings, and wing plume typing effect.");
+        Capture(window, Path.Combine(artifacts, "gundamfreedom-showcase-tested.png"));
+
+        await model.SavePreferencesAsync(s =>
+        {
+            AppearanceCodec.ResetDefaults(s);
+            s.Theme = ThemeManager.IronMan;
+            s.ThemeDetailsEnabled = true;
+            s.ChromeTexture = ChromeTexture.ArcReactor;
+            s.ChromeTextureIntensity = .88;
+            s.ChatSurfaceMode = AppearanceOptions.ChatSurfaceTheme;
+            s.ChatCanvasGradient = ChatCanvasOverlay.ArcCore;
+            s.ChatCanvasGradientIntensity = .85;
+            s.RepulsorEnabled = true;
+            s.RepulsorIntensity = .85;
+            s.AmbientOnSidebarEnabled = true;
+            s.TitleReactorEnabled = true;
+            s.TitleReactorIntensity = .85;
+            s.HeaderArcEnabled = true;
+            s.HeaderArcIntensity = .85;
+            s.RailArcEnabled = true;
+            s.RailArcIntensity = .85;
+            s.SidebarHudEnabled = true;
+            s.SidebarHudIntensity = .85;
+            s.TargetAura = TargetAura.ArcReactor;
+            s.TargetAuraIntensity = .85;
+            s.OnlineRingEnabled = true;
+            s.ClickEffect = "theme";
+        });
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        if (SystemParameters.ClientAreaAnimation) await Until(() => titleReactor.Progress > .005 && headerArc.Progress > .005 && railArc.Progress > .005 && sidebarHud.Progress > .005 && contentRepulsor.Progress > .005);
+        Check((DecorationDesign)Application.Current.Resources["BubbleDecorationDesign"] == DecorationDesign.IronMan &&
+            Application.Current.Resources["OutgoingBubbleBackground"] is LinearGradientBrush &&
+            ChatEffects.Resolve("theme", ThemeManager.IronMan, false) == "repulsor",
+            "Iron Man should activate reactor gradient bubbles, arc emblems, and repulsor click effect.");
+        Capture(window, Path.Combine(artifacts, "ironman-showcase-tested.png"));
+
         window.WindowState = WindowState.Minimized;
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
         Check(ambientEffects.All(effect => effect.ActiveFrameRate == 0 && effect.Progress == 0),
@@ -1359,7 +1509,12 @@ internal static class Program
 
     private static async Task TestChromeTexturesAsync(string artifacts)
     {
-        Check(ChromeTexture.Catalog.Count == 23, $"Expected 22 background textures + None, found {ChromeTexture.Catalog.Count}.");
+        Check(ChromeTexture.Catalog.Count == 32, $"Expected 31 background textures + None, found {ChromeTexture.Catalog.Count}.");
+        Check(ChromeTexture.Normalize("starry night") == ChromeTexture.StarryNight
+            && ChromeTexture.Normalize("lonely grass") == ChromeTexture.LonelyGrass
+            && ChromeTexture.Normalize("grassy fields") == ChromeTexture.GrassyFields
+            && ChromeTexture.Normalize("GALAXY") == ChromeTexture.Galaxy,
+            "Scenic texture aliases must normalize cleanly.");
         await using var model = new MainViewModel(preview: true);
         var window = new MainWindow(model);
         window.Show();
@@ -1373,8 +1528,8 @@ internal static class Program
         var textureBox = (System.Windows.Controls.ListBox)preferences.FindName("ChromeTextureBox");
         var intensityBox = (System.Windows.Controls.Slider)preferences.FindName("ChromeTextureIntensityBox");
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
-        Check(textureBox.IsVisible && textureBox.Items.Count == 23 && (string)textureBox.SelectedValue == ChromeTexture.Off,
-            "All 22 textures + None should appear directly on the Textures tab.");
+        Check(textureBox.IsVisible && textureBox.Items.Count == 32 && (string)textureBox.SelectedValue == ChromeTexture.Off,
+            "All 31 textures + None should appear directly on the Textures tab.");
 
         ((System.Windows.Controls.ListBox)preferences.FindName("ThemeBox")).SelectedValue = ThemeManager.Cyberpunk;
         textureBox.SelectedValue = ChromeTexture.Silk;
@@ -1383,6 +1538,13 @@ internal static class Program
         Check(textureLayer.IsVisible && textureLayer.Kind == ChromeTextureKind.Silk && textureLayer.Intensity == .85,
             "Selecting a chrome texture should live-preview across the unified shell.");
         Capture(preferences, Path.Combine(artifacts, "appearance-texture-prefs-tested.png"));
+
+        textureBox.SelectedValue = ChromeTexture.Galaxy;
+        var prefScroller = (System.Windows.Controls.ScrollViewer)preferences.FindName("PreferencesScroller");
+        prefScroller.ScrollToVerticalOffset(190);
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Capture(preferences, Path.Combine(artifacts, "appearance-texture-prefs-scenic-tested.png"));
+
         preferences.Close();
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
         Check(!textureLayer.IsVisible && model.ChromeTexture == ChromeTexture.Off, "Cancel must revert live chrome texture previews.");
@@ -1398,47 +1560,70 @@ internal static class Program
         Check(model.Settings.ChromeTexture == ChromeTexture.Hex && model.Settings.ChromeTextureIntensity == .75 && textureLayer.IsVisible,
             "Saved chrome texture should stay active after Preferences closes.");
 
-        foreach (var (theme, texture, expectedKind) in new[]
+        foreach (var (theme, texture, expectedKind, onChat) in new[]
         {
-            (ThemeManager.Cyberpunk, ChromeTexture.Hex, ChromeTextureKind.Hex),
-            (ThemeManager.Midnight, ChromeTexture.Silk, ChromeTextureKind.Silk),
-            (ThemeManager.Aurora, ChromeTexture.Topo, ChromeTextureKind.Topo),
-            (ThemeManager.Frost, ChromeTexture.Grid, ChromeTextureKind.Grid),
-            (ThemeManager.Matcha, ChromeTexture.Woven, ChromeTextureKind.Woven),
-            (ThemeManager.Dark, ChromeTexture.Grain, ChromeTextureKind.Grain),
-            (ThemeManager.Obsidian, ChromeTexture.Brushed, ChromeTextureKind.Brushed),
-            (ThemeManager.Rose, ChromeTexture.Marble, ChromeTextureKind.Marble),
-            (ThemeManager.Synthwave, ChromeTexture.Carbon, ChromeTextureKind.Carbon),
-            (ThemeManager.Emerald, ChromeTexture.Circuit, ChromeTextureKind.Circuit),
-            (ThemeManager.Nord, ChromeTexture.Waves, ChromeTextureKind.Waves),
-            (ThemeManager.Amber, ChromeTexture.ArtDeco, ChromeTextureKind.ArtDeco),
-            (ThemeManager.Espresso, ChromeTexture.Terrazzo, ChromeTextureKind.Terrazzo),
-            (ThemeManager.Cobalt, ChromeTexture.Mesh, ChromeTextureKind.Mesh),
-            (ThemeManager.Pineapple, ChromeTexture.Bubbles, ChromeTextureKind.Bubbles),
-            (ThemeManager.Vampire, ChromeTexture.Gothic, ChromeTextureKind.Gothic),
-            (ThemeManager.VoltSpark, ChromeTexture.Lightning, ChromeTextureKind.Lightning),
-            (ThemeManager.WebCrimson, ChromeTexture.Web, ChromeTextureKind.Web),
-            (ThemeManager.NoirPink, ChromeTexture.Starburst, ChromeTextureKind.Starburst),
-            (ThemeManager.Sage, ChromeTexture.Botanical, ChromeTextureKind.Botanical),
-            (ThemeManager.Cipher, ChromeTexture.Cipher, ChromeTextureKind.Cipher),
-            (ThemeManager.RibbonBlush, ChromeTexture.Watercolor, ChromeTextureKind.Watercolor)
+            (ThemeManager.Cyberpunk, ChromeTexture.Hex, ChromeTextureKind.Hex, false),
+            (ThemeManager.Midnight, ChromeTexture.Silk, ChromeTextureKind.Silk, false),
+            (ThemeManager.Aurora, ChromeTexture.Topo, ChromeTextureKind.Topo, false),
+            (ThemeManager.Frost, ChromeTexture.Grid, ChromeTextureKind.Grid, false),
+            (ThemeManager.Matcha, ChromeTexture.Woven, ChromeTextureKind.Woven, false),
+            (ThemeManager.Dark, ChromeTexture.Grain, ChromeTextureKind.Grain, false),
+            (ThemeManager.Obsidian, ChromeTexture.Brushed, ChromeTextureKind.Brushed, false),
+            (ThemeManager.Rose, ChromeTexture.Marble, ChromeTextureKind.Marble, false),
+            (ThemeManager.Synthwave, ChromeTexture.Carbon, ChromeTextureKind.Carbon, false),
+            (ThemeManager.Emerald, ChromeTexture.Circuit, ChromeTextureKind.Circuit, false),
+            (ThemeManager.Nord, ChromeTexture.Waves, ChromeTextureKind.Waves, false),
+            (ThemeManager.Amber, ChromeTexture.ArtDeco, ChromeTextureKind.ArtDeco, false),
+            (ThemeManager.Espresso, ChromeTexture.Terrazzo, ChromeTextureKind.Terrazzo, false),
+            (ThemeManager.Cobalt, ChromeTexture.Mesh, ChromeTextureKind.Mesh, false),
+            (ThemeManager.Pineapple, ChromeTexture.Bubbles, ChromeTextureKind.Bubbles, false),
+            (ThemeManager.Vampire, ChromeTexture.Gothic, ChromeTextureKind.Gothic, false),
+            (ThemeManager.VoltSpark, ChromeTexture.Lightning, ChromeTextureKind.Lightning, false),
+            (ThemeManager.WebCrimson, ChromeTexture.Web, ChromeTextureKind.Web, false),
+            (ThemeManager.NoirPink, ChromeTexture.Starburst, ChromeTextureKind.Starburst, false),
+            (ThemeManager.Sage, ChromeTexture.Botanical, ChromeTextureKind.Botanical, true),
+            (ThemeManager.Vampire, ChromeTexture.Botanical, ChromeTextureKind.Botanical, true),
+            (ThemeManager.Midnight, ChromeTexture.Galaxy, ChromeTextureKind.Galaxy, true),
+            (ThemeManager.Paper, ChromeTexture.Galaxy, ChromeTextureKind.Galaxy, true),
+            (ThemeManager.Nord, ChromeTexture.StarryNight, ChromeTextureKind.StarryNight, true),
+            (ThemeManager.Sand, ChromeTexture.Sun, ChromeTextureKind.Sun, true),
+            (ThemeManager.Dark, ChromeTexture.Moon, ChromeTextureKind.Moon, true),
+            (ThemeManager.Frost, ChromeTexture.Moon, ChromeTextureKind.Moon, true),
+            (ThemeManager.Paper, ChromeTexture.LonelyGrass, ChromeTextureKind.LonelyGrass, true),
+            (ThemeManager.Matcha, ChromeTexture.Leaves, ChromeTextureKind.Leaves, true),
+            (ThemeManager.Matcha, ChromeTexture.GrassyFields, ChromeTextureKind.GrassyFields, true),
+            (ThemeManager.Midnight, ChromeTexture.GrassyFields, ChromeTextureKind.GrassyFields, true),
+            (ThemeManager.Cipher, ChromeTexture.Cipher, ChromeTextureKind.Cipher, false),
+            (ThemeManager.RibbonBlush, ChromeTexture.Watercolor, ChromeTextureKind.Watercolor, false),
+            (ThemeManager.GundamFreedom, ChromeTexture.FreedomWings, ChromeTextureKind.FreedomWings, false),
+            (ThemeManager.IronMan, ChromeTexture.ArcReactor, ChromeTextureKind.ArcReactor, false)
         })
         {
-            await model.SavePreferencesAsync(s => { s.Theme = theme; s.ChromeTexture = texture; s.ChromeTextureIntensity = .78; });
-            ThemeManager.Apply(theme);
+            await model.SavePreferencesAsync(s =>
+            {
+                s.Theme = theme;
+                s.ChromeTexture = texture;
+                s.ChromeTextureIntensity = .78;
+                s.ChatSurfaceMode = onChat ? AppearanceOptions.ChatSurfaceTheme : AppearanceOptions.ChatSurfaceSeparate;
+            });
+            ThemeManager.Apply(theme, AppearanceOverrides.From(model.Settings));
             await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
             Check(textureLayer.IsVisible && textureLayer.Kind == expectedKind, $"Chrome texture {texture} should render cleanly in {theme}.");
             Capture(window, Path.Combine(artifacts, $"chrome-texture-{theme}-{texture}-tested.png"));
         }
 
+        string encoded = AppearanceCodec.Encode(model.Settings);
+        Check(AppearanceCodec.TryDecode(encoded, out var decoded) && decoded.ChromeTexture == ChromeTexture.ArcReactor,
+            "Look code should round-trip active chrome textures.");
+
         window.Close();
-        ThemeManager.Apply(ThemeManager.Light);
-        Console.WriteLine("PASS  Uniform chrome shell with 6 live theme-adaptive background textures");
+        ThemeManager.Apply(ThemeManager.Light, AppearanceOverrides.Default);
+        Console.WriteLine("PASS  Uniform chrome shell with all 31 theme-adaptive background textures");
     }
 
     private static async Task TestTargetAuraAsync(string artifacts)
     {
-        Check(TargetAura.Catalog.Count == 12, $"Expected 11 target aura styles + None, found {TargetAura.Catalog.Count}.");
+        Check(TargetAura.Catalog.Count == 14, $"Expected 13 target aura styles + None, found {TargetAura.Catalog.Count}.");
         await using var model = new MainViewModel(preview: true);
         model.Draft = "Looking great!";
         var window = new MainWindow(model);
@@ -1466,8 +1651,8 @@ internal static class Program
         var buttonsBox = (System.Windows.Controls.CheckBox)preferences.FindName("AuraButtonsBox");
         var intensityBox = (System.Windows.Controls.Slider)preferences.FindName("TargetAuraIntensityBox");
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
-        Check(auraBox.IsVisible && auraBox.Items.Count == 12 && (string)auraBox.SelectedValue == TargetAura.Off,
-            "All 11 aura styles + None should appear directly on the Aura tab.");
+        Check(auraBox.IsVisible && auraBox.Items.Count == 14 && (string)auraBox.SelectedValue == TargetAura.Off,
+            "All 13 aura styles + None should appear directly on the Aura tab.");
 
         ((System.Windows.Controls.ListBox)preferences.FindName("ThemeBox")).SelectedValue = ThemeManager.Cyberpunk;
         ((System.Windows.Controls.ListBox)preferences.FindName("ChromeTextureBox")).SelectedValue = ChromeTexture.Hex;
@@ -1516,7 +1701,9 @@ internal static class Program
             (ThemeManager.Crimson, ChromeTexture.ArtDeco, TargetAura.Neon, TargetAuraKind.Neon),
             (ThemeManager.Rose, ChromeTexture.Marble, TargetAura.Sakura, TargetAuraKind.Sakura),
             (ThemeManager.Obsidian, ChromeTexture.Mesh, TargetAura.Prism, TargetAuraKind.Prism),
-            (ThemeManager.Emerald, ChromeTexture.Circuit, TargetAura.Pulse, TargetAuraKind.Pulse)
+            (ThemeManager.Emerald, ChromeTexture.Circuit, TargetAura.Pulse, TargetAuraKind.Pulse),
+            (ThemeManager.GundamFreedom, ChromeTexture.FreedomWings, TargetAura.WingFlare, TargetAuraKind.WingFlare),
+            (ThemeManager.IronMan, ChromeTexture.ArcReactor, TargetAura.ArcReactor, TargetAuraKind.ArcReactor)
         })
         {
             await model.SavePreferencesAsync(s => { s.Theme = theme; s.ChromeTexture = texture; s.TargetAura = style; s.TargetAuraIntensity = .85; });
@@ -1562,9 +1749,74 @@ internal static class Program
         preferences.Show();
         preferences.ShowPage("AppearancePage");
 
-        // 1. Colors tab: custom accent + independent effect tint + bubble tints.
+        // 1. Colors tab: color finishes (12 styles + Original) + intensity slider + custom channels.
         preferences.ShowAppearanceTab("Colors");
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        var colorFinishBox = (System.Windows.Controls.ListBox)preferences.FindName("ColorFinishBox");
+        var colorFinishIntensity = (System.Windows.Controls.Slider)preferences.FindName("ColorFinishIntensityBox");
+        var chromeFinishLayer = (System.Windows.Controls.Border)window.FindName("ChromeColorFinishLayer");
+        var chatFinishLayer = (System.Windows.Controls.Border)window.FindName("ChatColorFinishLayer");
+        var themeSelector = (System.Windows.Controls.ListBox)preferences.FindName("ThemeBox");
+        Check(ColorFinish.Catalog.Count == 13 && colorFinishBox.Items.Count == 13,
+            $"Expected 13 color finish options (Original + 12 finishes), found {ColorFinish.Catalog.Count}/{colorFinishBox.Items.Count}.");
+        Check(colorFinishBox.SelectedValue as string == ColorFinish.Off && !colorFinishIntensity.IsVisible &&
+            chromeFinishLayer.Background == Brushes.Transparent && chatFinishLayer.Background == Brushes.Transparent,
+            "Color finish must default to Original with no wash overlay and collapsed slider.");
+
+        // Switch to Pineapple Sea (SpongeBob) and verify smoothing finishes soften harsh solid yellow while keeping yellow/blue spirit.
+        themeSelector.SelectedValue = ThemeManager.Pineapple;
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Capture(window, Path.Combine(artifacts, "pineapple-original-tested.png"));
+        var rawPineSidebar = ((SolidColorBrush)Application.Current.Resources["Sidebar"]).Color;
+        var rawPineAccent = ((SolidColorBrush)Application.Current.Resources["Accent"]).Color;
+        var (_, rawPineSat, _) = ColorFinish.ToHsl(rawPineSidebar);
+
+        foreach (var finish in ColorFinish.Catalog.Where(f => f.Value != ColorFinish.Off))
+        {
+            colorFinishBox.SelectedValue = finish.Value;
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            var gradedSidebar = ((SolidColorBrush)Application.Current.Resources["Sidebar"]).Color;
+            var gradedInk = ((SolidColorBrush)Application.Current.Resources["Ink"]).Color;
+            double contrast = (Math.Max(AppearanceOptions.RelativeLuminance(gradedSidebar), AppearanceOptions.RelativeLuminance(gradedInk)) + .05) /
+                              (Math.Min(AppearanceOptions.RelativeLuminance(gradedSidebar), AppearanceOptions.RelativeLuminance(gradedInk)) + .05);
+            Check(colorFinishIntensity.IsVisible && chromeFinishLayer.Background is LinearGradientBrush &&
+                chatFinishLayer.Background is LinearGradientBrush && contrast >= 6.0,
+                $"Finish {finish.Name} should activate smooth wash brushes and maintain crisp ink contrast ({contrast:F2}).");
+        }
+
+        // Verify slider reactivity and Pineapple saturation reduction on Pastel / Soft matte / Stylized.
+        colorFinishBox.SelectedValue = ColorFinish.Pastel;
+        colorFinishIntensity.Value = .25;
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        var lowBlendSidebar = ((SolidColorBrush)Application.Current.Resources["Sidebar"]).Color;
+        colorFinishIntensity.Value = 1.0;
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        var fullPastelSidebar = ((SolidColorBrush)Application.Current.Resources["Sidebar"]).Color;
+        var (pastelHue, pastelSat, _) = ColorFinish.ToHsl(fullPastelSidebar);
+        Check(lowBlendSidebar != fullPastelSidebar && pastelSat < rawPineSat * .55 && pastelHue is >= 25 and <= 75,
+            $"Pastel at 100% should visibly tone Pineapple saturation ({rawPineSat:F2} -> {pastelSat:F2}) while keeping golden hue ({pastelHue:F0}) and responding to slider.");
+        Capture(window, Path.Combine(artifacts, "pineapple-pastel-tested.png"));
+        Capture(preferences, Path.Combine(artifacts, "appearance-colors-finishes-tested.png"));
+
+        colorFinishBox.SelectedValue = ColorFinish.Stylized;
+        colorFinishIntensity.Value = .85;
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Capture(window, Path.Combine(artifacts, "pineapple-stylized-tested.png"));
+
+        themeSelector.SelectedValue = ThemeManager.IronMan;
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Capture(window, Path.Combine(artifacts, "ironman-stylized-tested.png"));
+
+        // Restore Light + Original finish before verifying un-graded hex channel overrides.
+        colorFinishBox.SelectedValue = ColorFinish.Off;
+        colorFinishIntensity.Value = .65;
+        themeSelector.SelectedValue = ThemeManager.Light;
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(((SolidColorBrush)Application.Current.Resources["Sidebar"]).Color != fullPastelSidebar &&
+            rawPineAccent != Color.FromRgb(0xEC, 0x48, 0x99) &&
+            chromeFinishLayer.Background == Brushes.Transparent,
+            "Restoring Original color finish must clear washes and restore raw colors.");
+
         var accentBox = (System.Windows.Controls.ListBox)preferences.FindName("AccentColorBox");
         var effectHexBox = (System.Windows.Controls.TextBox)preferences.FindName("EffectHexBox");
         var outBubbleBox = (System.Windows.Controls.ListBox)preferences.FindName("OutgoingBubbleColorBox");
@@ -1615,6 +1867,55 @@ internal static class Program
             "Gradient bubble style should apply a gradient brush to outgoing bubbles.");
         Check(((CornerRadius)Application.Current.Resources["OutgoingBubbleCorner"]).TopLeft >= 18,
             "Pill bubble shape should round bubble corners.");
+
+        // Verify live rendered incoming + outgoing TextBubble and FileBubble elements both update.
+        var msgList = (System.Windows.Controls.ItemsControl)window.FindName("MessageList");
+        var outFileSample = new ChatMessage { Id = "bubble-file-out", PeerId = model.SelectedPeer!.Id, Outgoing = true, FileName = "out.bin", Delivery = "Sent" };
+        var inFileSample = new ChatMessage { Id = "bubble-file-in", PeerId = model.SelectedPeer!.Id, Outgoing = false, FileName = "in.bin", Delivery = "Received" };
+        model.Messages.Add(outFileSample);
+        model.Messages.Add(inFileSample);
+        ((System.Windows.Controls.ListBox)preferences.FindName("BubbleShapeBox")).SelectedValue = AppearanceOptions.ShapeTail;
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        System.Windows.Controls.Border FindBubble(ChatMessage m, string name)
+        {
+            var container = (FrameworkElement)msgList.ItemContainerGenerator.ContainerFromItem(m);
+            container.ApplyTemplate();
+            return (System.Windows.Controls.Border)msgList.ItemTemplate.FindName(name, container);
+        }
+        var outTextMsg = model.Messages.First(m => m.Outgoing && m.HasText);
+        var inTextMsg = model.Messages.First(m => !m.Outgoing && m.HasText);
+        var outTextBorder = FindBubble(outTextMsg, "TextBubble");
+        var inTextBorder = FindBubble(inTextMsg, "TextBubble");
+        var outFileBorder = FindBubble(outFileSample, "FileBubble");
+        var inFileBorder = FindBubble(inFileSample, "FileBubble");
+        Check(outTextBorder.Background is LinearGradientBrush && inTextBorder.Background is LinearGradientBrush &&
+            ReferenceEquals(outTextBorder.Background, Application.Current.Resources["OutgoingBubbleBackground"]) &&
+            ReferenceEquals(inTextBorder.Background, Application.Current.Resources["IncomingBubbleBackground"]) &&
+            outTextBorder.CornerRadius.BottomRight == 3 && inTextBorder.CornerRadius.BottomLeft == 3 &&
+            outFileBorder.CornerRadius.BottomRight == 3 && inFileBorder.CornerRadius.BottomLeft == 3 &&
+            ReferenceEquals(outFileBorder.Background, Application.Current.Resources["OutgoingBubbleBackground"]) &&
+            ReferenceEquals(inFileBorder.Background, Application.Current.Resources["IncomingBubbleBackground"]),
+            "Rendered outgoing & incoming text and file bubbles must both reflect live custom colors, gradient style, and tail corners.");
+
+        // Switching to GundamFreedom / IronMan while keeping custom colors must keep Mecha/Reactor style on both sides.
+        var prevTheme = themeSelector.SelectedValue;
+        ((System.Windows.Controls.ListBox)preferences.FindName("BubbleStyleBox")).SelectedValue = AppearanceOptions.BubbleSoft;
+        ((System.Windows.Controls.ListBox)preferences.FindName("BubbleShapeBox")).SelectedValue = AppearanceOptions.Default;
+        themeSelector.SelectedValue = ThemeManager.IronMan;
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(outTextBorder.BorderBrush is LinearGradientBrush && inTextBorder.BorderBrush is LinearGradientBrush &&
+            outTextBorder.CornerRadius.TopLeft > outTextBorder.CornerRadius.TopRight &&
+            inTextBorder.CornerRadius.TopRight > inTextBorder.CornerRadius.TopLeft &&
+            outFileBorder.CornerRadius.TopLeft > outFileBorder.CornerRadius.TopRight &&
+            inFileBorder.CornerRadius.TopRight > inFileBorder.CornerRadius.TopLeft,
+            "Iron Man theme should apply Reactor borders and directional bevels to both outgoing and incoming text and file bubbles even with custom colors.");
+        // Restore theme & Pill/Gradient overrides for downstream assertions in this test.
+        themeSelector.SelectedValue = prevTheme;
+        ((System.Windows.Controls.ListBox)preferences.FindName("BubbleStyleBox")).SelectedValue = AppearanceOptions.BubbleGradient;
+        ((System.Windows.Controls.ListBox)preferences.FindName("BubbleShapeBox")).SelectedValue = AppearanceOptions.ShapePill;
+        model.Messages.Remove(outFileSample);
+        model.Messages.Remove(inFileSample);
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
         Check(((CornerRadius)Application.Current.Resources["PanelCorner"]).TopLeft == 0,
             "Sharp global corners should override PanelCorner.");
         Check(MessageMotion.ActiveStyle == MessageMotion.Pop && model.UseCustomAvatarShape && model.OnlineRingEnabled,
@@ -1656,6 +1957,9 @@ internal static class Program
             "Background blur slider should live-preview a BlurEffect.");
 
         // 5. Themes tab: Saved presets, Look code encode/decode, Reset, Load, Randomize.
+        preferences.ShowAppearanceTab("Colors");
+        ((System.Windows.Controls.ListBox)preferences.FindName("ColorFinishBox")).SelectedValue = ColorFinish.Velvet;
+        ((System.Windows.Controls.Slider)preferences.FindName("ColorFinishIntensityBox")).Value = .80;
         preferences.ShowAppearanceTab("Themes");
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
         ((System.Windows.Controls.ListBox)preferences.FindName("ThemeBox")).SelectedValue = ThemeManager.Midnight;
@@ -1669,6 +1973,8 @@ internal static class Program
         Check(code.StartsWith(AppearanceCodec.Prefix, StringComparison.Ordinal) &&
             AppearanceCodec.TryDecode(code, out var decoded) &&
             decoded.Theme == ThemeManager.Midnight &&
+            decoded.ColorFinish == ColorFinish.Velvet &&
+            Math.Abs((decoded.ColorFinishIntensity ?? 0) - .80) < .01 &&
             decoded.Accent == "#EC4899" &&
             decoded.EffectColor == "#00FFAA" &&
             decoded.BubbleStyle == AppearanceOptions.BubbleGradient &&
@@ -1720,6 +2026,8 @@ internal static class Program
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
 
         Check(model.Settings.Theme == ThemeManager.Midnight &&
+            model.Settings.ColorFinish == ColorFinish.Velvet &&
+            Math.Abs(model.Settings.ColorFinishIntensity - .80) < .01 &&
             model.Settings.CustomAccentColor == "#EC4899" &&
             model.Settings.CustomEffectColor == "#00FFAA" &&
             model.Settings.BubbleStyle == AppearanceOptions.BubbleGradient &&
@@ -1791,6 +2099,115 @@ internal static class Program
         Console.WriteLine("PASS  Custom color remix, bubbles, geometry, canvas gradients, new ambient effects, look codes & presets");
     }
 
+    private static async Task TestFloatingLanSuiteAsync(string artifacts)
+    {
+        await using var model = new MainViewModel(preview: true);
+        ThemeManager.Apply(ThemeManager.Pineapple, new AppearanceOverrides("", "", "", "", AppearanceOptions.BubbleSoft, AppearanceOptions.Default, AppearanceOptions.DensityCozy, AppearanceOptions.Default, AppearanceOptions.Default, "", 1.0, AppearanceOptions.ChatSurfaceSeparate, "", ColorFinish.Pastel, .75));
+        var window = new MainWindow(model);
+        window.Show();
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+
+        Check(FindText(window, "Floating LAN") is null, "Floating LAN must not appear in MainWindow navigation.");
+
+        using var controller = new FloatingPetController(model, () => App.ShowWindow(window));
+        controller.SyncVisibility();
+        Check(controller.PetWindow is null && !model.FloatingLanEnabled, "Floating pet should be off by default.");
+
+        // 1. Toggle Floating LAN purely from the tray menu.
+        var tray = new TrayMenuWindow(window, model);
+        tray.ShowNear(new System.Drawing.Point(800, 600));
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        var floatingCheck = (FrameworkElement)tray.FindName("FloatingCheck");
+        Check(floatingCheck.Visibility == Visibility.Collapsed, "Tray menu checkmark should start collapsed.");
+        var floatingAction = (System.Windows.Controls.Button)tray.FindName("FloatingAction");
+        floatingAction.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+
+        Check(model.FloatingLanEnabled && controller.PetWindow is { IsVisible: true, ShowInTaskbar: false },
+            "Clicking Floating LAN in the tray menu must show the floating pet off the taskbar.");
+
+        int petExStyle = GetWindowLong(new WindowInteropHelper(controller.PetWindow!).Handle, -20);
+        Check((petExStyle & 0x00000080) != 0 && (petExStyle & 0x00040000) == 0,
+            "Floating pet window must have WS_EX_TOOLWINDOW and never WS_EX_APPWINDOW.");
+
+        var trayOn = new TrayMenuWindow(window, model);
+        trayOn.ShowNear(new System.Drawing.Point(800, 600));
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(((FrameworkElement)trayOn.FindName("FloatingCheck")).Visibility == Visibility.Visible,
+            "Tray menu should show an active checkmark when Floating LAN is enabled.");
+        Capture(trayOn, Path.Combine(artifacts, "tray-floating-tested.png"));
+        trayOn.CloseOnce();
+
+        // 2. React to incoming messages while respecting NotificationPreviews privacy.
+        var petWindow = controller.PetWindow!;
+        var badge = (FrameworkElement)petWindow.FindName("UnreadBadge");
+        var speech = (FrameworkElement)petWindow.FindName("SpeechBubble");
+        var speechText = (System.Windows.Controls.TextBlock)petWindow.FindName("SpeechText");
+        Check(model.TotalUnread == 2 && badge.IsVisible, "Pet unread badge must reflect unread LAN messages.");
+
+        model.NotifyIncoming("Sofia Reyes", "Secret text", model.Peers[1].Id);
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(speech.IsVisible && speechText.Text == "New message",
+            "Speech bubble must hide message text when NotificationPreviews is false.");
+
+        model.Settings.NotificationPreviews = true;
+        model.NotifyIncoming("Sofia Reyes", "Check out the new build!", model.Peers[1].Id);
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(speech.IsVisible && speechText.Text == "Check out the new build!",
+            "Speech bubble should show the message snippet when NotificationPreviews is enabled.");
+        Capture(petWindow, Path.Combine(artifacts, "floating-pet-pineapple-tested.png"));
+
+        ThemeManager.Apply(ThemeManager.IronMan, AppearanceOverrides.Default);
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Capture(petWindow, Path.Combine(artifacts, "floating-pet-ironman-tested.png"));
+
+        // 3. Toggle compact quick-chat popup, roam, send reply, and mark read.
+        controller.ToggleQuickChat();
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(controller.QuickChatWindow is { IsVisible: true, ShowInTaskbar: false },
+            "Clicking the floating pet must open the compact quick-chat popup off the taskbar.");
+        var quickChat = controller.QuickChatWindow!;
+        int quickExStyle = GetWindowLong(new WindowInteropHelper(quickChat).Handle, -20);
+        Check((quickExStyle & 0x00000080) != 0 && (quickExStyle & 0x00040000) == 0,
+            "Quick chat popup must have WS_EX_TOOLWINDOW and stay out of Alt+Tab.");
+
+        var roamBtn = (System.Windows.Controls.Button)quickChat.FindName("RoamButton");
+        roamBtn.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        Check(model.FloatingLanRoam, "Roam toggle must enable roaming mode.");
+
+        var quickComposer = (System.Windows.Controls.TextBox)quickChat.FindName("QuickComposer");
+        model.SelectedPeer = model.Peers[1]; // Sofia Reyes (Unread = 2)
+        quickComposer.Focus();
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(model.TotalUnread == 0 && !badge.IsVisible,
+            "Replying from quick chat must mark the peer read and clear the pet badge.");
+
+        quickComposer.Text = "Quick reply from pet!";
+        ClickNamed(quickChat, "Send message");
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(model.Messages.Last().Text == "Quick reply from pet!" && model.Messages.Last().Delivery == "Preview only",
+            "Quick chat composer should send directly through MainViewModel.");
+        Capture(quickChat, Path.Combine(artifacts, "floating-quickchat-tested.png"));
+
+        // Verify context menu "Quick chat" stays open cleanly across input frames.
+        quickChat.Hide();
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        var menu = (System.Windows.Controls.ContextMenu)petWindow.FindName("PetContextMenu");
+        ((System.Windows.Controls.MenuItem)menu.Items[0]).RaiseEvent(new RoutedEventArgs(System.Windows.Controls.MenuItem.ClickEvent));
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(quickChat.IsVisible, "Context menu Quick chat action must keep quick-chat open.");
+
+        // 4. Turning off Floating LAN closes both quick chat and pet cleanly.
+        model.UpdateFloatingState(enabled: false);
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(!petWindow.IsVisible && !quickChat.IsVisible,
+            "Turning Floating LAN off must hide both the pet and quick chat windows.");
+
+        window.Close();
+        ThemeManager.Apply(ThemeManager.Light, AppearanceOverrides.Default);
+        Console.WriteLine("PASS  Tray-only Floating LAN pet, speech reaction, roam toggle, tool-window flags, and quick chat");
+    }
+
     private static void ClickContentButton(DependencyObject root, string content)
     {
         System.Windows.Controls.Button? Find(DependencyObject d)
@@ -1835,6 +2252,11 @@ internal static class Program
             CornerStyle = AppearanceOptions.CornerRound, AvatarShape = AppearanceOptions.AvatarSquircle, OnlineRingEnabled = true,
             UiFont = "Consolas", WindowOpacity = .94, EffectSpeed = 1.4, MessageAnimation = MessageMotion.Slide,
             MatrixEnabled = true, MatrixIntensity = .7, ConstellationEnabled = true, ConstellationIntensity = .6, BokehEnabled = true, BokehIntensity = .8,
+            WingPlumesEnabled = true, WingPlumesIntensity = .75, RepulsorEnabled = true, RepulsorIntensity = .85,
+            TitleWingsEnabled = true, TitleWingsIntensity = .8, TitleReactorEnabled = true, TitleReactorIntensity = .7,
+            HeaderBurstEnabled = true, HeaderBurstIntensity = .85, HeaderArcEnabled = true, HeaderArcIntensity = .75,
+            RailWingsEnabled = true, RailWingsIntensity = .7, RailArcEnabled = true, RailArcIntensity = .8,
+            SidebarWingsEnabled = true, SidebarWingsIntensity = .75, SidebarHudEnabled = true, SidebarHudIntensity = .85,
             SavedPresets = [new AppearancePreset { Id = "p1", Name = "Studio", Code = "CYDLAN1:test" }]
         });
         store.SavePeers([new Peer { Id = "peer", Name = "Offline contact" }, new Peer { Id = "second", Name = "Other contact" }]);
@@ -1871,7 +2293,12 @@ internal static class Program
             MessageFontSizePx: 18, ChatCanvasGradient: "aurora", ChatCanvasGradientIntensity: .75, ChatBackgroundBlur: 6,
             CornerStyle: "round", AvatarShape: "squircle", OnlineRingEnabled: true,
             UiFont: "Consolas", WindowOpacity: .94, EffectSpeed: 1.4, MessageAnimation: "slide",
-            MatrixEnabled: true, MatrixIntensity: .7, ConstellationEnabled: true, ConstellationIntensity: .6, BokehEnabled: true, BokehIntensity: .8
+            MatrixEnabled: true, MatrixIntensity: .7, ConstellationEnabled: true, ConstellationIntensity: .6, BokehEnabled: true, BokehIntensity: .8,
+            WingPlumesEnabled: true, WingPlumesIntensity: .75, RepulsorEnabled: true, RepulsorIntensity: .85,
+            TitleWingsEnabled: true, TitleWingsIntensity: .8, TitleReactorEnabled: true, TitleReactorIntensity: .7,
+            HeaderBurstEnabled: true, HeaderBurstIntensity: .85, HeaderArcEnabled: true, HeaderArcIntensity: .75,
+            RailWingsEnabled: true, RailWingsIntensity: .7, RailArcEnabled: true, RailArcIntensity: .8,
+            SidebarWingsEnabled: true, SidebarWingsIntensity: .75, SidebarHudEnabled: true, SidebarHudIntensity: .85
         } && model.Settings.SavedPresets.Count == 1 && model.Settings.SavedPresets[0].Name == "Studio", "The new effects and their settings should survive restart.");
         model.SelectedPeer = model.Peers[0];
         Check(model.Messages.Count == 40 && model.Messages[0].Text == "Message 086" && model.HasOlderMessages && !model.HasNewerMessages,
@@ -1964,16 +2391,20 @@ internal static class Program
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool IsIconic(IntPtr window);
     [DllImport("user32.dll", EntryPoint = "GetWindowLongW")] private static extern int GetWindowLong(IntPtr window, int index);
 
-    private static void ClickNamed(DependencyObject root, string automationName)
+    private static List<System.Windows.Controls.Button> FindButtons(DependencyObject root, string automationName)
     {
-        System.Windows.Controls.Button? Find(DependencyObject d)
+        var matches = new List<System.Windows.Controls.Button>();
+        void Walk(DependencyObject d)
         {
-            if (d is System.Windows.Controls.Button b && System.Windows.Automation.AutomationProperties.GetName(b) == automationName) return b;
-            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++) if (Find(VisualTreeHelper.GetChild(d, i)) is { } f) return f;
-            return null;
+            if (d is System.Windows.Controls.Button b && System.Windows.Automation.AutomationProperties.GetName(b) == automationName) matches.Add(b);
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++) Walk(VisualTreeHelper.GetChild(d, i));
         }
-        (Find(root) ?? throw new Exception("No button named " + automationName)).RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        Walk(root);
+        return matches;
     }
+
+    private static void ClickNamed(DependencyObject root, string automationName) =>
+        (FindButtons(root, automationName).FirstOrDefault() ?? throw new Exception("No button named " + automationName)).RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
 
     private static System.Windows.Controls.TextBlock? FindText(DependencyObject root, string text)
     {

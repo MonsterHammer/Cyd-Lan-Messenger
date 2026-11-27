@@ -80,6 +80,19 @@ public static class PopupHost
     }
 
     [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongW")] private static extern int GetWindowLong(IntPtr hwnd, int index);
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongW")] private static extern int SetWindowLong(IntPtr hwnd, int index, int value);
+
+    /// <summary>Hides a borderless floating tool window from the Windows taskbar and Alt+Tab switcher.</summary>
+    public static void MakeToolWindow(Window window)
+    {
+        var handle = new WindowInteropHelper(window).Handle;
+        if (handle == IntPtr.Zero) return;
+        const int gwlExStyle = -20, wsExToolWindow = 0x00000080, wsExAppWindow = 0x00040000;
+        int style = GetWindowLong(handle, gwlExStyle);
+        SetWindowLong(handle, gwlExStyle, (style | wsExToolWindow) & ~wsExAppWindow);
+    }
+
     /// <summary>Asks Windows 11 to draw rounded corners on a borderless window (no effect on Windows 10).</summary>
     public static void RoundCorners(Window window)
     {

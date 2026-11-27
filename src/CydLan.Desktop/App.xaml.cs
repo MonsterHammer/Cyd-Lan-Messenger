@@ -16,6 +16,7 @@ public partial class App : System.Windows.Application
     private RegisteredWaitHandle? activateRegistration;
     private Forms.NotifyIcon? tray;
     private TrayMenuWindow? trayMenu;
+    private FloatingPetController? floatingPet;
     private MessageNotificationWindow? notification;
     private MainViewModel? model;
     private DiagnosticLog? log;
@@ -65,6 +66,7 @@ public partial class App : System.Windows.Application
                 log.Write("application.start", null, ("version", typeof(App).Assembly.GetName().Version), ("runtime", Environment.Version), ("os", Environment.OSVersion.VersionString));
             }
             model = new MainViewModel(preview, seedPreview: !e.Args.Contains("--empty-preview"), localStore: preview ? null : new LocalStore(dataDirectory), log: log);
+            if (preview && e.Args.Contains("--floating")) model.Settings.FloatingLanEnabled = true;
             int themeArg = Array.IndexOf(e.Args, "--theme");
             if (preview && themeArg >= 0 && themeArg + 1 < e.Args.Length) model.Settings.Theme = ThemeManager.Normalize(e.Args[themeArg + 1]); // preview/screenshot override only
             ThemeManager.Apply(model.Settings.Theme, AppearanceOverrides.From(model.Settings));
@@ -87,10 +89,12 @@ public partial class App : System.Windows.Application
                     });
                 }, null, Timeout.Infinite, executeOnlyOnce: false);
             }
-            if (!capturing && !preview)
+            if (!capturing)
             {
                 CreateTray(window);
-                ConnectNotifications(window, model);
+                floatingPet = new FloatingPetController(model, () => ShowWindow(window));
+                floatingPet.SyncVisibility();
+                if (!preview) ConnectNotifications(window, model);
             }
             if (preview && !capturing)
                 window.Closed += async (_, _) => await QuitAsync();
@@ -220,6 +224,7 @@ public partial class App : System.Windows.Application
         {
             activateRegistration?.Unregister(null);
             activateEvent?.Dispose();
+            floatingPet?.Dispose();
             trayMenu?.CloseOnce();
             notification?.Close();
             tray?.Dispose(); mutex?.Dispose(); Shutdown(Environment.ExitCode);

@@ -54,10 +54,16 @@ public sealed class ChatMessage : Observable
     public bool Broadcast { get; set; }
     public DateTimeOffset Time { get; set; } = DateTimeOffset.Now;
     private string delivery = "Received";
+    private bool canCancel;
     public string Delivery { get => delivery; set { Set(ref delivery, value); Changed(nameof(CanRetry)); Changed(nameof(DeliveryProblem)); Changed(nameof(AwaitingAnswer)); } }
     /// <summary>An incoming file offer that has not been accepted or declined yet.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public bool AwaitingAnswer => !Outgoing && HasFile && Delivery == "Waiting";
+    /// <summary>An outgoing file offer or active transfer that can currently be cancelled.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool CanCancel { get => canCancel; set { if (Set(ref canCancel, value)) Changed(nameof(CanCancelInline)); } }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool CanCancelInline => !HasFile && CanCancel;
     /// <summary>The message (or its file) did not get through: shown in the warning colour.</summary>
     public bool DeliveryProblem => Delivery is "Declined" or "Cancelled" or "Aborted" or "Interrupted" or "Unconfirmed" || Delivery.StartsWith("Failed", StringComparison.Ordinal) || Delivery.StartsWith("Not sent", StringComparison.Ordinal);
     public bool CanRetry => Outgoing && !Broadcast && ImagePath.Length == 0 && FileName.Length == 0 && Delivery is "Failed" or "Unconfirmed";
@@ -67,7 +73,7 @@ public sealed class ChatMessage : Observable
     public string ImagePath { get => imagePath; set { if (Set(ref imagePath, value)) { Changed(nameof(HasImage)); Changed(nameof(CanRetry)); } } }
     /// <summary>Name of a non-image file offered in this conversation; empty otherwise.</summary>
     private string fileName = "";
-    public string FileName { get => fileName; set { if (Set(ref fileName, value)) Changed(nameof(HasFile)); } }
+    public string FileName { get => fileName; set { if (Set(ref fileName, value)) { Changed(nameof(HasFile)); Changed(nameof(CanCancelInline)); } } }
     public bool FolderAttachment { get; set; }
     /// <summary>File-transfer ID backing an image or file message, so its delivery state can follow the transfer.</summary>
     public string TransferId { get; set; } = "";
@@ -110,6 +116,7 @@ public sealed class FileTransfer : Observable
             if (!Set(ref state, value)) return;
             Changed(nameof(IsActive));
             Changed(nameof(IsConnecting));
+            Changed(nameof(CanCancel));
             Changed(nameof(ActiveLabel));
             Changed(nameof(StatusLabel));
         }
@@ -118,6 +125,8 @@ public sealed class FileTransfer : Observable
     public bool IsActive => IsConnecting || State == "Transferring";
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsConnecting => State is "Accepted" or "Connecting";
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool CanCancel => IsActive || (Outgoing && State == "Waiting for approval");
     [System.Text.Json.Serialization.JsonIgnore]
     public int DisplayPercent => State is "Received" or "Sent · receipt unavailable" ? 100 : (int)Math.Floor(Math.Clamp(Progress, 0, 99));
     [System.Text.Json.Serialization.JsonIgnore]
@@ -173,6 +182,10 @@ public sealed class AppSettings
     public string Status { get; set; } = "chat";
     public bool Notifications { get; set; } = true;
     public bool StartMinimized { get; set; }
+    public bool FloatingLanEnabled { get; set; }
+    public bool FloatingLanRoam { get; set; }
+    public double? FloatingLanLeft { get; set; }
+    public double? FloatingLanTop { get; set; }
     /// <summary>Desktop colour theme: "light", "dark" or "system".</summary>
     public string Theme { get; set; } = "light";
     public string ChatBackgroundPath { get; set; } = "";
@@ -292,6 +305,8 @@ public sealed class AppSettings
     public bool AuraSelectedPersonEnabled { get; set; } = true;
     public bool AuraHighlightButtonsEnabled { get; set; } = true;
     // Opt-in appearance remixing (empty / "default" / "off" = use bundled theme)
+    public string ColorFinish { get; set; } = "off";
+    public double ColorFinishIntensity { get; set; } = .65;
     public string CustomAccentColor { get; set; } = "";
     public string CustomEffectColor { get; set; } = "";
     public string CustomOutgoingBubbleColor { get; set; } = "";
@@ -319,6 +334,26 @@ public sealed class AppSettings
     public double ConstellationIntensity { get; set; } = .65;
     public bool BokehEnabled { get; set; }
     public double BokehIntensity { get; set; } = .65;
+    public bool WingPlumesEnabled { get; set; }
+    public double WingPlumesIntensity { get; set; } = .65;
+    public bool RepulsorEnabled { get; set; }
+    public double RepulsorIntensity { get; set; } = .65;
+    public bool TitleWingsEnabled { get; set; }
+    public double TitleWingsIntensity { get; set; } = .65;
+    public bool TitleReactorEnabled { get; set; }
+    public double TitleReactorIntensity { get; set; } = .65;
+    public bool HeaderBurstEnabled { get; set; }
+    public double HeaderBurstIntensity { get; set; } = .65;
+    public bool HeaderArcEnabled { get; set; }
+    public double HeaderArcIntensity { get; set; } = .65;
+    public bool RailWingsEnabled { get; set; }
+    public double RailWingsIntensity { get; set; } = .65;
+    public bool RailArcEnabled { get; set; }
+    public double RailArcIntensity { get; set; } = .65;
+    public bool SidebarWingsEnabled { get; set; }
+    public double SidebarWingsIntensity { get; set; } = .65;
+    public bool SidebarHudEnabled { get; set; }
+    public double SidebarHudIntensity { get; set; } = .65;
     public List<AppearancePreset> SavedPresets { get; set; } = [];
     public int Port { get; set; } = 50000;
     public string Multicast { get; set; } = "239.255.100.100";

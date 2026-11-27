@@ -8,7 +8,7 @@ using Point = System.Windows.Point;
 
 namespace CydLan.Desktop;
 
-public enum RailEffectKind { Beacon, Stream, Stardust, Scan, Aurora, Pulse, Plasma, Cascade }
+public enum RailEffectKind { Beacon, Stream, Stardust, Scan, Aurora, Pulse, Plasma, Cascade, WingTrail, ArcReactor }
 
 /// <summary>Renders palette-adaptive animated effects inside the left navigation rail.</summary>
 public sealed class RailEffect : AmbientEffect
@@ -58,6 +58,8 @@ public sealed class RailEffect : AmbientEffect
             case RailEffectKind.Pulse: DrawPulse(dc, width, height, intensity); break;
             case RailEffectKind.Plasma: DrawPlasma(dc, width, height, intensity); break;
             case RailEffectKind.Cascade: DrawCascade(dc, width, height, intensity); break;
+            case RailEffectKind.WingTrail: DrawWingTrail(dc, width, height, intensity); break;
+            case RailEffectKind.ArcReactor: DrawArcReactor(dc, width, height, intensity); break;
         }
     }
 
@@ -243,6 +245,64 @@ public sealed class RailEffect : AmbientEffect
             double nx = midX + Math.Sin(u * Math.Tau * 2.5 - time + (n % 2) * Math.PI) * width * .28 * fade;
             var sprites = n % 2 == 0 ? orbSprites : altOrbSprites;
             dc.DrawImage(sprites[EffectPalette.OpacityIndex(fade * (.45 + .50 * intensity))], new Rect(nx - 7, ny - 7, 14, 14));
+        }
+    }
+
+    private static readonly Lazy<Pen[]> FreedomCyanPens = new(() => BuildPens(Color.FromRgb(0x38, 0xBD, 0xF8), 1.5));
+    private static readonly Lazy<Pen[]> FreedomCrimsonPens = new(() => BuildPens(Color.FromRgb(0xE1, 0x1D, 0x48), 1.25));
+    private static readonly Lazy<Pen[]> StarkGoldPens = new(() => BuildPens(Color.FromRgb(0xF5, 0xB7, 0x00), 1.35));
+    private static readonly Lazy<BitmapSource[]> ArcCyanSprites = new(() => BuildOrbSprites(Color.FromRgb(0x38, 0xBD, 0xF8)));
+    private static readonly Lazy<BitmapSource[]> StarkGoldSprites = new(() => BuildOrbSprites(Color.FromRgb(0xF5, 0xB7, 0x00)));
+
+    private void DrawWingTrail(DrawingContext dc, double width, double height, double intensity)
+    {
+        var cyanPens = FreedomCyanPens.Value;
+        var crimsonPens = FreedomCrimsonPens.Value;
+        var goldPens = StarkGoldPens.Value;
+        var cyanOrbs = ArcCyanSprites.Value;
+
+        int beams = Math.Clamp((int)(height / 54), 4, 8);
+        for (int i = 0; i < beams; i++)
+        {
+            double u = (i * .31 + Time * (1.7 + (i % 2) * .45)) % 1;
+            double fade = Math.Sin(u * Math.PI);
+            double x = width * (.24 + .52 * ((i * .618) % 1));
+            double headY = (1 - u) * height;
+            double len = 36 + (i % 3) * 14;
+            var pen = (i % 3 == 0 ? crimsonPens : cyanPens)[EffectPalette.OpacityIndex(fade * (.42 + .52 * intensity))];
+            dc.DrawLine(pen, new Point(x, Math.Max(4, headY)), new Point(Math.Clamp(x + (i % 2 == 0 ? -8 : 8), 4, width - 4), Math.Min(height - 4, headY + len)));
+            dc.DrawImage(cyanOrbs[EffectPalette.OpacityIndex(fade * (.45 + .50 * intensity))], new Rect(x - 7, headY - 7, 14, 14));
+        }
+
+        double vy = height * .14;
+        double midX = width * .50;
+        dc.DrawLine(goldPens[EffectPalette.OpacityIndex(.38 + .42 * intensity)], new Point(midX - 11, vy - 5), new Point(midX, vy + 3));
+        dc.DrawLine(goldPens[EffectPalette.OpacityIndex(.38 + .42 * intensity)], new Point(midX + 11, vy - 5), new Point(midX, vy + 3));
+    }
+
+    private void DrawArcReactor(DrawingContext dc, double width, double height, double intensity)
+    {
+        var cyanPens = FreedomCyanPens.Value;
+        var goldPens = StarkGoldPens.Value;
+        var crimsonPens = FreedomCrimsonPens.Value;
+        var cyanOrbs = ArcCyanSprites.Value;
+        var goldOrbs = StarkGoldSprites.Value;
+
+        double cx = width * .50;
+        double cy = height * .50 + Math.Sin(Time * Math.Tau) * Math.Min(height * .26, 70);
+        double pulse = .5 + .5 * Math.Sin(Time * Math.Tau * 3);
+
+        dc.DrawLine(crimsonPens[EffectPalette.OpacityIndex(.24 + .32 * intensity)], new Point(width - 2.5, 16), new Point(width - 2.5, height - 16));
+        dc.DrawImage(cyanOrbs[EffectPalette.OpacityIndex(.40 + .50 * intensity)], new Rect(cx - 17, cy - 17, 34, 34));
+        dc.DrawEllipse(null, cyanPens[EffectPalette.OpacityIndex((.42 + .50 * intensity) * (1 - pulse * .35))], new Point(cx, cy), 10 + 7 * pulse, 10 + 7 * pulse);
+        dc.DrawEllipse(null, goldPens[EffectPalette.OpacityIndex(.34 + .46 * intensity)], new Point(cx, cy), 6.5, 6.5);
+
+        for (int n = 0; n < 3; n++)
+        {
+            double u = (Time * 1.4 + n / 3.0) % 1;
+            double ny = (1 - u) * height;
+            double fade = Math.Sin(u * Math.PI);
+            dc.DrawImage(goldOrbs[EffectPalette.OpacityIndex(fade * (.36 + .48 * intensity))], new Rect(cx - 5.5, ny - 5.5, 11, 11));
         }
     }
 

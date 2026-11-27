@@ -19,6 +19,8 @@ public enum HeaderEffectKind
     Laser,
     TitleAurora,
     TitleWave,
+    TitleWings,
+    TitleReactor,
     // Chat header effects
     Prism,
     Ripples,
@@ -26,7 +28,9 @@ public enum HeaderEffectKind
     Starlight,
     Nebula,
     Silk,
-    Plasma
+    Plasma,
+    HeaderBurst,
+    HeaderArc
 }
 
 /// <summary>Renders palette-adaptive animated effects across the full top title bar and the conversation chat header.</summary>
@@ -80,6 +84,8 @@ public sealed class HeaderEffect : AmbientEffect
             case HeaderEffectKind.Laser: DrawLaser(dc, width, height, intensity); break;
             case HeaderEffectKind.TitleAurora: DrawTitleAurora(dc, width, height, intensity); break;
             case HeaderEffectKind.TitleWave: DrawTitleWave(dc, width, height, intensity); break;
+            case HeaderEffectKind.TitleWings: DrawTitleWings(dc, width, height, intensity); break;
+            case HeaderEffectKind.TitleReactor: DrawTitleReactor(dc, width, height, intensity); break;
             case HeaderEffectKind.Prism: DrawPrism(dc, width, height, intensity); break;
             case HeaderEffectKind.Ripples: DrawRipples(dc, width, height, intensity); break;
             case HeaderEffectKind.Circuit: DrawCircuit(dc, width, height, intensity); break;
@@ -87,6 +93,8 @@ public sealed class HeaderEffect : AmbientEffect
             case HeaderEffectKind.Nebula: DrawNebula(dc, width, height, intensity); break;
             case HeaderEffectKind.Silk: DrawSilk(dc, width, height, intensity); break;
             case HeaderEffectKind.Plasma: DrawPlasma(dc, width, height, intensity); break;
+            case HeaderEffectKind.HeaderBurst: DrawHeaderBurst(dc, width, height, intensity); break;
+            case HeaderEffectKind.HeaderArc: DrawHeaderArc(dc, width, height, intensity); break;
         }
     }
 
@@ -552,6 +560,151 @@ public sealed class HeaderEffect : AmbientEffect
             secondaryRibbonFills[EffectPalette.OpacityIndex(.20 * intensity + .06)],
             shimmerPens[EffectPalette.OpacityIndex(.28 * intensity)],
             baseY: height * .58, amplitude: Math.Min(11, height * .19), thickness: height * .38, phase: -time * 1.25 + 1.6, frequency: 2.6);
+    }
+
+    private static readonly Lazy<Pen[]> BeamBluePens = new(() => BuildShimmerPens(Color.FromRgb(0x38, 0xBD, 0xF8), 1.45));
+    private static readonly Lazy<Pen[]> FreedomCrimsonPens = new(() => BuildShimmerPens(Color.FromRgb(0xE1, 0x1D, 0x48), 1.25));
+    private static readonly Lazy<Pen[]> StarkGoldPens = new(() => BuildShimmerPens(Color.FromRgb(0xF5, 0xB7, 0x00), 1.35));
+    private static readonly Lazy<Brush[]> BeamRibbonFills = new(() => BuildRibbonBrushes(Color.FromRgb(0x38, 0xBD, 0xF8), .34));
+    private static readonly Lazy<Brush[]> CrimsonRibbonFills = new(() => BuildRibbonBrushes(Color.FromRgb(0xE1, 0x1D, 0x48), .22));
+    private static readonly Lazy<Brush[]> ReactorGoldFills = new(() => BuildSparkleBrushes(Color.FromRgb(0xF5, 0xB7, 0x00)));
+    private static readonly Lazy<Brush[]> ReactorCyanFills = new(() => BuildSparkleBrushes(Color.FromRgb(0x38, 0xBD, 0xF8)));
+
+    private void DrawTitleWings(DrawingContext dc, double width, double height, double intensity)
+    {
+        var beamPens = BeamBluePens.Value;
+        var crimsonPens = FreedomCrimsonPens.Value;
+        var goldPens = StarkGoldPens.Value;
+        var cyanFills = ReactorCyanFills.Value;
+
+        double midY = height * .50;
+        double sweep = (Time * 1.9) % 1;
+        double flare = Math.Sin(sweep * Math.PI);
+        DrawRibbon(dc, width, height, BeamRibbonFills.Value[EffectPalette.OpacityIndex(.22 * intensity + .05)],
+            baseY: midY, amplitude: height * .16, thickness: height * .46, phase: Time * Math.Tau, frequency: 2.0);
+
+        // Mirrored swept wing blades + central V-fin chevron across title bar
+        double cx = width * .50;
+        for (int s = -1; s <= 1; s += 2)
+        {
+            for (int f = 0; f < 3; f++)
+            {
+                double x0 = cx + s * (16 + f * 22);
+                double x1 = Math.Clamp(cx + s * (width * .42 - f * 38), 10, width - 10);
+                double y0 = midY + 4 - f * 3;
+                double y1 = midY - 6 + f * 4.5;
+                var pen = (f == 1 ? crimsonPens : beamPens)[EffectPalette.OpacityIndex((.34 + .46 * intensity) * (.7 + .3 * flare))];
+                dc.DrawLine(pen, new Point(x0, y0), new Point(x1, y1));
+            }
+        }
+
+        // V-fin center crest
+        dc.DrawLine(goldPens[EffectPalette.OpacityIndex(.48 + .42 * intensity)], new Point(cx - 14, midY - 5), new Point(cx, midY + 5));
+        dc.DrawLine(goldPens[EffectPalette.OpacityIndex(.48 + .42 * intensity)], new Point(cx + 14, midY - 5), new Point(cx, midY + 5));
+        double beamX = sweep * width;
+        dc.DrawEllipse(cyanFills[EffectPalette.OpacityIndex(flare * (.45 + .50 * intensity))], null, new Point(beamX, midY), 3.2, 2.2);
+    }
+
+    private void DrawTitleReactor(DrawingContext dc, double width, double height, double intensity)
+    {
+        var cyanPens = BeamBluePens.Value;
+        var goldPens = StarkGoldPens.Value;
+        var crimsonPens = FreedomCrimsonPens.Value;
+        var cyanFills = ReactorCyanFills.Value;
+        var goldFills = ReactorGoldFills.Value;
+
+        double midY = height * .50;
+        double scanX = ((Time * 1.8) % 1) * width;
+        double pulse = .5 + .5 * Math.Sin(Time * Math.Tau * 3);
+
+        // Armor trim bars
+        dc.DrawLine(crimsonPens[EffectPalette.OpacityIndex(.26 + .32 * intensity)], new Point(8, height - 2), new Point(width - 8, height - 2));
+        dc.DrawLine(goldPens[EffectPalette.OpacityIndex(.28 + .38 * intensity)], new Point(width * .18, 3), new Point(width * .82, 3));
+
+        // Central mini arc core + sweeping telemetry blip
+        double cx = width * .50;
+        double r = Math.Min(height * .36, 10.5);
+        dc.DrawEllipse(null, cyanPens[EffectPalette.OpacityIndex((.42 + .48 * intensity) * (.65 + .35 * pulse))], new Point(cx, midY), r, r);
+        dc.DrawEllipse(cyanFills[EffectPalette.OpacityIndex(.38 + .46 * intensity)], null, new Point(cx, midY), r * .42, r * .42);
+
+        for (int i = 0; i < 6; i++)
+        {
+            double tickX = width * (.14 + i * .144);
+            double dist = Math.Max(0, 1 - Math.Abs(tickX - scanX) / (width * .22));
+            dc.DrawEllipse((i % 2 == 0 ? goldFills : cyanFills)[EffectPalette.OpacityIndex((.22 + .65 * dist) * intensity)],
+                null, new Point(tickX, midY), 1.8 + dist, 1.8 + dist);
+        }
+    }
+
+    private void DrawHeaderBurst(DrawingContext dc, double width, double height, double intensity)
+    {
+        var cyanPens = BeamBluePens.Value;
+        var crimsonPens = FreedomCrimsonPens.Value;
+        var goldPens = StarkGoldPens.Value;
+        var cyanFills = ReactorCyanFills.Value;
+
+        double time = Time * Math.Tau;
+        DrawRibbon(dc, width, height, BeamRibbonFills.Value[EffectPalette.OpacityIndex(.24 * intensity + .06)],
+            baseY: height * .48, amplitude: Math.Min(13, height * .22), thickness: height * .50, phase: time, frequency: 2.2);
+        DrawRibbon(dc, width, height, CrimsonRibbonFills.Value[EffectPalette.OpacityIndex(.14 * intensity + .03)],
+            baseY: height * .64, amplitude: Math.Min(9, height * .16), thickness: height * .34, phase: -time * 1.3, frequency: 3.1);
+
+        // HiMAT Full-Burst wing beams sweeping outward
+        double u = (Time * 1.8) % 1;
+        double burstX = width * (.24 + .52 * (.5 + .5 * Math.Sin(time * .5)));
+        double span = width * (.16 + .28 * Math.Sin(u * Math.PI));
+        for (int b = -2; b <= 2; b++)
+        {
+            if (b == 0) continue;
+            double yOff = b * (height * .12);
+            double dir = Math.Sign(b);
+            var pen = (Math.Abs(b) == 1 ? crimsonPens : cyanPens)[EffectPalette.OpacityIndex((.36 + .52 * intensity) * (.55 + .45 * Math.Sin(u * Math.PI)))];
+            dc.DrawLine(pen, new Point(burstX, height * .5 + yOff * .25), new Point(Math.Clamp(burstX + dir * span, 6, width - 6), Math.Clamp(height * .5 + yOff, 4, height - 4)));
+        }
+
+        // Gold chevron hairline in open header lane
+        double vx = Math.Max(200, width - 216);
+        dc.DrawLine(goldPens[EffectPalette.OpacityIndex(.40 + .42 * intensity)], new Point(vx - 14, height * .36), new Point(vx, height * .56));
+        dc.DrawLine(goldPens[EffectPalette.OpacityIndex(.40 + .42 * intensity)], new Point(vx + 14, height * .36), new Point(vx, height * .56));
+        DrawDriftingMotes(dc, width, height, intensity, cyanFills, time);
+    }
+
+    private void DrawHeaderArc(DrawingContext dc, double width, double height, double intensity)
+    {
+        var cyanPens = BeamBluePens.Value;
+        var goldPens = StarkGoldPens.Value;
+        var crimsonPens = FreedomCrimsonPens.Value;
+        var cyanFills = ReactorCyanFills.Value;
+        var goldFills = ReactorGoldFills.Value;
+
+        double time = Time * Math.Tau;
+        double pulse = .5 + .5 * Math.Sin(time * 2.5);
+        double coreX = Math.Max(200, width - 216);
+        double coreY = height * .50;
+        double baseR = Math.Min(height * .40, 22);
+
+        dc.DrawLine(crimsonPens[EffectPalette.OpacityIndex(.26 + .34 * intensity)], new Point(12, height - 2.5), new Point(width - 12, height - 2.5));
+        dc.DrawLine(goldPens[EffectPalette.OpacityIndex(.24 + .36 * intensity)], new Point(width * .28, 3.5), new Point(coreX - baseR * 1.6, 3.5));
+
+        for (int ring = 0; ring < 3; ring++)
+        {
+            double phase = (Time * 1.9 + ring / 3.0) % 1;
+            double rr = baseR * (.45 + phase * 1.15);
+            double alpha = Math.Sin(phase * Math.PI) * (.40 + .48 * intensity);
+            dc.DrawEllipse(null, (ring == 1 ? goldPens : cyanPens)[EffectPalette.OpacityIndex(alpha)], new Point(coreX, coreY), rr, rr);
+        }
+
+        dc.DrawEllipse(cyanFills[EffectPalette.OpacityIndex((.34 + .45 * intensity) * (.7 + .3 * pulse))], null, new Point(coreX, coreY), baseR * .38, baseR * .38);
+
+        int nodes = Math.Clamp((int)(width / 92), 4, 10);
+        for (int i = 0; i < nodes; i++)
+        {
+            double u = (i / (double)nodes + Time * 1.2) % 1;
+            double nx = 24 + (coreX - baseR * 1.8 - 24) * u;
+            double ny = height * (.30 + (i % 2) * .40);
+            double alpha = Math.Sin(u * Math.PI) * (.32 + .50 * intensity);
+            dc.DrawEllipse((i % 2 == 0 ? goldFills : cyanFills)[EffectPalette.OpacityIndex(alpha)], null, new Point(nx, ny), 1.9, 1.9);
+        }
     }
 
     private void DrawPlasma(DrawingContext dc, double width, double height, double intensity)

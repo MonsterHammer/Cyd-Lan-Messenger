@@ -11,7 +11,7 @@ using Point = System.Windows.Point;
 
 namespace CydLan.Desktop;
 
-public enum TargetAuraKind { Off, Fire, Smoke, Aura, Embers, Arcane, Frost, Electric, Neon, Sakura, Prism, Pulse }
+public enum TargetAuraKind { Off, Fire, Smoke, Aura, Embers, Arcane, Frost, Electric, Neon, Sakura, Prism, Pulse, WingFlare, ArcReactor }
 
 public enum TargetAuraRole { None, Preview, Module, Person, Button }
 
@@ -32,6 +32,8 @@ public sealed class TargetAura : AmbientEffect
     public const string Sakura = "sakura";
     public const string Prism = "prism";
     public const string Pulse = "pulse";
+    public const string WingFlare = "wingflare";
+    public const string ArcReactor = "arcreactor";
 
     public static IReadOnlyList<TargetAuraSwatch> Catalog { get; } =
     [
@@ -46,7 +48,9 @@ public sealed class TargetAura : AmbientEffect
         new TargetAuraSwatch(Neon, "Neon", TargetAuraKind.Neon),
         new TargetAuraSwatch(Sakura, "Sakura", TargetAuraKind.Sakura),
         new TargetAuraSwatch(Prism, "Prism", TargetAuraKind.Prism),
-        new TargetAuraSwatch(Pulse, "Pulse", TargetAuraKind.Pulse)
+        new TargetAuraSwatch(Pulse, "Pulse", TargetAuraKind.Pulse),
+        new TargetAuraSwatch(WingFlare, "Wing flare", TargetAuraKind.WingFlare),
+        new TargetAuraSwatch(ArcReactor, "Arc reactor", TargetAuraKind.ArcReactor)
     ];
 
     public static readonly DependencyProperty KindProperty = DependencyProperty.Register(
@@ -105,7 +109,7 @@ public sealed class TargetAura : AmbientEffect
     public static void SetTrackSelection(DependencyObject obj, bool value) => obj.SetValue(TrackSelectionProperty, value);
 
     public static string Normalize(string? value) => value is Fire or Smoke or Aura or Embers or Arcane
-        or Frost or Electric or Neon or Sakura or Prism or Pulse ? value : Off;
+        or Frost or Electric or Neon or Sakura or Prism or Pulse or WingFlare or ArcReactor ? value : Off;
 
     public static TargetAuraKind KindFor(string? value) => Normalize(value) switch
     {
@@ -120,6 +124,8 @@ public sealed class TargetAura : AmbientEffect
         Sakura => TargetAuraKind.Sakura,
         Prism => TargetAuraKind.Prism,
         Pulse => TargetAuraKind.Pulse,
+        WingFlare => TargetAuraKind.WingFlare,
+        ArcReactor => TargetAuraKind.ArcReactor,
         _ => TargetAuraKind.Off
     };
 
@@ -177,6 +183,8 @@ public sealed class TargetAura : AmbientEffect
             case TargetAuraKind.Sakura: DrawSakura(dc, width, height, intensity); break;
             case TargetAuraKind.Prism: DrawPrism(dc, width, height, intensity); break;
             case TargetAuraKind.Pulse: DrawPulse(dc, width, height, intensity); break;
+            case TargetAuraKind.WingFlare: DrawWingFlare(dc, width, height, intensity); break;
+            case TargetAuraKind.ArcReactor: DrawArcReactor(dc, width, height, intensity); break;
         }
     }
 
@@ -652,6 +660,76 @@ public sealed class TargetAura : AmbientEffect
         var center = new Point(target.Left + target.Width * .5, target.Top + target.Height * .5);
         dc.DrawImage(auraSprites[EffectPalette.OpacityIndex(.24 * intensity * breathe)],
             new Rect(center.X - glowR, center.Y - glowR * .75, glowR * 2, glowR * 1.5));
+    }
+
+    private static readonly Lazy<Pen[]> WingBluePens = new(() => BuildPens(Color.FromRgb(0x38, 0xBD, 0xF8), 1.45));
+    private static readonly Lazy<Pen[]> WingCrimsonPens = new(() => BuildPens(Color.FromRgb(0xE1, 0x1D, 0x48), 1.25));
+    private static readonly Lazy<Pen[]> StarkGoldPens = new(() => BuildPens(Color.FromRgb(0xF5, 0xB7, 0x00), 1.35));
+    private static readonly Lazy<BitmapSource[]> ArcCyanOrbs = new(() => BuildOrbSprites(Color.FromRgb(0x38, 0xBD, 0xF8)));
+    private static readonly Lazy<BitmapSource[]> StarkGoldOrbs = new(() => BuildOrbSprites(Color.FromRgb(0xF5, 0xB7, 0x00)));
+    private static readonly Lazy<Brush[]> WhiteCoreFills = new(() => BuildSolidBrushes(Colors.White));
+
+    private void DrawWingFlare(DrawingContext dc, double width, double height, double intensity)
+    {
+        var bluePens = WingBluePens.Value;
+        var crimsonPens = WingCrimsonPens.Value;
+        var goldPens = StarkGoldPens.Value;
+        var orbs = ArcCyanOrbs.Value;
+        var whiteFills = WhiteCoreFills.Value;
+
+        var target = TargetBounds(width, height);
+        double corner = Math.Min(target.Height * .26, 8);
+        dc.DrawRoundedRectangle(null, bluePens[EffectPalette.OpacityIndex(.30 + .34 * intensity)], target, corner, corner);
+
+        // Swept V-fin / HiMAT corner wings
+        double pulse = .55 + .45 * Math.Sin(Time * Math.Tau * 2.4);
+        dc.DrawLine(goldPens[EffectPalette.OpacityIndex(.42 + .42 * intensity)],
+            new Point(target.Left + 2, target.Top + 7), new Point(target.Left + 10, target.Top + 1));
+        dc.DrawLine(goldPens[EffectPalette.OpacityIndex(.42 + .42 * intensity)],
+            new Point(target.Right - 2, target.Bottom - 7), new Point(target.Right - 10, target.Bottom - 1));
+        dc.DrawLine(crimsonPens[EffectPalette.OpacityIndex((.28 + .42 * intensity) * pulse)],
+            new Point(target.Right - 12, target.Top + 2), new Point(target.Right - 2, target.Top + 8));
+
+        for (int i = 0; i < 4; i++)
+        {
+            double t = (Time * 2.8 + i * .25) % 1;
+            Point p = PerimeterPoint(target, t);
+            double r = 7.5 * (.75 + .35 * intensity);
+            dc.DrawImage(orbs[EffectPalette.OpacityIndex(.62 * intensity)], new Rect(p.X - r, p.Y - r, r * 2, r * 2));
+            dc.DrawEllipse(whiteFills[EffectPalette.OpacityIndex(.82 * intensity)], null, p, 1.35, 1.35);
+        }
+    }
+
+    private void DrawArcReactor(DrawingContext dc, double width, double height, double intensity)
+    {
+        var cyanPens = WingBluePens.Value;
+        var goldPens = StarkGoldPens.Value;
+        var redPens = WingCrimsonPens.Value;
+        var cyanOrbs = ArcCyanOrbs.Value;
+        var goldOrbs = StarkGoldOrbs.Value;
+
+        var target = TargetBounds(width, height);
+        var frame = target;
+        frame.Inflate(EdgeInset.Left > 2 ? 1.8 : -1, EdgeInset.Top > 2 ? 1.8 : -1);
+        double corner = Math.Min(frame.Height * .24, 7);
+
+        double pulse = .5 + .5 * Math.Sin(Time * Math.Tau * 3);
+        dc.DrawRoundedRectangle(null, goldPens[EffectPalette.OpacityIndex(.32 + .36 * intensity)], frame, corner, corner);
+        dc.DrawRoundedRectangle(null, redPens[EffectPalette.OpacityIndex(.22 + .24 * intensity)], target, corner, corner);
+
+        double cx = target.Right - 13;
+        double cy = target.Top + target.Height * .5;
+        double r = Math.Clamp(target.Height * .24, 4.5, 9.5);
+        dc.DrawImage(cyanOrbs[EffectPalette.OpacityIndex((.42 + .46 * intensity) * (.7 + .3 * pulse))], new Rect(cx - r * 1.9, cy - r * 1.9, r * 3.8, r * 3.8));
+        dc.DrawEllipse(null, cyanPens[EffectPalette.OpacityIndex(.48 + .44 * intensity)], new Point(cx, cy), r, r);
+
+        for (int i = 0; i < 3; i++)
+        {
+            double t = (Time * 2.2 + i / 3.0) % 1;
+            Point p = PerimeterPoint(frame, t);
+            var sprites = i == 0 ? cyanOrbs : goldOrbs;
+            dc.DrawImage(sprites[EffectPalette.OpacityIndex(.58 * intensity)], new Rect(p.X - 6.5, p.Y - 6.5, 13, 13));
+        }
     }
 
     private static Point PerimeterPoint(Rect r, double t)

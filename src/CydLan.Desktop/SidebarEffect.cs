@@ -8,7 +8,7 @@ using Point = System.Windows.Point;
 
 namespace CydLan.Desktop;
 
-public enum SidebarEffectKind { Motes, EdgeGlow, Prism, Sweep, Aurora, Nebula, Waves, Ripples, Circuit }
+public enum SidebarEffectKind { Motes, EdgeGlow, Prism, Sweep, Aurora, Nebula, Waves, Ripples, Circuit, BeamWings, HudMatrix }
 
 /// <summary>Renders palette-adaptive animated effects inside the side panel without reducing text legibility.</summary>
 public sealed class SidebarEffect : AmbientEffect
@@ -64,6 +64,8 @@ public sealed class SidebarEffect : AmbientEffect
             case SidebarEffectKind.Waves: DrawWaves(dc, width, height, intensity); break;
             case SidebarEffectKind.Ripples: DrawRipples(dc, width, height, intensity); break;
             case SidebarEffectKind.Circuit: DrawCircuit(dc, width, height, intensity); break;
+            case SidebarEffectKind.BeamWings: DrawBeamWings(dc, width, height, intensity); break;
+            case SidebarEffectKind.HudMatrix: DrawHudMatrix(dc, width, height, intensity); break;
         }
     }
 
@@ -298,6 +300,70 @@ public sealed class SidebarEffect : AmbientEffect
                 var sprites = i == 1 ? altMoteSprites : moteSprites;
                 dc.DrawImage(sprites[EffectPalette.OpacityIndex(.65 * intensity * fade)], new Rect(px - 6, py - 6, 12, 12));
             }
+        }
+    }
+
+    private static readonly Lazy<Pen[]> BeamCyanPens = new(() => BuildGlowPens(Color.FromRgb(0x38, 0xBD, 0xF8), 1.45));
+    private static readonly Lazy<Pen[]> BeamCrimsonPens = new(() => BuildGlowPens(Color.FromRgb(0xE1, 0x1D, 0x48), 1.25));
+    private static readonly Lazy<Pen[]> HudGoldPens = new(() => BuildGlowPens(Color.FromRgb(0xF5, 0xB7, 0x00), 1.2));
+    private static readonly Lazy<BitmapSource[]> CyanMotes = new(() => BuildMoteSprites(Color.FromRgb(0x38, 0xBD, 0xF8)));
+    private static readonly Lazy<BitmapSource[]> GoldMotes = new(() => BuildMoteSprites(Color.FromRgb(0xF5, 0xB7, 0x00)));
+    private static readonly Lazy<Brush[]> CyanRibbons = new(() => BuildVerticalRibbons(Color.FromRgb(0x38, 0xBD, 0xF8), .30));
+
+    private void DrawBeamWings(DrawingContext dc, double width, double height, double intensity)
+    {
+        var cyanPens = BeamCyanPens.Value;
+        var crimsonPens = BeamCrimsonPens.Value;
+        var goldPens = HudGoldPens.Value;
+        var motes = CyanMotes.Value;
+
+        DrawVerticalRibbon(dc, width, height, CyanRibbons.Value[EffectPalette.OpacityIndex(.20 * intensity + .05)],
+            baseX: width * .76, amplitude: width * .16, thickness: width * .36, phase: Time * Math.Tau, frequency: 1.6);
+
+        int plumes = Math.Clamp((int)(height / 76), 4, 9);
+        for (int i = 0; i < plumes; i++)
+        {
+            double rise = (i * .29 + Time * (1.2 + (i % 3) * .3)) % 1;
+            double fade = Math.Sin(rise * Math.PI);
+            double x0 = width * (.94 - i % 3 * .14);
+            double y0 = (1 - rise) * (height - 24) + 12;
+            var pen = (i % 3 == 0 ? crimsonPens : cyanPens)[EffectPalette.OpacityIndex(fade * (.34 + .48 * intensity))];
+            dc.DrawLine(pen, new Point(x0, y0), new Point(Math.Max(10, x0 - 44), Math.Min(height - 6, y0 + 26)));
+            dc.DrawImage(motes[EffectPalette.OpacityIndex(fade * (.36 + .48 * intensity))], new Rect(x0 - 8, y0 - 8, 16, 16));
+        }
+
+        dc.DrawLine(goldPens[EffectPalette.OpacityIndex(.28 * intensity)], new Point(width * .20, 14), new Point(width * .50, 24));
+        dc.DrawLine(goldPens[EffectPalette.OpacityIndex(.28 * intensity)], new Point(width * .80, 14), new Point(width * .50, 24));
+    }
+
+    private void DrawHudMatrix(DrawingContext dc, double width, double height, double intensity)
+    {
+        var cyanPens = BeamCyanPens.Value;
+        var goldPens = HudGoldPens.Value;
+        var crimsonPens = BeamCrimsonPens.Value;
+        var goldMotes = GoldMotes.Value;
+        var cyanMotes = CyanMotes.Value;
+
+        double scanU = (Time * 2.2) % 1;
+        double scanY = scanU * height;
+        double scanFade = Math.Sin(scanU * Math.PI);
+        dc.DrawLine(cyanPens[EffectPalette.OpacityIndex(scanFade * (.34 + .46 * intensity))], new Point(8, scanY), new Point(width - 8, scanY));
+
+        // JARVIS-style corner telemetry brackets + reactor rings
+        double cx = width * .76;
+        double cy = height * .22;
+        double pulse = .5 + .5 * Math.Sin(Time * Math.Tau * 2.5);
+        dc.DrawEllipse(null, cyanPens[EffectPalette.OpacityIndex((.30 + .42 * intensity) * (.7 + .3 * pulse))], new Point(cx, cy), 18 + pulse * 4, 18 + pulse * 4);
+        dc.DrawEllipse(null, goldPens[EffectPalette.OpacityIndex(.28 + .38 * intensity)], new Point(cx, cy), 10, 10);
+
+        dc.DrawLine(crimsonPens[EffectPalette.OpacityIndex(.22 + .28 * intensity)], new Point(width - 2, 18), new Point(width - 2, height - 18));
+        for (int i = 0; i < 6; i++)
+        {
+            double tickY = 58 + (height - 96) * (i / 5.0);
+            double proximity = Math.Max(0, 1 - Math.Abs(tickY - scanY) / 52);
+            dc.DrawLine(goldPens[EffectPalette.OpacityIndex((.18 + .46 * proximity) * intensity)], new Point(width - 18, tickY), new Point(width - 6, tickY));
+            var sprite = (i % 2 == 0 ? goldMotes : cyanMotes)[EffectPalette.OpacityIndex((.22 + .52 * proximity) * intensity)];
+            dc.DrawImage(sprite, new Rect(width - 25, tickY - 6, 12, 12));
         }
     }
 

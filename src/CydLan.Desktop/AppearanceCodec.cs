@@ -23,6 +23,8 @@ public static class AppearanceCodec
     {
         public string? Theme { get; set; }
         public bool? ThemeDetails { get; set; }
+        public string? ColorFinish { get; set; }
+        public double? ColorFinishIntensity { get; set; }
         public string? Accent { get; set; }
         public string? EffectColor { get; set; }
         public string? OutBubble { get; set; }
@@ -82,6 +84,10 @@ public static class AppearanceCodec
         public double? ConstellationIntensity { get; set; }
         public bool? Bokeh { get; set; }
         public double? BokehIntensity { get; set; }
+        public bool? WingPlumes { get; set; }
+        public double? WingPlumesIntensity { get; set; }
+        public bool? Repulsor { get; set; }
+        public double? RepulsorIntensity { get; set; }
         public bool? AmbientSidebar { get; set; }
         public bool? HeaderAurora { get; set; }
         public double? HeaderAuroraIntensity { get; set; }
@@ -101,6 +107,10 @@ public static class AppearanceCodec
         public double? TitleAuroraIntensity { get; set; }
         public bool? TitleWave { get; set; }
         public double? TitleWaveIntensity { get; set; }
+        public bool? TitleWings { get; set; }
+        public double? TitleWingsIntensity { get; set; }
+        public bool? TitleReactor { get; set; }
+        public double? TitleReactorIntensity { get; set; }
         public bool? HeaderPrism { get; set; }
         public double? HeaderPrismIntensity { get; set; }
         public bool? HeaderRipples { get; set; }
@@ -115,6 +125,10 @@ public static class AppearanceCodec
         public double? HeaderSilkIntensity { get; set; }
         public bool? HeaderPlasma { get; set; }
         public double? HeaderPlasmaIntensity { get; set; }
+        public bool? HeaderBurst { get; set; }
+        public double? HeaderBurstIntensity { get; set; }
+        public bool? HeaderArc { get; set; }
+        public double? HeaderArcIntensity { get; set; }
         public bool? RailBeacon { get; set; }
         public double? RailBeaconIntensity { get; set; }
         public bool? RailStream { get; set; }
@@ -131,6 +145,10 @@ public static class AppearanceCodec
         public double? RailPlasmaIntensity { get; set; }
         public bool? RailCascade { get; set; }
         public double? RailCascadeIntensity { get; set; }
+        public bool? RailWings { get; set; }
+        public double? RailWingsIntensity { get; set; }
+        public bool? RailArc { get; set; }
+        public double? RailArcIntensity { get; set; }
         public bool? SidebarMotes { get; set; }
         public double? SidebarMotesIntensity { get; set; }
         public bool? SidebarGlow { get; set; }
@@ -149,6 +167,10 @@ public static class AppearanceCodec
         public double? SidebarRipplesIntensity { get; set; }
         public bool? SidebarCircuit { get; set; }
         public double? SidebarCircuitIntensity { get; set; }
+        public bool? SidebarWings { get; set; }
+        public double? SidebarWingsIntensity { get; set; }
+        public bool? SidebarHud { get; set; }
+        public double? SidebarHudIntensity { get; set; }
         public bool? ButtonGlow { get; set; }
         public double? ButtonGlowIntensity { get; set; }
         public bool? ButtonSheen { get; set; }
@@ -169,6 +191,8 @@ public static class AppearanceCodec
     {
         Theme = ThemeManager.Normalize(s.Theme),
         ThemeDetails = s.ThemeDetailsEnabled ? true : null,
+        ColorFinish = NonDefault(Desktop.ColorFinish.Normalize(s.ColorFinish), Desktop.ColorFinish.Off),
+        ColorFinishIntensity = Desktop.ColorFinish.Normalize(s.ColorFinish) != Desktop.ColorFinish.Off ? Round2(s.ColorFinishIntensity) : null,
         Accent = NormalizeHexOrNull(s.CustomAccentColor),
         EffectColor = NormalizeHexOrNull(s.CustomEffectColor),
         OutBubble = NormalizeHexOrNull(s.CustomOutgoingBubbleColor),
@@ -228,6 +252,10 @@ public static class AppearanceCodec
         ConstellationIntensity = s.ConstellationEnabled ? Round2(s.ConstellationIntensity) : null,
         Bokeh = s.BokehEnabled ? true : null,
         BokehIntensity = s.BokehEnabled ? Round2(s.BokehIntensity) : null,
+        WingPlumes = s.WingPlumesEnabled ? true : null,
+        WingPlumesIntensity = s.WingPlumesEnabled ? Round2(s.WingPlumesIntensity) : null,
+        Repulsor = s.RepulsorEnabled ? true : null,
+        RepulsorIntensity = s.RepulsorEnabled ? Round2(s.RepulsorIntensity) : null,
         AmbientSidebar = s.AmbientOnSidebarEnabled ? true : null,
         HeaderAurora = s.HeaderAuroraEnabled ? true : null,
         HeaderAuroraIntensity = s.HeaderAuroraEnabled ? Round2(s.HeaderAuroraIntensity) : null,
@@ -247,6 +275,10 @@ public static class AppearanceCodec
         TitleAuroraIntensity = s.TitleAuroraEnabled ? Round2(s.TitleAuroraIntensity) : null,
         TitleWave = s.TitleWaveEnabled ? true : null,
         TitleWaveIntensity = s.TitleWaveEnabled ? Round2(s.TitleWaveIntensity) : null,
+        TitleWings = s.TitleWingsEnabled ? true : null,
+        TitleWingsIntensity = s.TitleWingsEnabled ? Round2(s.TitleWingsIntensity) : null,
+        TitleReactor = s.TitleReactorEnabled ? true : null,
+        TitleReactorIntensity = s.TitleReactorEnabled ? Round2(s.TitleReactorIntensity) : null,
         HeaderPrism = s.HeaderPrismEnabled ? true : null,
         HeaderPrismIntensity = s.HeaderPrismEnabled ? Round2(s.HeaderPrismIntensity) : null,
         HeaderRipples = s.HeaderRipplesEnabled ? true : null,
@@ -261,6 +293,10 @@ public static class AppearanceCodec
         HeaderSilkIntensity = s.HeaderSilkEnabled ? Round2(s.HeaderSilkIntensity) : null,
         HeaderPlasma = s.HeaderPlasmaEnabled ? true : null,
         HeaderPlasmaIntensity = s.HeaderPlasmaEnabled ? Round2(s.HeaderPlasmaIntensity) : null,
+        HeaderBurst = s.HeaderBurstEnabled ? true : null,
+        HeaderBurstIntensity = s.HeaderBurstEnabled ? Round2(s.HeaderBurstIntensity) : null,
+        HeaderArc = s.HeaderArcEnabled ? true : null,
+        HeaderArcIntensity = s.HeaderArcEnabled ? Round2(s.HeaderArcIntensity) : null,
         RailBeacon = s.RailBeaconEnabled ? true : null,
         RailBeaconIntensity = s.RailBeaconEnabled ? Round2(s.RailBeaconIntensity) : null,
         RailStream = s.RailStreamEnabled ? true : null,
@@ -277,6 +313,10 @@ public static class AppearanceCodec
         RailPlasmaIntensity = s.RailPlasmaEnabled ? Round2(s.RailPlasmaIntensity) : null,
         RailCascade = s.RailCascadeEnabled ? true : null,
         RailCascadeIntensity = s.RailCascadeEnabled ? Round2(s.RailCascadeIntensity) : null,
+        RailWings = s.RailWingsEnabled ? true : null,
+        RailWingsIntensity = s.RailWingsEnabled ? Round2(s.RailWingsIntensity) : null,
+        RailArc = s.RailArcEnabled ? true : null,
+        RailArcIntensity = s.RailArcEnabled ? Round2(s.RailArcIntensity) : null,
         SidebarMotes = s.SidebarMotesEnabled ? true : null,
         SidebarMotesIntensity = s.SidebarMotesEnabled ? Round2(s.SidebarMotesIntensity) : null,
         SidebarGlow = s.SidebarGlowEnabled ? true : null,
@@ -295,6 +335,10 @@ public static class AppearanceCodec
         SidebarRipplesIntensity = s.SidebarRipplesEnabled ? Round2(s.SidebarRipplesIntensity) : null,
         SidebarCircuit = s.SidebarCircuitEnabled ? true : null,
         SidebarCircuitIntensity = s.SidebarCircuitEnabled ? Round2(s.SidebarCircuitIntensity) : null,
+        SidebarWings = s.SidebarWingsEnabled ? true : null,
+        SidebarWingsIntensity = s.SidebarWingsEnabled ? Round2(s.SidebarWingsIntensity) : null,
+        SidebarHud = s.SidebarHudEnabled ? true : null,
+        SidebarHudIntensity = s.SidebarHudEnabled ? Round2(s.SidebarHudIntensity) : null,
         ButtonGlow = s.ButtonGlowEnabled ? true : null,
         ButtonGlowIntensity = s.ButtonGlowEnabled ? Round2(s.ButtonGlowIntensity) : null,
         ButtonSheen = s.ButtonSheenEnabled ? true : null,
@@ -362,6 +406,8 @@ public static class AppearanceCodec
         ResetDefaults(s);
         s.Theme = ThemeManager.Normalize(d.Theme);
         s.ThemeDetailsEnabled = d.ThemeDetails == true;
+        s.ColorFinish = Desktop.ColorFinish.Normalize(d.ColorFinish);
+        s.ColorFinishIntensity = ClampUnit(d.ColorFinishIntensity, .65);
         s.CustomAccentColor = AppearanceOptions.NormalizeHex(d.Accent);
         s.CustomEffectColor = AppearanceOptions.NormalizeHex(d.EffectColor);
         s.CustomOutgoingBubbleColor = AppearanceOptions.NormalizeHex(d.OutBubble);
@@ -421,6 +467,10 @@ public static class AppearanceCodec
         s.ConstellationIntensity = ClampUnit(d.ConstellationIntensity, .65);
         s.BokehEnabled = d.Bokeh == true;
         s.BokehIntensity = ClampUnit(d.BokehIntensity, .65);
+        s.WingPlumesEnabled = d.WingPlumes == true;
+        s.WingPlumesIntensity = ClampUnit(d.WingPlumesIntensity, .65);
+        s.RepulsorEnabled = d.Repulsor == true;
+        s.RepulsorIntensity = ClampUnit(d.RepulsorIntensity, .65);
         s.AmbientOnSidebarEnabled = d.AmbientSidebar == true;
         s.HeaderAuroraEnabled = d.HeaderAurora == true;
         s.HeaderAuroraIntensity = ClampUnit(d.HeaderAuroraIntensity, .65);
@@ -440,6 +490,10 @@ public static class AppearanceCodec
         s.TitleAuroraIntensity = ClampUnit(d.TitleAuroraIntensity, .65);
         s.TitleWaveEnabled = d.TitleWave == true;
         s.TitleWaveIntensity = ClampUnit(d.TitleWaveIntensity, .65);
+        s.TitleWingsEnabled = d.TitleWings == true;
+        s.TitleWingsIntensity = ClampUnit(d.TitleWingsIntensity, .65);
+        s.TitleReactorEnabled = d.TitleReactor == true;
+        s.TitleReactorIntensity = ClampUnit(d.TitleReactorIntensity, .65);
         s.HeaderPrismEnabled = d.HeaderPrism == true;
         s.HeaderPrismIntensity = ClampUnit(d.HeaderPrismIntensity, .65);
         s.HeaderRipplesEnabled = d.HeaderRipples == true;
@@ -454,6 +508,10 @@ public static class AppearanceCodec
         s.HeaderSilkIntensity = ClampUnit(d.HeaderSilkIntensity, .65);
         s.HeaderPlasmaEnabled = d.HeaderPlasma == true;
         s.HeaderPlasmaIntensity = ClampUnit(d.HeaderPlasmaIntensity, .65);
+        s.HeaderBurstEnabled = d.HeaderBurst == true;
+        s.HeaderBurstIntensity = ClampUnit(d.HeaderBurstIntensity, .65);
+        s.HeaderArcEnabled = d.HeaderArc == true;
+        s.HeaderArcIntensity = ClampUnit(d.HeaderArcIntensity, .65);
         s.RailBeaconEnabled = d.RailBeacon == true;
         s.RailBeaconIntensity = ClampUnit(d.RailBeaconIntensity, .65);
         s.RailStreamEnabled = d.RailStream == true;
@@ -470,6 +528,10 @@ public static class AppearanceCodec
         s.RailPlasmaIntensity = ClampUnit(d.RailPlasmaIntensity, .65);
         s.RailCascadeEnabled = d.RailCascade == true;
         s.RailCascadeIntensity = ClampUnit(d.RailCascadeIntensity, .65);
+        s.RailWingsEnabled = d.RailWings == true;
+        s.RailWingsIntensity = ClampUnit(d.RailWingsIntensity, .65);
+        s.RailArcEnabled = d.RailArc == true;
+        s.RailArcIntensity = ClampUnit(d.RailArcIntensity, .65);
         s.SidebarMotesEnabled = d.SidebarMotes == true;
         s.SidebarMotesIntensity = ClampUnit(d.SidebarMotesIntensity, .65);
         s.SidebarGlowEnabled = d.SidebarGlow == true;
@@ -488,6 +550,10 @@ public static class AppearanceCodec
         s.SidebarRipplesIntensity = ClampUnit(d.SidebarRipplesIntensity, .65);
         s.SidebarCircuitEnabled = d.SidebarCircuit == true;
         s.SidebarCircuitIntensity = ClampUnit(d.SidebarCircuitIntensity, .65);
+        s.SidebarWingsEnabled = d.SidebarWings == true;
+        s.SidebarWingsIntensity = ClampUnit(d.SidebarWingsIntensity, .65);
+        s.SidebarHudEnabled = d.SidebarHud == true;
+        s.SidebarHudIntensity = ClampUnit(d.SidebarHudIntensity, .65);
         s.ButtonGlowEnabled = d.ButtonGlow == true;
         s.ButtonGlowIntensity = ClampUnit(d.ButtonGlowIntensity, .65);
         s.ButtonSheenEnabled = d.ButtonSheen == true;
@@ -507,6 +573,8 @@ public static class AppearanceCodec
     public static void ResetDefaults(AppSettings s)
     {
         s.ThemeDetailsEnabled = false;
+        s.ColorFinish = Desktop.ColorFinish.Off;
+        s.ColorFinishIntensity = .65;
         s.CustomAccentColor = "";
         s.CustomEffectColor = "";
         s.CustomOutgoingBubbleColor = "";
@@ -566,6 +634,10 @@ public static class AppearanceCodec
         s.ConstellationIntensity = .65;
         s.BokehEnabled = false;
         s.BokehIntensity = .65;
+        s.WingPlumesEnabled = false;
+        s.WingPlumesIntensity = .65;
+        s.RepulsorEnabled = false;
+        s.RepulsorIntensity = .65;
         s.AmbientOnSidebarEnabled = false;
         s.HeaderAuroraEnabled = false;
         s.HeaderAuroraIntensity = .65;
@@ -585,6 +657,10 @@ public static class AppearanceCodec
         s.TitleAuroraIntensity = .65;
         s.TitleWaveEnabled = false;
         s.TitleWaveIntensity = .65;
+        s.TitleWingsEnabled = false;
+        s.TitleWingsIntensity = .65;
+        s.TitleReactorEnabled = false;
+        s.TitleReactorIntensity = .65;
         s.HeaderPrismEnabled = false;
         s.HeaderPrismIntensity = .65;
         s.HeaderRipplesEnabled = false;
@@ -599,6 +675,10 @@ public static class AppearanceCodec
         s.HeaderSilkIntensity = .65;
         s.HeaderPlasmaEnabled = false;
         s.HeaderPlasmaIntensity = .65;
+        s.HeaderBurstEnabled = false;
+        s.HeaderBurstIntensity = .65;
+        s.HeaderArcEnabled = false;
+        s.HeaderArcIntensity = .65;
         s.RailBeaconEnabled = false;
         s.RailBeaconIntensity = .65;
         s.RailStreamEnabled = false;
@@ -615,6 +695,10 @@ public static class AppearanceCodec
         s.RailPlasmaIntensity = .65;
         s.RailCascadeEnabled = false;
         s.RailCascadeIntensity = .65;
+        s.RailWingsEnabled = false;
+        s.RailWingsIntensity = .65;
+        s.RailArcEnabled = false;
+        s.RailArcIntensity = .65;
         s.SidebarMotesEnabled = false;
         s.SidebarMotesIntensity = .65;
         s.SidebarGlowEnabled = false;
@@ -633,6 +717,10 @@ public static class AppearanceCodec
         s.SidebarRipplesIntensity = .65;
         s.SidebarCircuitEnabled = false;
         s.SidebarCircuitIntensity = .65;
+        s.SidebarWingsEnabled = false;
+        s.SidebarWingsIntensity = .65;
+        s.SidebarHudEnabled = false;
+        s.SidebarHudIntensity = .65;
         s.ButtonGlowEnabled = false;
         s.ButtonGlowIntensity = .65;
         s.ButtonSheenEnabled = false;
@@ -655,9 +743,10 @@ public static class AppearanceCodec
         var themes = ThemeManager.Catalog.Where(t => !t.IsSystem).Select(t => t.Tag).ToArray();
         string theme = themes[rng.Next(themes.Length)];
         string[] textures = ChromeTexture.Catalog.Select(t => t.Value).ToArray();
-        string[] bubbleStyles = [AppearanceOptions.BubbleSoft, AppearanceOptions.BubbleSolid, AppearanceOptions.BubbleOutlined, AppearanceOptions.BubbleGlass, AppearanceOptions.BubbleGradient, AppearanceOptions.BubbleMinimal];
+        string[] finishes = Desktop.ColorFinish.Catalog.Select(f => f.Value).ToArray();
+        string[] bubbleStyles = [AppearanceOptions.BubbleSoft, AppearanceOptions.BubbleSolid, AppearanceOptions.BubbleOutlined, AppearanceOptions.BubbleGlass, AppearanceOptions.BubbleGradient, AppearanceOptions.BubbleMinimal, AppearanceOptions.BubbleMecha, AppearanceOptions.BubbleReactor];
         string[] bubbleShapes = [AppearanceOptions.Default, AppearanceOptions.ShapeSubtle, AppearanceOptions.ShapeRounded, AppearanceOptions.ShapePill, AppearanceOptions.ShapeTail];
-        string[] gradients = [ChatCanvasOverlay.Off, ChatCanvasOverlay.Vignette, ChatCanvasOverlay.Spotlight, ChatCanvasOverlay.Mesh, ChatCanvasOverlay.Diagonal, ChatCanvasOverlay.Aurora];
+        string[] gradients = [ChatCanvasOverlay.Off, ChatCanvasOverlay.Vignette, ChatCanvasOverlay.Spotlight, ChatCanvasOverlay.Mesh, ChatCanvasOverlay.Diagonal, ChatCanvasOverlay.Aurora, ChatCanvasOverlay.FullBurst, ChatCanvasOverlay.ArcCore];
         string[] auras = TargetAura.Catalog.Select(a => a.Value).ToArray();
         string[] anims = [MessageMotion.Off, MessageMotion.Fade, MessageMotion.Slide, MessageMotion.Pop];
         string[] avatars = [AppearanceOptions.Default, AppearanceOptions.AvatarCircle, AppearanceOptions.AvatarSquircle, AppearanceOptions.AvatarRounded];
@@ -666,6 +755,8 @@ public static class AppearanceCodec
         {
             Theme = theme,
             ThemeDetails = rng.Next(2) == 0 ? true : null,
+            ColorFinish = rng.Next(2) == 0 ? NonDefault(finishes[rng.Next(finishes.Length)], Desktop.ColorFinish.Off) : null,
+            ColorFinishIntensity = .65,
             BubbleStyle = bubbleStyles[rng.Next(bubbleStyles.Length)],
             BubbleShape = bubbleShapes[rng.Next(bubbleShapes.Length)],
             CanvasGradient = gradients[rng.Next(gradients.Length)],
@@ -690,7 +781,7 @@ public static class AppearanceCodec
         };
 
         // Pick one ambient effect cleanly so random looks stay tasteful and legible.
-        switch (rng.Next(10))
+        switch (rng.Next(12))
         {
             case 0: d.Petals = true; break;
             case 1: d.Fireflies = true; break;
@@ -702,8 +793,10 @@ public static class AppearanceCodec
             case 7: d.Matrix = true; break;
             case 8: d.Constellation = true; break;
             case 9: d.Bokeh = true; break;
+            case 10: d.WingPlumes = true; break;
+            case 11: d.Repulsor = true; break;
         }
-        switch (rng.Next(8))
+        switch (rng.Next(10))
         {
             case 0: d.TitleSparkles = true; break;
             case 1: d.TitleShimmer = true; break;
@@ -712,8 +805,10 @@ public static class AppearanceCodec
             case 4: d.TitleLaser = true; break;
             case 5: d.TitleAurora = true; break;
             case 6: d.TitleWave = true; break;
+            case 7: d.TitleWings = true; break;
+            case 8: d.TitleReactor = true; break;
         }
-        switch (rng.Next(10))
+        switch (rng.Next(12))
         {
             case 0: d.HeaderAurora = true; break;
             case 1: d.HeaderPulse = true; break;
@@ -724,8 +819,10 @@ public static class AppearanceCodec
             case 6: d.HeaderNebula = true; break;
             case 7: d.HeaderSilk = true; break;
             case 8: d.HeaderPlasma = true; break;
+            case 9: d.HeaderBurst = true; break;
+            case 10: d.HeaderArc = true; break;
         }
-        switch (rng.Next(9))
+        switch (rng.Next(11))
         {
             case 0: d.RailBeacon = true; break;
             case 1: d.RailStream = true; break;
@@ -735,8 +832,10 @@ public static class AppearanceCodec
             case 5: d.RailPulse = true; break;
             case 6: d.RailPlasma = true; break;
             case 7: d.RailCascade = true; break;
+            case 8: d.RailWings = true; break;
+            case 9: d.RailArc = true; break;
         }
-        switch (rng.Next(10))
+        switch (rng.Next(12))
         {
             case 0: d.SidebarMotes = true; break;
             case 1: d.SidebarGlow = true; break;
@@ -747,6 +846,8 @@ public static class AppearanceCodec
             case 6: d.SidebarWaves = true; break;
             case 7: d.SidebarRipples = true; break;
             case 8: d.SidebarCircuit = true; break;
+            case 9: d.SidebarWings = true; break;
+            case 10: d.SidebarHud = true; break;
         }
         if (rng.Next(2) == 0) d.ChatSurface = AppearanceOptions.ChatSurfaceTheme;
         return d;

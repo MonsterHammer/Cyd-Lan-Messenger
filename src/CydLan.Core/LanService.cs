@@ -20,6 +20,7 @@ public sealed partial class LanService : IAsyncDisposable
     private readonly ConcurrentDictionary<string, byte> connecting = new();
     private readonly ConcurrentDictionary<string, (string Address, int Port, int Failures, long RetryAt)> retryDelays = new();
     private readonly ConcurrentDictionary<string, FileTransfer> transfers = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, ActiveFileTransfer> activeTransfers = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, TaskCompletionSource<bool>> pending = new();
     private readonly ConcurrentDictionary<string, byte> received = new();
     private readonly ConcurrentDictionary<TcpClient, byte> clients = new();
@@ -365,14 +366,26 @@ public sealed partial class LanService : IAsyncDisposable
             {
                 var header = new byte[33];
                 await stream.ReadExactlyAsync(header, deadline.Token);
-                if (header[0] != (byte)'E') return;
+                if (header[0] != (byte)'E')
+                {
+                    log?.Write("transfer.stream_rejected", null, ("reason", "invalid_header"));
+                    return;
+                }
                 var id = Encoding.ASCII.GetString(header, 1, 32);
                 var peer = await ReadIdentityAsync(stream, deadline.Token);
                 var remote = RemoteIPv4(client);
-                if (!sessions.TryGetValue(peer, out var session) || session.Address != remote) return;
+                if (!sessions.TryGetValue(peer, out var session) || session.Address != remote)
+                {
+                    log?.Write("transfer.stream_rejected", null, ("peer", peer), ("id", id), ("reason", "session_mismatch"), ("address", remote), ("sessionAddress", session?.Address));
+                    return;
+                }
                 if (await TryReceiveFolderFileAsync(session, id, stream)) return;
-                if (!transfers.TryGetValue(peer + ":" + id, out var transfer) || transfer.Outgoing || transfer.State != "Accepted") return;
-                await ReceiveFileAsync(stream, transfer);
+                if (!transfers.TryGetValue(peer + ":" + id, out var transfer) || transfer.Outgoing || transfer.State != "Accepted")
+                {
+                    log?.Write("transfer.stream_rejected", null, ("peer", peer), ("id", id), ("reason", "not_accepted"), ("state", transfer?.State), ("outgoing", transfer?.Outgoing));
+                    return;
+                }
+                await ReceiveFileAsync(client, stream, transfer);
             }
         }
         catch (Exception e) when (e is IOException or SocketException or OperationCanceledException or CryptographicException or InvalidDataException or ObjectDisposedException)
@@ -776,17 +789,43 @@ public sealed partial class LanService : IAsyncDisposable
         TransferChanged?.Invoke(transfer);
         _ = ExpireAcceptedAsync(key, transfer);
     }
-    /// <summary>Withdraws an offer the other person has not accepted yet.</summary>
+    /// <summary>Withdraws a pending offer or cancels an active transfer.</summary>
     public async Task CancelFileAsync(FileTransfer transfer)
     {
-        if (!transfer.Outgoing || transfer.State != "Waiting for approval") throw new InvalidOperationException("Only a pending offer can be cancelled.");
-        if (transfer.Folder) { await AnswerNativeFolderAsync(transfer, "cancel", "Cancelled"); return; }
+        if (transfer.Folder) { await CancelNativeFolderAsync(transfer); return; }
         string key = transfer.PeerId + ":" + transfer.Id;
-        transfers.TryRemove(key, out _);
-        try { await SendAsync(transfer.PeerId, "file", FileBody(transfer, "cancel")); }
-        catch (Exception e) when (e is IOException or SocketException or OperationCanceledException) { }
-        transfer.State = "Cancelled"; TransferChanged?.Invoke(transfer);
-        ReleaseFolderArchive(transfer);
+        if (transfer.Outgoing && transfer.State == "Waiting for approval")
+        {
+            if (!transfers.TryRemove(new KeyValuePair<string, FileTransfer>(key, transfer)))
+                throw new InvalidOperationException("Only a pending or active transfer can be cancelled.");
+            try { await SendAsync(transfer.PeerId, "file", FileBody(transfer, "cancel")); }
+            catch (Exception e) when (e is IOException or SocketException or OperationCanceledException) { }
+            transfer.State = "Cancelled"; Report(transfer);
+            ReleaseFolderArchive(transfer);
+            return;
+        }
+        if (transfer.State is not ("Accepted" or "Connecting" or "Transferring"))
+            throw new InvalidOperationException("Only a pending or active transfer can be cancelled.");
+
+        transfers.TryRemove(new KeyValuePair<string, FileTransfer>(key, transfer));
+        activeTransfers.TryGetValue(key, out var control);
+        if (control is null)
+        {
+            transfer.State = "Cancelled";
+            Report(transfer);
+            ReleaseFolderArchive(transfer);
+            try { await SendAsync(transfer.PeerId, "file", FileBody(transfer, "abort")).WaitAsync(TimeSpan.FromSeconds(1)); }
+            catch (Exception e) when (e is IOException or SocketException or OperationCanceledException or TimeoutException) { }
+            return;
+        }
+        control.MarkStopping("Cancelled");
+        try
+        {
+            try { await SendAsync(transfer.PeerId, "file", FileBody(transfer, "abort")).WaitAsync(TimeSpan.FromMilliseconds(300)); }
+            catch (Exception e) when (e is IOException or SocketException or OperationCanceledException or TimeoutException) { }
+        }
+        finally { control.Cancel(); }
+        await control.Finished.Task;
     }
     public async Task DeclineFileAsync(FileTransfer transfer)
     {
@@ -817,6 +856,7 @@ public sealed partial class LanService : IAsyncDisposable
             if (transfer.Avatar) { transfers.TryRemove(pair); continue; }
             if (transfer.State is not ("Waiting for approval" or "Accepted" or "Connecting")) continue;
             if (!transfers.TryRemove(pair)) continue;
+            if (activeTransfers.TryGetValue(pair.Key, out var control)) control.TryStop(reason);
             ReleaseFolderArchive(transfer);
             transfer.State = reason;
             TransferChanged?.Invoke(transfer);
@@ -990,10 +1030,12 @@ public sealed partial class LanService : IAsyncDisposable
             // Keep LAN Messenger's distinct outcomes: the other side declined the offer, cancelled it, or aborted mid-transfer.
             else if (message.Get("fileop") is "decline" or "cancel" or "abort" && transfer.State is not ("Received" or "Sent · receipt unavailable"))
             {
-                transfer.State = message.Get("fileop") switch { "decline" => "Declined", "cancel" => "Cancelled", _ => "Aborted" };
-                TransferChanged?.Invoke(transfer);
+                string nextState = message.Get("fileop") switch { "decline" => "Declined", "cancel" => "Cancelled", _ => "Aborted" };
+                transfers.TryRemove(new KeyValuePair<string, FileTransfer>(key, transfer));
+                if (activeTransfers.TryGetValue(key, out var control) && control.TryStop(nextState)) return;
+                transfer.State = nextState;
+                Report(transfer);
                 ReleaseFolderArchive(transfer);
-                transfers.TryRemove(key, out _);
             }
         }
         await Task.CompletedTask;
@@ -1023,15 +1065,34 @@ public sealed partial class LanService : IAsyncDisposable
     }
     private async Task SendFileAsync(Session session, FileTransfer transfer, int port)
     {
+        string key = transfer.PeerId + ":" + transfer.Id;
+        var control = new ActiveFileTransfer(stopping.Token);
+        activeTransfers[key] = control;
         bool started = false;
         try
         {
             await SendFilePayloadAsync(session, port, transfer.Id, transfer.Archive?.Path ?? transfer.Path, transfer.Size,
-                bytes => { started = true; transfer.State = "Transferring"; transfer.TransferredBytes = bytes; transfer.Progress = TransferPercent(bytes, transfer.Size); Report(transfer); }, stopping.Token);
+                bytes =>
+                {
+                    if (control.StopState is not null) return;
+                    transfer.State = "Transferring"; transfer.TransferredBytes = bytes; transfer.Progress = TransferPercent(bytes, transfer.Size); Report(transfer);
+                },
+                control.Token,
+                () => started = true);
+            if (control.StopState is { } stopped)
+            {
+                transfer.State = stopped; Report(transfer);
+                return;
+            }
             transfer.TransferredBytes = transfer.Size; transfer.Progress = 100; transfer.State = "Sent · receipt unavailable"; Report(transfer);
         }
-        catch (Exception e) when (e is IOException or SocketException or OperationCanceledException or UnauthorizedAccessException or InvalidDataException)
+        catch (Exception e) when (e is IOException or SocketException or OperationCanceledException or UnauthorizedAccessException or InvalidDataException or ObjectDisposedException)
         {
+            if (control.StopState is { } stopped)
+            {
+                transfer.State = stopped; Report(transfer);
+                return;
+            }
             log?.Write("transfer.send_failed", e, ("peer", transfer.PeerId), ("id", transfer.Id), ("bytes", transfer.Size));
             transfer.State = "Failed: " + e.Message;
             Report(transfer);
@@ -1043,26 +1104,49 @@ public sealed partial class LanService : IAsyncDisposable
         }
         finally
         {
+            activeTransfers.TryRemove(new KeyValuePair<string, ActiveFileTransfer>(key, control));
+            control.Complete();
             ReleaseFolderArchive(transfer);
-            transfers.TryRemove(transfer.PeerId + ":" + transfer.Id, out _);
+            transfers.TryRemove(new KeyValuePair<string, FileTransfer>(key, transfer));
         }
     }
-    private async Task ReceiveFileAsync(NetworkStream stream, FileTransfer transfer)
+    private async Task ReceiveFileAsync(TcpClient client, NetworkStream stream, FileTransfer transfer)
     {
+        string key = transfer.PeerId + ":" + transfer.Id;
+        var control = new ActiveFileTransfer(stopping.Token);
+        activeTransfers[key] = control;
+        using var cancelClient = control.Token.Register(() => { try { client.Dispose(); } catch (ObjectDisposedException) { } });
         try
         {
             await ReceiveFilePayloadAsync(stream, transfer.Id, transfer.Path, transfer.Size,
-                bytes => { transfer.State = "Transferring"; transfer.TransferredBytes = bytes; transfer.Progress = TransferPercent(bytes, transfer.Size); Report(transfer); }, stopping.Token);
+                bytes =>
+                {
+                    if (control.StopState is not null) return;
+                    transfer.State = "Transferring"; transfer.TransferredBytes = bytes; transfer.Progress = TransferPercent(bytes, transfer.Size); Report(transfer);
+                },
+                control.Token);
+            if (control.StopState is { } stopped)
+            {
+                transfer.State = stopped; Report(transfer);
+                return;
+            }
             transfer.TransferredBytes = transfer.Size; transfer.Progress = 100; transfer.State = "Received"; Report(transfer);
         }
-        catch (Exception e) when (e is IOException or SocketException or OperationCanceledException or UnauthorizedAccessException)
+        catch (Exception e) when (e is IOException or SocketException or OperationCanceledException or UnauthorizedAccessException or ObjectDisposedException)
         {
+            if (control.StopState is { } stopped)
+            {
+                transfer.State = stopped; Report(transfer);
+                return;
+            }
             log?.Write("transfer.receive_failed", e, ("peer", transfer.PeerId), ("id", transfer.Id), ("bytes", transfer.Size));
             transfer.State = "Failed: " + e.Message; Report(transfer);
         }
         finally
         {
-            transfers.TryRemove(transfer.PeerId + ":" + transfer.Id, out _);
+            activeTransfers.TryRemove(new KeyValuePair<string, ActiveFileTransfer>(key, control));
+            control.Complete();
+            transfers.TryRemove(new KeyValuePair<string, FileTransfer>(key, transfer));
         }
     }
 
@@ -1070,17 +1154,20 @@ public sealed partial class LanService : IAsyncDisposable
 
     private const int TransferBufferSize = 262144;
 
-    private async Task SendFilePayloadAsync(Session session, int port, string id, string path, long size, Action<long> progress, CancellationToken cancellationToken)
+    private async Task SendFilePayloadAsync(Session session, int port, string id, string path, long size, Action<long> progress, CancellationToken cancellationToken, Action? onStarted = null)
     {
         using var client = new TcpClient { NoDelay = true };
+        using var cancelSocket = cancellationToken.Register(() => { try { client.Dispose(); } catch (ObjectDisposedException) { } });
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(TimeSpan.FromSeconds(30));
         await client.ConnectAsync(session.Address, port, deadline.Token);
         var stream = client.GetStream();
         await stream.WriteAsync(Encoding.ASCII.GetBytes("FILE" + id + settings.UserId), deadline.Token);
         var start = new byte[5];
-        await stream.ReadExactlyAsync(start, deadline.Token);
+        try { await stream.ReadExactlyAsync(start, deadline.Token); }
+        catch (EndOfStreamException) { throw new EndOfStreamException("The peer closed the transfer before starting."); }
         if (!start.AsSpan().SequenceEqual("START"u8)) throw new InvalidDataException("Invalid transfer response.");
+        onStarted?.Invoke();
         await using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, TransferBufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan);
         if (file.Length != size) throw new IOException("The file changed after it was offered.");
         progress(0);
@@ -1110,6 +1197,7 @@ public sealed partial class LanService : IAsyncDisposable
         // A received file is visible only after the exact advertised byte count.
         string partial = path + "." + id + ".partial";
         bool created = false;
+        using var cancelStream = cancellationToken.Register(() => { try { stream.Dispose(); } catch (ObjectDisposedException) { } });
         try
         {
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -1156,6 +1244,7 @@ public sealed partial class LanService : IAsyncDisposable
             try { await udp.SendAsync(Encode("depart", null, []), new IPEndPoint(IPAddress.Parse(settings.Multicast), settings.Port)); }
             catch (Exception e) when (e is SocketException or ObjectDisposedException) { }
         }
+        foreach (var active in activeTransfers.Values) active.TryStop("Interrupted");
         await stopping.CancelAsync();
         udp?.Dispose(); listener?.Stop();
         foreach (var client in clients.Keys) client.Dispose();
@@ -1171,6 +1260,61 @@ public sealed partial class LanService : IAsyncDisposable
         if (transfer.Archive is not { } archive) return;
         archive.Dispose();
         transfers.TryRemove(transfer.PeerId + ":" + transfer.Id, out _);
+    }
+
+    private sealed class ActiveFileTransfer
+    {
+        private readonly CancellationTokenSource cancellation;
+        private readonly object gate = new();
+        private string? stopState;
+        private bool completed;
+
+        public ActiveFileTransfer(CancellationToken stopping)
+        {
+            cancellation = CancellationTokenSource.CreateLinkedTokenSource(stopping);
+            Token = cancellation.Token;
+        }
+
+        public CancellationToken Token { get; }
+        public TaskCompletionSource Finished { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public string? StopState { get { lock (gate) return stopState; } }
+
+        public void MarkStopping(string state)
+        {
+            lock (gate)
+            {
+                if (!completed && stopState is null) stopState = state;
+            }
+        }
+
+        public void Cancel()
+        {
+            lock (gate)
+            {
+                if (!completed) cancellation.Cancel();
+            }
+        }
+
+        public bool TryStop(string state)
+        {
+            lock (gate)
+            {
+                if (completed || stopState is not null) return false;
+                stopState = state;
+                cancellation.Cancel();
+                return true;
+            }
+        }
+
+        public void Complete()
+        {
+            lock (gate)
+            {
+                completed = true;
+                cancellation.Dispose();
+                Finished.TrySetResult();
+            }
+        }
     }
 
     private sealed class Session(string id, string address, int port, TcpClient client, bool incoming)

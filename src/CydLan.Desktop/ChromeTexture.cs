@@ -13,13 +13,15 @@ public enum ChromeTextureKind
     Off,
     Grain, Woven, Topo, Grid, Silk, Hex,
     Brushed, Marble, Carbon, Circuit, Waves, ArtDeco, Terrazzo, Mesh,
-    Bubbles, Gothic, Lightning, Web, Starburst, Botanical, Cipher, Watercolor
+    Bubbles, Gothic, Lightning, Web, Starburst, Botanical, Cipher, Watercolor,
+    FreedomWings, ArcReactor,
+    Leaves, LonelyGrass, GrassyFields, Galaxy, StarryNight, Sun, Moon
 }
 
 public sealed record ChromeTextureSwatch(string Value, string Name, ChromeTextureKind Kind);
 
 /// <summary>Renders a single continuous surface texture behind unified chrome regions (title bar, side nav, side panel, and header).</summary>
-public sealed class ChromeTexture : FrameworkElement
+public sealed partial class ChromeTexture : FrameworkElement
 {
     public const string Off = "off";
     public const string Grain = "grain";
@@ -42,8 +44,17 @@ public sealed class ChromeTexture : FrameworkElement
     public const string Web = "web";
     public const string Starburst = "starburst";
     public const string Botanical = "botanical";
+    public const string Leaves = "leaves";
+    public const string LonelyGrass = "lonelygrass";
+    public const string GrassyFields = "grassyfields";
+    public const string Galaxy = "galaxy";
+    public const string StarryNight = "starrynight";
+    public const string Sun = "sun";
+    public const string Moon = "moon";
     public const string Cipher = "cipher";
     public const string Watercolor = "watercolor";
+    public const string FreedomWings = "freedomwings";
+    public const string ArcReactor = "arcreactor";
 
     public static IReadOnlyList<ChromeTextureSwatch> Catalog { get; } =
     [
@@ -61,8 +72,17 @@ public sealed class ChromeTexture : FrameworkElement
         new(Lightning, "Lightning veins", ChromeTextureKind.Lightning),
         new(Web, "Cobweb silk", ChromeTextureKind.Web),
         new(Starburst, "Starburst", ChromeTextureKind.Starburst),
+        new(Galaxy, "Galaxy", ChromeTextureKind.Galaxy),
+        new(StarryNight, "Starry night", ChromeTextureKind.StarryNight),
+        new(Sun, "Sun", ChromeTextureKind.Sun),
+        new(Moon, "Moon", ChromeTextureKind.Moon),
         new(Botanical, "Botanical", ChromeTextureKind.Botanical),
+        new(Leaves, "Leaves", ChromeTextureKind.Leaves),
+        new(LonelyGrass, "Lonely grass", ChromeTextureKind.LonelyGrass),
+        new(GrassyFields, "Grassy fields", ChromeTextureKind.GrassyFields),
         new(Cipher, "Cipher streams", ChromeTextureKind.Cipher),
+        new(FreedomWings, "Freedom wings", ChromeTextureKind.FreedomWings),
+        new(ArcReactor, "Arc reactor", ChromeTextureKind.ArcReactor),
         new(Woven, "Woven linen", ChromeTextureKind.Woven),
         new(Grid, "Drafting grid", ChromeTextureKind.Grid),
         new(Hex, "Honeycomb", ChromeTextureKind.Hex),
@@ -122,9 +142,17 @@ public sealed class ChromeTexture : FrameworkElement
         SetResourceReference(LineColorProperty, "ChromeLineColor");
     }
 
-    public static string Normalize(string? value) => value is Grain or Woven or Topo or Grid or Silk or Hex
-        or Brushed or Marble or Carbon or Circuit or Waves or ArtDeco or Terrazzo or Mesh
-        or Bubbles or Gothic or Lightning or Web or Starburst or Botanical or Cipher or Watercolor ? value : Off;
+    public static string Normalize(string? value) => value?.Trim().ToLowerInvariant() switch
+    {
+        "starry night" or "starry-night" or StarryNight => StarryNight,
+        "lonely grass" or "lonely-grass" or LonelyGrass => LonelyGrass,
+        "grassy fields" or "grassy-fields" or GrassyFields => GrassyFields,
+        Grain or Woven or Topo or Grid or Silk or Hex
+            or Brushed or Marble or Carbon or Circuit or Waves or ArtDeco or Terrazzo or Mesh
+            or Bubbles or Gothic or Lightning or Web or Starburst or Botanical or Cipher or Watercolor
+            or FreedomWings or ArcReactor or Galaxy or Sun or Moon or Leaves => value.Trim().ToLowerInvariant(),
+        _ => Off
+    };
 
     public static ChromeTextureKind KindFor(string? value) => Normalize(value) switch
     {
@@ -148,8 +176,17 @@ public sealed class ChromeTexture : FrameworkElement
         Web => ChromeTextureKind.Web,
         Starburst => ChromeTextureKind.Starburst,
         Botanical => ChromeTextureKind.Botanical,
+        Leaves => ChromeTextureKind.Leaves,
+        LonelyGrass => ChromeTextureKind.LonelyGrass,
+        GrassyFields => ChromeTextureKind.GrassyFields,
+        Galaxy => ChromeTextureKind.Galaxy,
+        StarryNight => ChromeTextureKind.StarryNight,
+        Sun => ChromeTextureKind.Sun,
+        Moon => ChromeTextureKind.Moon,
         Cipher => ChromeTextureKind.Cipher,
         Watercolor => ChromeTextureKind.Watercolor,
+        FreedomWings => ChromeTextureKind.FreedomWings,
+        ArcReactor => ChromeTextureKind.ArcReactor,
         _ => ChromeTextureKind.Off
     };
 
@@ -260,11 +297,38 @@ public sealed class ChromeTexture : FrameworkElement
             case ChromeTextureKind.Botanical:
                 cachedVector = BuildBotanicalDrawing(width, height, hi, lo, accent, isLight, intensity, compact);
                 break;
+            case ChromeTextureKind.Leaves:
+                cachedVector = BuildLeavesDrawing(width, height, hi, lo, accent, isLight, intensity, compact);
+                break;
+            case ChromeTextureKind.LonelyGrass:
+                cachedVector = BuildLonelyGrassDrawing(width, height, hi, lo, accent, isLight, intensity, compact);
+                break;
+            case ChromeTextureKind.GrassyFields:
+                cachedVector = BuildGrassyFieldsDrawing(width, height, hi, lo, accent, isLight, intensity, compact);
+                break;
+            case ChromeTextureKind.Galaxy:
+                cachedVector = BuildGalaxyDrawing(width, height, hi, lo, accent, isLight, intensity, compact);
+                break;
+            case ChromeTextureKind.StarryNight:
+                cachedVector = BuildStarryNightDrawing(width, height, hi, lo, accent, isLight, intensity, compact);
+                break;
+            case ChromeTextureKind.Sun:
+                cachedVector = BuildSunDrawing(width, height, hi, lo, accent, isLight, intensity, compact);
+                break;
+            case ChromeTextureKind.Moon:
+                cachedVector = BuildMoonDrawing(width, height, hi, lo, accent, isLight, intensity, compact);
+                break;
             case ChromeTextureKind.Cipher:
                 cachedVector = BuildCipherDrawing(width, height, hi, lo, accent, isLight, intensity, compact);
                 break;
             case ChromeTextureKind.Watercolor:
                 cachedVector = BuildWatercolorDrawing(width, height, hi, lo, accent, isLight, intensity, compact);
+                break;
+            case ChromeTextureKind.FreedomWings:
+                cachedVector = BuildFreedomWingsDrawing(width, height, hi, lo, accent, isLight, intensity, compact);
+                break;
+            case ChromeTextureKind.ArcReactor:
+                cachedVector = BuildArcReactorDrawing(width, height, hi, lo, accent, isLight, intensity, compact);
                 break;
 
             // Intentionally geometric repeating textures
@@ -298,7 +362,11 @@ public sealed class ChromeTexture : FrameworkElement
         byte topAlpha = (byte)Math.Round((isLight ? 40 : 16) * intensity);
         byte midAlpha = (byte)Math.Round((isLight ? 12 : 14) * intensity);
         byte edgeAlpha = (byte)Math.Round((isLight ? 16 : 32) * intensity);
-        if (kind is ChromeTextureKind.Silk or ChromeTextureKind.Watercolor) topAlpha = (byte)(topAlpha / 2);
+        if (kind is ChromeTextureKind.Silk or ChromeTextureKind.Watercolor
+            or ChromeTextureKind.Galaxy or ChromeTextureKind.StarryNight
+            or ChromeTextureKind.Sun or ChromeTextureKind.Moon
+            or ChromeTextureKind.LonelyGrass or ChromeTextureKind.GrassyFields)
+            topAlpha = (byte)(topAlpha / 2);
 
         var wash = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 1) };
         wash.GradientStops.Add(new GradientStop(WithAlpha(hi, topAlpha), 0));
@@ -737,68 +805,7 @@ public sealed class ChromeTexture : FrameworkElement
         return group;
     }
 
-    private static DrawingGroup BuildBotanicalDrawing(double width, double height, Color hi, Color lo, Color accent, bool isLight, double intensity, bool compact)
-    {
-        var group = new DrawingGroup();
-        using var dc = group.Open();
-        var rng = new Random(2917);
-
-        var stemPen = FrozenPen(WithAlpha(accent, (byte)Math.Round((isLight ? 46 : 52) * intensity)), 1.15);
-        var veinPen = FrozenPen(WithAlpha(hi, (byte)Math.Round((isLight ? 72 : 34) * intensity)), .75);
-        var leafFill = FrozenBrush(WithAlpha(accent, (byte)Math.Round((isLight ? 24 : 26) * intensity)));
-        var altLeaf = FrozenBrush(WithAlpha(isLight ? lo : hi, (byte)Math.Round((isLight ? 14 : 16) * intensity)));
-
-        var leafGeom = Geometry.Parse("M0,0 C5,-6 14,-6 19,0 C14,6 5,6 0,0 Z");
-        leafGeom.Freeze();
-
-        int fronds = compact ? 3 : 8;
-        for (int f = 0; f < fronds; f++)
-        {
-            double x0 = rng.NextDouble() * width;
-            double y0 = f % 2 == 0 ? height + 6 : rng.NextDouble() * height;
-            double angle = f % 2 == 0 ? -Math.PI * (.30 + rng.NextDouble() * .40) : (rng.NextDouble() - .5) * Math.PI;
-            double len = (compact ? 38 : 115) + rng.NextDouble() * (compact ? 26 : 130);
-            double bend = (rng.NextDouble() - .5) * .65;
-
-            var stem = new StreamGeometry();
-            var anchors = new List<(Point P, double Tan)>();
-            const int segs = 12;
-            using (var ctx = stem.Open())
-            {
-                double cx = x0, cy = y0, a = angle;
-                ctx.BeginFigure(new Point(cx, cy), isFilled: false, isClosed: false);
-                for (int s = 1; s <= segs; s++)
-                {
-                    a += bend / segs;
-                    cx += Math.Cos(a) * (len / segs);
-                    cy += Math.Sin(a) * (len / segs);
-                    var pt = new Point(cx, cy);
-                    ctx.LineTo(pt, isStroked: true, isSmoothJoin: true);
-                    if (s >= 2 && s <= segs - 1 && s % 2 == 0)
-                        anchors.Add((pt, a));
-                }
-            }
-            stem.Freeze();
-            dc.DrawGeometry(null, stemPen, stem);
-
-            for (int k = 0; k < anchors.Count; k++)
-            {
-                var (pt, tan) = anchors[k];
-                double scale = (compact ? .55 : .85) * (1.15 - k * .11);
-                foreach (int side in new[] { -1, 1 })
-                {
-                    var m = Matrix.Identity;
-                    m.Scale(scale, scale);
-                    m.Rotate((tan + side * .62) * 180 / Math.PI);
-                    m.Translate(pt.X, pt.Y);
-                    dc.PushTransform(new MatrixTransform(m));
-                    dc.DrawGeometry((k + f) % 2 == 0 ? leafFill : altLeaf, veinPen, leafGeom);
-                    dc.Pop();
-                }
-            }
-        }
-        return group;
-    }
+    // BuildBotanicalDrawing & scenic styles live in ChromeTexture.Scenes.cs
 
     private static DrawingGroup BuildCipherDrawing(double width, double height, Color hi, Color lo, Color accent, bool isLight, double intensity, bool compact)
     {
@@ -877,6 +884,156 @@ public sealed class ChromeTexture : FrameworkElement
             double r = .7 + rng.NextDouble() * (compact ? 1.5 : 2.6);
             dc.DrawEllipse(speck, null, new Point(rng.NextDouble() * width, rng.NextDouble() * height), r, r * (.75 + rng.NextDouble() * .5));
         }
+        return group;
+    }
+
+    private static DrawingGroup BuildFreedomWingsDrawing(double width, double height, Color hi, Color lo, Color accent, bool isLight, double intensity, bool compact)
+    {
+        var group = new DrawingGroup();
+        using var dc = group.Open();
+        Color beamBlue = Color.FromRgb(0x38, 0xBD, 0xF8);
+        Color cobalt = Color.FromRgb(0x1D, 0x4E, 0xD8);
+        Color crimson = Color.FromRgb(0xE1, 0x1D, 0x48);
+        Color gold = Color.FromRgb(0xEA, 0xB3, 0x08);
+
+        var topGlow = new RadialGradientBrush
+        {
+            Center = new Point(.86, .14),
+            GradientOrigin = new Point(.86, .14),
+            RadiusX = .65,
+            RadiusY = .58
+        };
+        topGlow.GradientStops.Add(new GradientStop(WithAlpha(beamBlue, (byte)Math.Round((isLight ? 42 : 48) * intensity)), 0));
+        topGlow.GradientStops.Add(new GradientStop(WithAlpha(cobalt, (byte)Math.Round((isLight ? 16 : 22) * intensity)), .55));
+        topGlow.GradientStops.Add(new GradientStop(WithAlpha(cobalt, 0), 1));
+        topGlow.Freeze();
+        dc.DrawRectangle(topGlow, null, new Rect(0, 0, width, height));
+
+        // Swept HiMAT wing blades fanning from top-right
+        int wingCount = compact ? 4 : 7;
+        double pivotX = width * 1.04;
+        double pivotY = height * -.06;
+        double span = Math.Max(width, height) * .95;
+        var edgePen = FrozenPen(WithAlpha(cobalt, (byte)Math.Round((isLight ? 48 : 74) * intensity)), compact ? 1.0 : 1.35);
+        var beamPen = FrozenPen(WithAlpha(beamBlue, (byte)Math.Round((isLight ? 52 : 76) * intensity)), compact ? .85 : 1.15);
+        var trimPen = FrozenPen(WithAlpha(crimson, (byte)Math.Round((isLight ? 36 : 56) * intensity)), compact ? .75 : 1.0);
+        for (int i = 0; i < wingCount; i++)
+        {
+            double a0 = 1.92 + i * .16;
+            double a1 = a0 + .09;
+            double len = span * (.94 - i * .07);
+            var p0 = new Point(pivotX, pivotY);
+            var p1 = new Point(pivotX + Math.Cos(a0) * len, pivotY + Math.Sin(a0) * len);
+            var tip = new Point(pivotX + Math.Cos((a0 + a1) * .5) * (len * 1.08), pivotY + Math.Sin((a0 + a1) * .5) * (len * 1.08));
+            var p2 = new Point(pivotX + Math.Cos(a1) * (len * .76), pivotY + Math.Sin(a1) * (len * .76));
+            var blade = new StreamGeometry();
+            using (var ctx = blade.Open())
+            {
+                ctx.BeginFigure(p0, isFilled: true, isClosed: true);
+                ctx.LineTo(p1, isStroked: true, isSmoothJoin: false);
+                ctx.LineTo(tip, isStroked: true, isSmoothJoin: false);
+                ctx.LineTo(p2, isStroked: true, isSmoothJoin: false);
+            }
+            blade.Freeze();
+            var fill = FrozenBrush(WithAlpha(i % 2 == 0 ? cobalt : beamBlue, (byte)Math.Round((isLight ? 16 : 24) * intensity)));
+            dc.DrawGeometry(fill, i % 3 == 0 ? trimPen : i % 2 == 0 ? edgePen : beamPen, blade);
+        }
+
+        // Mirrored lower-left thruster vanes + subtle V-fin accent
+        var panelPen = FrozenPen(WithAlpha(hi, (byte)Math.Round((isLight ? 90 : 34) * intensity)), .9);
+        int lowerCount = compact ? 2 : 4;
+        for (int i = 0; i < lowerCount; i++)
+        {
+            double yBase = height * (.66 + i * .085);
+            dc.DrawLine(i == 0 ? trimPen : edgePen, new Point(0, yBase), new Point(width * (.36 - i * .06), yBase + height * .16));
+            dc.DrawLine(panelPen, new Point(width * .04, yBase - 3), new Point(width * (.30 - i * .05), yBase + height * .12));
+        }
+
+        var vPen = FrozenPen(WithAlpha(gold, (byte)Math.Round((isLight ? 52 : 68) * intensity)), compact ? 1.1 : 1.5);
+        double vx = width * (compact ? .24 : .16);
+        double vy = height * (compact ? .28 : .20);
+        double vs = compact ? 16 : 28;
+        var vfin = new StreamGeometry();
+        using (var ctx = vfin.Open())
+        {
+            ctx.BeginFigure(new Point(vx - vs * .95, vy - vs * .42), isFilled: false, isClosed: false);
+            ctx.LineTo(new Point(vx, vy + vs * .22), isStroked: true, isSmoothJoin: false);
+            ctx.LineTo(new Point(vx + vs * .95, vy - vs * .42), isStroked: true, isSmoothJoin: false);
+        }
+        vfin.Freeze();
+        dc.DrawGeometry(null, vPen, vfin);
+        dc.DrawEllipse(FrozenBrush(WithAlpha(crimson, (byte)Math.Round(65 * intensity))), null, new Point(vx, vy + vs * .22), compact ? 2 : 3, compact ? 2 : 3);
+        return group;
+    }
+
+    private static DrawingGroup BuildArcReactorDrawing(double width, double height, Color hi, Color lo, Color accent, bool isLight, double intensity, bool compact)
+    {
+        var group = new DrawingGroup();
+        using var dc = group.Open();
+        Color arcCyan = Color.FromRgb(0x38, 0xBD, 0xF8);
+        Color starkGold = Color.FromRgb(0xF5, 0xB7, 0x00);
+        Color armorRed = Color.FromRgb(0xDC, 0x26, 0x26);
+
+        var center = new Point(width * (compact ? .64 : .72), height * (compact ? .52 : .36));
+        double minDim = Math.Min(width, height);
+        double coreRadius = Math.Clamp(minDim * (compact ? .36 : .28), 22, 140);
+
+        var glow = new RadialGradientBrush
+        {
+            Center = new Point(center.X / Math.Max(1, width), center.Y / Math.Max(1, height)),
+            GradientOrigin = new Point(center.X / Math.Max(1, width), center.Y / Math.Max(1, height)),
+            RadiusX = compact ? .55 : .42,
+            RadiusY = compact ? .55 : .42
+        };
+        glow.GradientStops.Add(new GradientStop(WithAlpha(arcCyan, (byte)Math.Round((isLight ? 44 : 68) * intensity)), 0));
+        glow.GradientStops.Add(new GradientStop(WithAlpha(starkGold, (byte)Math.Round((isLight ? 18 : 26) * intensity)), .52));
+        glow.GradientStops.Add(new GradientStop(WithAlpha(armorRed, 0), 1));
+        glow.Freeze();
+        dc.DrawRectangle(glow, null, new Rect(0, 0, width, height));
+
+        var cyanPen = FrozenPen(WithAlpha(arcCyan, (byte)Math.Round((isLight ? 54 : 88) * intensity)), compact ? 1.1 : 1.5);
+        var goldPen = FrozenPen(WithAlpha(starkGold, (byte)Math.Round((isLight ? 42 : 68) * intensity)), compact ? 1.0 : 1.35);
+        var redPen = FrozenPen(WithAlpha(armorRed, (byte)Math.Round((isLight ? 34 : 58) * intensity)), .95);
+
+        dc.DrawEllipse(null, cyanPen, center, coreRadius, coreRadius);
+        dc.DrawEllipse(null, goldPen, center, coreRadius * .72, coreRadius * .72);
+        dc.DrawEllipse(null, cyanPen, center, coreRadius * .42, coreRadius * .42);
+
+        // Solenoid coils around the reactor ring
+        int coils = compact ? 8 : 10;
+        for (int i = 0; i < coils; i++)
+        {
+            double a = i * Math.Tau / coils - Math.PI * .5;
+            var p0 = new Point(center.X + Math.Cos(a) * coreRadius * .45, center.Y + Math.Sin(a) * coreRadius * .45);
+            var p1 = new Point(center.X + Math.Cos(a) * coreRadius * .96, center.Y + Math.Sin(a) * coreRadius * .96);
+            dc.DrawLine(i % 2 == 0 ? goldPen : cyanPen, p0, p1);
+        }
+
+        // Triangular / beveled Stark armor seam lines across the panel
+        if (!compact)
+        {
+            dc.DrawLine(redPen, new Point(0, height * .18), new Point(width * .28, height * .18));
+            dc.DrawLine(goldPen, new Point(width * .28, height * .18), new Point(width * .38, height * .30));
+            dc.DrawLine(redPen, new Point(0, height * .82), new Point(width * .34, height * .82));
+            dc.DrawLine(goldPen, new Point(width * .34, height * .82), new Point(width * .44, height * .68));
+            dc.DrawLine(redPen, new Point(center.X - coreRadius * 1.3, center.Y), new Point(0, center.Y));
+        }
+
+        // Subtle hexagonal armor mesh cell
+        double hexR = compact ? 16 : 26;
+        var hex = new StreamGeometry();
+        using (var ctx = hex.Open())
+        {
+            for (int i = 0; i < 6; i++)
+            {
+                double a = i * Math.Tau / 6;
+                var pt = new Point(center.X + Math.Cos(a) * hexR * .65, center.Y + Math.Sin(a) * hexR * .65);
+                if (i == 0) ctx.BeginFigure(pt, isFilled: false, isClosed: true);
+                else ctx.LineTo(pt, isStroked: true, isSmoothJoin: false);
+            }
+        }
+        hex.Freeze();
+        dc.DrawGeometry(null, cyanPen, hex);
         return group;
     }
 

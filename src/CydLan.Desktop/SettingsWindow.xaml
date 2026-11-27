@@ -461,6 +461,81 @@
               </StackPanel>
               </StackPanel>
               <StackPanel x:Name="AppearanceColorsSection" Visibility="Collapsed">
+                <TextBlock Text="Color finish" Style="{StaticResource Label}" Margin="0,0,0,8"/>
+                <ListBox x:Name="ColorFinishBox" Style="{StaticResource SwatchGrid}" SelectedValuePath="Value" SelectionChanged="ColorFinish_Changed"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                         Margin="0,0,0,6" AutomationProperties.Name="Color finish">
+                  <ListBox.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ListBox.ItemsPanel>
+                  <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem">
+                      <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                      <Setter Property="Margin" Value="0,0,8,8"/>
+                      <Setter Property="Padding" Value="0"/>
+                      <Setter Property="Cursor" Value="Hand"/>
+                      <Setter Property="AutomationProperties.Name" Value="{Binding Name, Mode=OneTime}"/>
+                      <Setter Property="Template">
+                        <Setter.Value>
+                          <ControlTemplate TargetType="ListBoxItem">
+                            <Border x:Name="Frame" Width="116" Height="56" CornerRadius="{DynamicResource ControlCorner}"
+                                    BorderBrush="{DynamicResource Line}" BorderThickness="1.5" Background="{DynamicResource Sidebar}"
+                                    local:Rounded.Radius="{Binding CornerRadius.TopLeft, RelativeSource={RelativeSource Self}}" ClipToBounds="True">
+                              <Grid>
+                                <ContentPresenter/>
+                                <Border x:Name="SelectedBadge" Width="16" Height="16" CornerRadius="8" Background="{DynamicResource Accent}"
+                                        HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,5,5,0" Visibility="Collapsed">
+                                  <local:Glyph Data="{DynamicResource IconCheck}" Size="9" StrokeThickness="2.2" Foreground="{DynamicResource AccentInk}"/>
+                                </Border>
+                              </Grid>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource Muted}"/></Trigger>
+                              <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                                <Setter TargetName="Frame" Property="BorderThickness" Value="2"/>
+                                <Setter TargetName="SelectedBadge" Property="Visibility" Value="Visible"/>
+                              </Trigger>
+                            </ControlTemplate.Triggers>
+                          </ControlTemplate>
+                        </Setter.Value>
+                      </Setter>
+                    </Style>
+                  </ListBox.ItemContainerStyle>
+                  <ListBox.ItemTemplate>
+                    <DataTemplate DataType="{x:Type local:ColorFinishSwatch}">
+                      <Grid>
+                        <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="21"/></Grid.RowDefinitions>
+                        <local:ColorFinishPreview Kind="{Binding Kind, Mode=OneTime}" Intensity=".85"/>
+                        <Border Grid.Row="1" Background="{DynamicResource Sidebar}" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Padding="7,0">
+                          <TextBlock Text="{Binding Name, Mode=OneTime}" Foreground="{DynamicResource Ink}" FontSize="10.5" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                        </Border>
+                      </Grid>
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
+                <StackPanel Margin="0,2,0,10">
+                  <StackPanel.Style>
+                    <Style TargetType="StackPanel">
+                      <Setter Property="Visibility" Value="Visible"/>
+                      <Style.Triggers>
+                        <DataTrigger Binding="{Binding SelectedValue, ElementName=ColorFinishBox}" Value="off">
+                          <Setter Property="Visibility" Value="Collapsed"/>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding SelectedValue, ElementName=ColorFinishBox}" Value="{x:Null}">
+                          <Setter Property="Visibility" Value="Collapsed"/>
+                        </DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </StackPanel.Style>
+                  <DockPanel Margin="0,0,0,4">
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=ColorFinishIntensityBox, StringFormat=P0}" Foreground="{DynamicResource Muted}"/>
+                    <TextBlock Text="Finish intensity" Style="{StaticResource Label}" Margin="0"/>
+                  </DockPanel>
+                  <Slider x:Name="ColorFinishIntensityBox" Style="{StaticResource BackgroundSlider}" Minimum=".1" Maximum="1" TickFrequency=".05"
+                          SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True" ValueChanged="ColorFinish_SliderChanged"
+                          AutomationProperties.Name="Color finish intensity"/>
+                </StackPanel>
+                <Separator Margin="0,2,0,12" Background="{DynamicResource Line}"/>
+
                 <DockPanel Margin="0,0,0,6">
                   <TextBox x:Name="AccentHexBox" DockPanel.Dock="Right" Width="92" MaxLength="9" Padding="8,4" FontSize="12" LostKeyboardFocus="ColorHex_Committed" KeyDown="ColorHex_KeyDown" AutomationProperties.Name="Accent hex"/>
                   <TextBlock Text="Accent color" Style="{StaticResource Label}" VerticalAlignment="Center" Margin="0"/>
@@ -500,15 +575,24 @@
                   <ListBox x:Name="ChatBackgroundColorBox" Style="{StaticResource ColorChipGrid}" SelectedValuePath="Value" SelectionChanged="ColorOverride_Changed" Margin="0,0,0,12" AutomationProperties.Name="Chat background color"/>
                 </StackPanel>
 
-                <Border Background="{DynamicResource ChatPreviewBackground}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="{DynamicResource PanelCorner}" Padding="14,12">
-                  <StackPanel>
-                    <Border HorizontalAlignment="Left" Padding="{DynamicResource MessageBubblePadding}" Background="{DynamicResource IncomingBubbleBackground}" BorderBrush="{DynamicResource IncomingBubbleBorder}" BorderThickness="{DynamicResource IncomingBubbleBorderThickness}" CornerRadius="{DynamicResource IncomingBubbleCorner}" Margin="0,0,0,8">
-                      <TextBlock Text="Incoming message" Foreground="{DynamicResource IncomingBubbleForeground}" FontSize="13"/>
-                    </Border>
-                    <Border HorizontalAlignment="Right" Padding="{DynamicResource MessageBubblePadding}" Background="{DynamicResource OutgoingBubbleBackground}" BorderBrush="{DynamicResource OutgoingBubbleBorder}" BorderThickness="{DynamicResource OutgoingBubbleBorderThickness}" CornerRadius="{DynamicResource OutgoingBubbleCorner}">
-                      <TextBlock Text="Outgoing message" Foreground="{DynamicResource OutgoingBubbleForeground}" FontSize="13"/>
-                    </Border>
-                  </StackPanel>
+                <Border Background="{DynamicResource ChatPreviewBackground}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="{DynamicResource PanelCorner}" ClipToBounds="True">
+                  <Grid>
+                    <Border Background="{DynamicResource ChatColorFinishBrush}" IsHitTestVisible="False"/>
+                    <StackPanel Margin="14,12">
+                      <Border HorizontalAlignment="Left" Padding="0" Background="{DynamicResource IncomingBubbleBackground}" BorderBrush="{DynamicResource IncomingBubbleBorder}" BorderThickness="{DynamicResource IncomingBubbleBorderThickness}" CornerRadius="{DynamicResource IncomingBubbleCorner}" Margin="0,0,0,8">
+                        <Grid>
+                          <local:BubbleDecoration IsOutgoing="False"/>
+                          <TextBlock Text="Incoming message" Foreground="{DynamicResource IncomingBubbleForeground}" FontSize="13" Margin="{DynamicResource MessageBubblePadding}"/>
+                        </Grid>
+                      </Border>
+                      <Border HorizontalAlignment="Right" Padding="0" Background="{DynamicResource OutgoingBubbleBackground}" BorderBrush="{DynamicResource OutgoingBubbleBorder}" BorderThickness="{DynamicResource OutgoingBubbleBorderThickness}" CornerRadius="{DynamicResource OutgoingBubbleCorner}">
+                        <Grid>
+                          <local:BubbleDecoration IsOutgoing="True"/>
+                          <TextBlock Text="Outgoing message" Foreground="{DynamicResource OutgoingBubbleForeground}" FontSize="13" Margin="{DynamicResource MessageBubblePadding}"/>
+                        </Grid>
+                      </Border>
+                    </StackPanel>
+                  </Grid>
                 </Border>
               </StackPanel>
               <StackPanel x:Name="AppearanceBubblesSection" Visibility="Collapsed">
@@ -552,11 +636,17 @@
 
                 <Border Background="{DynamicResource Canvas}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="{DynamicResource PanelCorner}" Padding="14,12">
                   <StackPanel>
-                    <Border HorizontalAlignment="Left" Padding="{DynamicResource MessageBubblePadding}" Background="{DynamicResource IncomingBubbleBackground}" BorderBrush="{DynamicResource IncomingBubbleBorder}" BorderThickness="{DynamicResource IncomingBubbleBorderThickness}" CornerRadius="{DynamicResource IncomingBubbleCorner}" Margin="0,0,0,8">
-                      <TextBlock Text="Incoming preview" Foreground="{DynamicResource IncomingBubbleForeground}" FontSize="13"/>
+                    <Border HorizontalAlignment="Left" Padding="0" Background="{DynamicResource IncomingBubbleBackground}" BorderBrush="{DynamicResource IncomingBubbleBorder}" BorderThickness="{DynamicResource IncomingBubbleBorderThickness}" CornerRadius="{DynamicResource IncomingBubbleCorner}" Margin="0,0,0,8">
+                      <Grid>
+                        <local:BubbleDecoration IsOutgoing="False"/>
+                        <TextBlock Text="Incoming preview" Foreground="{DynamicResource IncomingBubbleForeground}" FontSize="13" Margin="{DynamicResource MessageBubblePadding}"/>
+                      </Grid>
                     </Border>
-                    <Border HorizontalAlignment="Right" Padding="{DynamicResource MessageBubblePadding}" Background="{DynamicResource OutgoingBubbleBackground}" BorderBrush="{DynamicResource OutgoingBubbleBorder}" BorderThickness="{DynamicResource OutgoingBubbleBorderThickness}" CornerRadius="{DynamicResource OutgoingBubbleCorner}">
-                      <TextBlock Text="Outgoing preview" Foreground="{DynamicResource OutgoingBubbleForeground}" FontSize="13"/>
+                    <Border HorizontalAlignment="Right" Padding="0" Background="{DynamicResource OutgoingBubbleBackground}" BorderBrush="{DynamicResource OutgoingBubbleBorder}" BorderThickness="{DynamicResource OutgoingBubbleBorderThickness}" CornerRadius="{DynamicResource OutgoingBubbleCorner}">
+                      <Grid>
+                        <local:BubbleDecoration IsOutgoing="True"/>
+                        <TextBlock Text="Outgoing preview" Foreground="{DynamicResource OutgoingBubbleForeground}" FontSize="13" Margin="{DynamicResource MessageBubblePadding}"/>
+                      </Grid>
                     </Border>
                   </StackPanel>
                 </Border>
@@ -611,6 +701,16 @@
                   <CheckBox x:Name="BokehBox" Style="{StaticResource EffectCard}" Tag="Soft bokeh" AutomationProperties.Name="Soft bokeh">
                     <Border Background="{DynamicResource Canvas}">
                       <local:WeatherEffect x:Name="BokehPreview" Kind="Bokeh" Intensity="{Binding Value, ElementName=BokehIntensityBox}"/>
+                    </Border>
+                  </CheckBox>
+                  <CheckBox x:Name="WingPlumesBox" Style="{StaticResource EffectCard}" Tag="Wing plumes" AutomationProperties.Name="Wing plumes">
+                    <Border Background="{DynamicResource Canvas}">
+                      <local:WeatherEffect x:Name="WingPlumesPreview" Kind="WingPlumes" Intensity="{Binding Value, ElementName=WingPlumesIntensityBox}"/>
+                    </Border>
+                  </CheckBox>
+                  <CheckBox x:Name="RepulsorBox" Style="{StaticResource EffectCard}" Tag="Repulsor sparks" AutomationProperties.Name="Repulsor sparks">
+                    <Border Background="{DynamicResource Canvas}">
+                      <local:WeatherEffect x:Name="RepulsorPreview" Kind="Repulsor" Intensity="{Binding Value, ElementName=RepulsorIntensityBox}"/>
                     </Border>
                   </CheckBox>
                 </WrapPanel>
@@ -711,6 +811,24 @@
                           TickFrequency=".05" SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True"
                           AutomationProperties.Name="Soft bokeh intensity" Margin="0,0,0,8"/>
                 </StackPanel>
+                <StackPanel Visibility="{Binding IsChecked, ElementName=WingPlumesBox, Converter={StaticResource Bool}}">
+                  <DockPanel Margin="0,0,0,4">
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=WingPlumesIntensityBox, StringFormat=P0}" Foreground="{DynamicResource Muted}"/>
+                    <TextBlock Text="Wing plumes intensity" Style="{StaticResource Label}" Margin="0"/>
+                  </DockPanel>
+                  <Slider x:Name="WingPlumesIntensityBox" Style="{StaticResource BackgroundSlider}" Minimum=".1" Maximum="1"
+                          TickFrequency=".05" SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True"
+                          AutomationProperties.Name="Wing plumes intensity" Margin="0,0,0,8"/>
+                </StackPanel>
+                <StackPanel Visibility="{Binding IsChecked, ElementName=RepulsorBox, Converter={StaticResource Bool}}">
+                  <DockPanel Margin="0,0,0,4">
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=RepulsorIntensityBox, StringFormat=P0}" Foreground="{DynamicResource Muted}"/>
+                    <TextBlock Text="Repulsor sparks intensity" Style="{StaticResource Label}" Margin="0"/>
+                  </DockPanel>
+                  <Slider x:Name="RepulsorIntensityBox" Style="{StaticResource BackgroundSlider}" Minimum=".1" Maximum="1"
+                          TickFrequency=".05" SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True"
+                          AutomationProperties.Name="Repulsor sparks intensity" Margin="0,0,0,8"/>
+                </StackPanel>
                 <Separator Margin="0,8,0,12" Background="{DynamicResource Line}"/>
                 <Grid>
                   <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="12"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -725,6 +843,8 @@
                       <ComboBoxItem Content="Ink bloom" Tag="ink"/>
                       <ComboBoxItem Content="Burst" Tag="burst"/>
                       <ComboBoxItem Content="Petals" Tag="petals"/>
+                      <ComboBoxItem Content="Wing plumes" Tag="feathers"/>
+                      <ComboBoxItem Content="Arc pulse" Tag="repulsor"/>
                     </ComboBox>
                   </StackPanel>
                   <StackPanel Grid.Column="2">
@@ -737,6 +857,8 @@
                       <ComboBoxItem Content="Ripple" Tag="ripple"/>
                       <ComboBoxItem Content="Burst" Tag="burst"/>
                       <ComboBoxItem Content="Petals" Tag="petals"/>
+                      <ComboBoxItem Content="Wing plumes" Tag="feathers"/>
+                      <ComboBoxItem Content="Arc pulse" Tag="repulsor"/>
                     </ComboBox>
                   </StackPanel>
                 </Grid>
@@ -812,7 +934,7 @@
                       <Setter Property="Template">
                         <Setter.Value>
                           <ControlTemplate TargetType="ListBoxItem">
-                            <Border x:Name="Frame" Width="126" Height="64" CornerRadius="{DynamicResource ControlCorner}"
+                            <Border x:Name="Frame" Width="116" Height="56" CornerRadius="{DynamicResource ControlCorner}"
                                     BorderBrush="{DynamicResource Line}" BorderThickness="1.5" Background="{DynamicResource Sidebar}"
                                     local:Rounded.Radius="{Binding CornerRadius.TopLeft, RelativeSource={RelativeSource Self}}" ClipToBounds="True">
                               <Grid>
@@ -918,6 +1040,16 @@
                       <local:HeaderEffect x:Name="TitleWavePreview" Kind="TitleWave" Intensity="{Binding Value, ElementName=TitleWaveIntensityBox}"/>
                     </Border>
                   </CheckBox>
+                  <CheckBox x:Name="TitleWingsBox" Style="{StaticResource EffectCard}" Tag="Title wings" AutomationProperties.Name="Title bar wings">
+                    <Border Background="{DynamicResource Sidebar}">
+                      <local:HeaderEffect x:Name="TitleWingsPreview" Kind="TitleWings" Intensity="{Binding Value, ElementName=TitleWingsIntensityBox}"/>
+                    </Border>
+                  </CheckBox>
+                  <CheckBox x:Name="TitleReactorBox" Style="{StaticResource EffectCard}" Tag="Title reactor" AutomationProperties.Name="Title bar reactor">
+                    <Border Background="{DynamicResource Sidebar}">
+                      <local:HeaderEffect x:Name="TitleReactorPreview" Kind="TitleReactor" Intensity="{Binding Value, ElementName=TitleReactorIntensityBox}"/>
+                    </Border>
+                  </CheckBox>
                 </WrapPanel>
                 <StackPanel Visibility="{Binding IsChecked, ElementName=SteampunkEngineBox, Converter={StaticResource Bool}}">
                   <DockPanel Margin="0,4,0,4">
@@ -983,6 +1115,22 @@
                   <Slider x:Name="TitleWaveIntensityBox" Style="{StaticResource BackgroundSlider}" Minimum=".1" Maximum="1" TickFrequency=".05"
                           SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True" AutomationProperties.Name="Title bar wave intensity" Margin="0,0,0,8"/>
                 </StackPanel>
+                <StackPanel Visibility="{Binding IsChecked, ElementName=TitleWingsBox, Converter={StaticResource Bool}}">
+                  <DockPanel Margin="0,4,0,4">
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=TitleWingsIntensityBox, StringFormat=P0}" Foreground="{DynamicResource Muted}"/>
+                    <TextBlock Text="Title wings intensity" Style="{StaticResource Label}" Margin="0"/>
+                  </DockPanel>
+                  <Slider x:Name="TitleWingsIntensityBox" Style="{StaticResource BackgroundSlider}" Minimum=".1" Maximum="1" TickFrequency=".05"
+                          SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True" AutomationProperties.Name="Title bar wings intensity" Margin="0,0,0,8"/>
+                </StackPanel>
+                <StackPanel Visibility="{Binding IsChecked, ElementName=TitleReactorBox, Converter={StaticResource Bool}}">
+                  <DockPanel Margin="0,4,0,4">
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=TitleReactorIntensityBox, StringFormat=P0}" Foreground="{DynamicResource Muted}"/>
+                    <TextBlock Text="Title reactor intensity" Style="{StaticResource Label}" Margin="0"/>
+                  </DockPanel>
+                  <Slider x:Name="TitleReactorIntensityBox" Style="{StaticResource BackgroundSlider}" Minimum=".1" Maximum="1" TickFrequency=".05"
+                          SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True" AutomationProperties.Name="Title bar reactor intensity" Margin="0,0,0,8"/>
+                </StackPanel>
                 <Separator Margin="0,6,0,12" Background="{DynamicResource Line}"/>
                 <TextBlock Text="Chat header" Style="{StaticResource Label}" Margin="0,0,0,8"/>
                 <WrapPanel Margin="0,0,0,4">
@@ -1029,6 +1177,16 @@
                   <CheckBox x:Name="HeaderPlasmaBox" Style="{StaticResource EffectCard}" Tag="Header plasma" AutomationProperties.Name="Header plasma">
                     <Border Background="{DynamicResource Sidebar}">
                       <local:HeaderEffect x:Name="HeaderPlasmaPreview" Kind="Plasma" Intensity="{Binding Value, ElementName=HeaderPlasmaIntensityBox}"/>
+                    </Border>
+                  </CheckBox>
+                  <CheckBox x:Name="HeaderBurstBox" Style="{StaticResource EffectCard}" Tag="Header burst" AutomationProperties.Name="Header burst">
+                    <Border Background="{DynamicResource Sidebar}">
+                      <local:HeaderEffect x:Name="HeaderBurstPreview" Kind="HeaderBurst" Intensity="{Binding Value, ElementName=HeaderBurstIntensityBox}"/>
+                    </Border>
+                  </CheckBox>
+                  <CheckBox x:Name="HeaderArcBox" Style="{StaticResource EffectCard}" Tag="Header arc" AutomationProperties.Name="Header arc">
+                    <Border Background="{DynamicResource Sidebar}">
+                      <local:HeaderEffect x:Name="HeaderArcPreview" Kind="HeaderArc" Intensity="{Binding Value, ElementName=HeaderArcIntensityBox}"/>
                     </Border>
                   </CheckBox>
                 </WrapPanel>
@@ -1104,6 +1262,22 @@
                   <Slider x:Name="HeaderPlasmaIntensityBox" Style="{StaticResource BackgroundSlider}" Minimum=".1" Maximum="1" TickFrequency=".05"
                           SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True" AutomationProperties.Name="Header plasma intensity" Margin="0,0,0,8"/>
                 </StackPanel>
+                <StackPanel Visibility="{Binding IsChecked, ElementName=HeaderBurstBox, Converter={StaticResource Bool}}">
+                  <DockPanel Margin="0,4,0,4">
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=HeaderBurstIntensityBox, StringFormat=P0}" Foreground="{DynamicResource Muted}"/>
+                    <TextBlock Text="Burst intensity" Style="{StaticResource Label}" Margin="0"/>
+                  </DockPanel>
+                  <Slider x:Name="HeaderBurstIntensityBox" Style="{StaticResource BackgroundSlider}" Minimum=".1" Maximum="1" TickFrequency=".05"
+                          SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True" AutomationProperties.Name="Header burst intensity" Margin="0,0,0,8"/>
+                </StackPanel>
+                <StackPanel Visibility="{Binding IsChecked, ElementName=HeaderArcBox, Converter={StaticResource Bool}}">
+                  <DockPanel Margin="0,4,0,4">
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=HeaderArcIntensityBox, StringFormat=P0}" Foreground="{DynamicResource Muted}"/>
+                    <TextBlock Text="Arc intensity" Style="{StaticResource Label}" Margin="0"/>
+                  </DockPanel>
+                  <Slider x:Name="HeaderArcIntensityBox" Style="{StaticResource BackgroundSlider}" Minimum=".1" Maximum="1" TickFrequency=".05"
+                          SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True" AutomationProperties.Name="Header arc intensity" Margin="0,0,0,8"/>
+                </StackPanel>
               </StackPanel>
               <StackPanel x:Name="AppearancePanelsSection" Visibility="Collapsed">
                 <TextBlock Text="Side nav" Style="{StaticResource Label}" Margin="0,0,0,8"/>
@@ -1161,6 +1335,20 @@
                     <Grid Background="{DynamicResource Canvas}">
                       <Border Width="48" HorizontalAlignment="Center" Background="{DynamicResource Sidebar}" BorderBrush="{DynamicResource Line}" BorderThickness="1,0">
                         <local:RailEffect x:Name="RailCascadePreview" Kind="Cascade" Intensity="{Binding Value, ElementName=RailCascadeIntensityBox}"/>
+                      </Border>
+                    </Grid>
+                  </CheckBox>
+                  <CheckBox x:Name="RailWingsBox" Style="{StaticResource EffectCard}" Tag="Rail wings" AutomationProperties.Name="Rail wings">
+                    <Grid Background="{DynamicResource Canvas}">
+                      <Border Width="48" HorizontalAlignment="Center" Background="{DynamicResource Sidebar}" BorderBrush="{DynamicResource Line}" BorderThickness="1,0">
+                        <local:RailEffect x:Name="RailWingsPreview" Kind="WingTrail" Intensity="{Binding Value, ElementName=RailWingsIntensityBox}"/>
+                      </Border>
+                    </Grid>
+                  </CheckBox>
+                  <CheckBox x:Name="RailArcBox" Style="{StaticResource EffectCard}" Tag="Arc reactor" AutomationProperties.Name="Rail arc reactor">
+                    <Grid Background="{DynamicResource Canvas}">
+                      <Border Width="48" HorizontalAlignment="Center" Background="{DynamicResource Sidebar}" BorderBrush="{DynamicResource Line}" BorderThickness="1,0">
+                        <local:RailEffect x:Name="RailArcPreview" Kind="ArcReactor" Intensity="{Binding Value, ElementName=RailArcIntensityBox}"/>
                       </Border>
                     </Grid>
                   </CheckBox>
@@ -1229,6 +1417,22 @@
                   <Slider x:Name="RailCascadeIntensityBox" Style="{StaticResource BackgroundSlider}" Minimum=".1" Maximum="1" TickFrequency=".05"
                           SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True" AutomationProperties.Name="Rail cascade intensity" Margin="0,0,0,8"/>
                 </StackPanel>
+                <StackPanel Visibility="{Binding IsChecked, ElementName=RailWingsBox, Converter={StaticResource Bool}}">
+                  <DockPanel Margin="0,4,0,4">
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=RailWingsIntensityBox, StringFormat=P0}" Foreground="{DynamicResource Muted}"/>
+                    <TextBlock Text="Rail wings intensity" Style="{StaticResource Label}" Margin="0"/>
+                  </DockPanel>
+                  <Slider x:Name="RailWingsIntensityBox" Style="{StaticResource BackgroundSlider}" Minimum=".1" Maximum="1" TickFrequency=".05"
+                          SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True" AutomationProperties.Name="Rail wings intensity" Margin="0,0,0,8"/>
+                </StackPanel>
+                <StackPanel Visibility="{Binding IsChecked, ElementName=RailArcBox, Converter={StaticResource Bool}}">
+                  <DockPanel Margin="0,4,0,4">
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=RailArcIntensityBox, StringFormat=P0}" Foreground="{DynamicResource Muted}"/>
+                    <TextBlock Text="Arc reactor intensity" Style="{StaticResource Label}" Margin="0"/>
+                  </DockPanel>
+                  <Slider x:Name="RailArcIntensityBox" Style="{StaticResource BackgroundSlider}" Minimum=".1" Maximum="1" TickFrequency=".05"
+                          SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True" AutomationProperties.Name="Rail arc reactor intensity" Margin="0,0,0,8"/>
+                </StackPanel>
                 <TextBlock Text="Side panel" Style="{StaticResource Label}" Margin="0,10,0,8"/>
                 <WrapPanel Margin="0,0,0,4">
                   <CheckBox x:Name="SidebarMotesBox" Style="{StaticResource EffectCard}" Tag="Floating motes" AutomationProperties.Name="Floating motes">
@@ -1274,6 +1478,16 @@
                   <CheckBox x:Name="SidebarCircuitBox" Style="{StaticResource EffectCard}" Tag="Side circuit" AutomationProperties.Name="Side circuit">
                     <Border Background="{DynamicResource Sidebar}">
                       <local:SidebarEffect x:Name="SidebarCircuitPreview" Kind="Circuit" Intensity="{Binding Value, ElementName=SidebarCircuitIntensityBox}"/>
+                    </Border>
+                  </CheckBox>
+                  <CheckBox x:Name="SidebarWingsBox" Style="{StaticResource EffectCard}" Tag="Beam wings" AutomationProperties.Name="Beam wings">
+                    <Border Background="{DynamicResource Sidebar}">
+                      <local:SidebarEffect x:Name="SidebarWingsPreview" Kind="BeamWings" Intensity="{Binding Value, ElementName=SidebarWingsIntensityBox}"/>
+                    </Border>
+                  </CheckBox>
+                  <CheckBox x:Name="SidebarHudBox" Style="{StaticResource EffectCard}" Tag="Stark HUD" AutomationProperties.Name="Stark HUD">
+                    <Border Background="{DynamicResource Sidebar}">
+                      <local:SidebarEffect x:Name="SidebarHudPreview" Kind="HudMatrix" Intensity="{Binding Value, ElementName=SidebarHudIntensityBox}"/>
                     </Border>
                   </CheckBox>
                 </WrapPanel>
@@ -1349,6 +1563,22 @@
                   <Slider x:Name="SidebarCircuitIntensityBox" Style="{StaticResource BackgroundSlider}" Minimum=".1" Maximum="1" TickFrequency=".05"
                           SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True" AutomationProperties.Name="Side circuit intensity" Margin="0,0,0,8"/>
                 </StackPanel>
+                <StackPanel Visibility="{Binding IsChecked, ElementName=SidebarWingsBox, Converter={StaticResource Bool}}">
+                  <DockPanel Margin="0,4,0,4">
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=SidebarWingsIntensityBox, StringFormat=P0}" Foreground="{DynamicResource Muted}"/>
+                    <TextBlock Text="Beam wings intensity" Style="{StaticResource Label}" Margin="0"/>
+                  </DockPanel>
+                  <Slider x:Name="SidebarWingsIntensityBox" Style="{StaticResource BackgroundSlider}" Minimum=".1" Maximum="1" TickFrequency=".05"
+                          SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True" AutomationProperties.Name="Beam wings intensity" Margin="0,0,0,8"/>
+                </StackPanel>
+                <StackPanel Visibility="{Binding IsChecked, ElementName=SidebarHudBox, Converter={StaticResource Bool}}">
+                  <DockPanel Margin="0,4,0,4">
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=SidebarHudIntensityBox, StringFormat=P0}" Foreground="{DynamicResource Muted}"/>
+                    <TextBlock Text="Stark HUD intensity" Style="{StaticResource Label}" Margin="0"/>
+                  </DockPanel>
+                  <Slider x:Name="SidebarHudIntensityBox" Style="{StaticResource BackgroundSlider}" Minimum=".1" Maximum="1" TickFrequency=".05"
+                          SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True" AutomationProperties.Name="Stark HUD intensity" Margin="0,0,0,8"/>
+                </StackPanel>
               </StackPanel>
               <StackPanel x:Name="AppearanceAuraSection" Visibility="Collapsed">
                 <TextBlock Text="Selection &amp; button aura" Style="{StaticResource Label}" Margin="0,0,0,8"/>
@@ -1366,7 +1596,7 @@
                       <Setter Property="Template">
                         <Setter.Value>
                           <ControlTemplate TargetType="ListBoxItem">
-                            <Border x:Name="Frame" Width="126" Height="64" CornerRadius="{DynamicResource ControlCorner}"
+                            <Border x:Name="Frame" Width="116" Height="56" CornerRadius="{DynamicResource ControlCorner}"
                                     BorderBrush="{DynamicResource Line}" BorderThickness="1.5" Background="{DynamicResource Sidebar}"
                                     local:Rounded.Radius="{Binding CornerRadius.TopLeft, RelativeSource={RelativeSource Self}}" ClipToBounds="True">
                               <Grid>

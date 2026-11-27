@@ -144,6 +144,28 @@ public sealed partial class LanService
         TransferChanged?.Invoke(transfer);
     }
 
+    private async Task CancelNativeFolderAsync(FileTransfer transfer)
+    {
+        if (!nativeFolders.TryGetValue((transfer.PeerId, transfer.Id), out var folder) || folder.Transfer != transfer)
+            throw new InvalidOperationException("Only a pending or active transfer can be cancelled.");
+        if (transfer.Outgoing && transfer.State == "Waiting for approval")
+        {
+            try { await SendAsync(folder.Session, "folder", FolderBody(folder, "cancel")); }
+            catch (Exception e) when (e is IOException or SocketException or OperationCanceledException) { }
+            folder.Stop("Cancelled");
+            return;
+        }
+        if (transfer.State is not ("Accepted" or "Connecting" or "Transferring") || folder.Token.IsCancellationRequested)
+            throw new InvalidOperationException("Only a pending or active transfer can be cancelled.");
+
+        folder.MarkStopping("Cancelled");
+        transfer.State = "Cancelled";
+        TransferChanged?.Invoke(transfer);
+        try { await SendAsync(folder.Session, "folder", FolderBody(folder, "abort")).WaitAsync(TimeSpan.FromSeconds(1)); }
+        catch (Exception e) when (e is IOException or SocketException or OperationCanceledException or TimeoutException) { }
+        folder.Stop("Cancelled");
+    }
+
     private async Task AnswerNativeFolderAsync(FileTransfer transfer, string operation, string state)
     {
         if (!nativeFolders.TryGetValue((transfer.PeerId, transfer.Id), out var folder) || folder.Transfer != transfer ||
@@ -338,7 +360,7 @@ public sealed partial class LanService
             transfer.Progress = 100;
             state = transfer.Outgoing ? "Sent · receipt unavailable" : "Received";
         }
-        catch (OperationCanceledException) when (folder.Token.IsCancellationRequested) { }
+        catch (Exception e) when ((e is OperationCanceledException or IOException or SocketException or ObjectDisposedException) && folder.Token.IsCancellationRequested) { }
         catch (Exception e) when (e is IOException or SocketException or UnauthorizedAccessException or InvalidDataException or TimeoutException)
         {
             state = "Failed: " + e.Message;
@@ -393,6 +415,13 @@ public sealed partial class LanService
         public TaskCompletionSource<string> Decision { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource Finished { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public Channel<FolderEntry> Offers { get; } = Channel.CreateBounded<FolderEntry>(1);
+        public void MarkStopping(string state)
+        {
+            lock (gate)
+            {
+                if (!completed && stopState is null) stopState = state;
+            }
+        }
         public void Stop(string state)
         {
             lock (gate)

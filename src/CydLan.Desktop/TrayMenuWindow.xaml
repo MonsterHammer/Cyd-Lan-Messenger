@@ -5,6 +5,7 @@
         Style="{StaticResource {x:Type Window}}" Title="CydLan tray menu" WindowStyle="None" ResizeMode="NoResize" AllowsTransparency="True"
         Background="Transparent" ShowInTaskbar="False" Topmost="True" Width="250" SizeToContent="Height" WindowStartupLocation="Manual">
   <Window.Resources>
+    <BooleanToVisibilityConverter x:Key="Bool"/>
     <Style x:Key="TrayAction" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
       <Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="Padding" Value="10,8"/><Setter Property="Margin" Value="0,1"/>
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
@@ -27,6 +28,14 @@
       <Button x:Name="OpenAction" Style="{StaticResource TrayAction}" Click="Open_Click"><Grid><local:Glyph Data="{DynamicResource IconChat}" Size="16" Foreground="{DynamicResource Accent}" HorizontalAlignment="Left"/><TextBlock Text="Open CydLan" Margin="27,0,0,0" FontSize="12" FontWeight="SemiBold"/></Grid></Button>
       <Button Style="{StaticResource TrayAction}" Click="Transfers_Click"><Grid><local:Glyph Data="{DynamicResource IconTransfer}" Size="16" Foreground="{DynamicResource Muted}" HorizontalAlignment="Left"/><TextBlock Text="File transfers" Margin="27,0,0,0" FontSize="12"/></Grid></Button>
       <Button Style="{StaticResource TrayAction}" Click="Settings_Click"><Grid><local:Glyph Data="{DynamicResource IconSettings}" Size="16" Foreground="{DynamicResource Muted}" HorizontalAlignment="Left"/><TextBlock Text="Preferences" Margin="27,0,0,0" FontSize="12"/></Grid></Button>
+      <Button x:Name="FloatingAction" Style="{StaticResource TrayAction}" Click="Floating_Click">
+        <Grid>
+          <local:Glyph Data="{DynamicResource IconPet}" Size="16" Foreground="{DynamicResource Muted}" HorizontalAlignment="Left"/>
+          <TextBlock Text="Floating LAN" Margin="27,0,22,0" FontSize="12"/>
+          <local:Glyph x:Name="FloatingCheck" Data="{DynamicResource IconCheck}" Size="13" StrokeThickness="2.2" Foreground="{DynamicResource Accent}" HorizontalAlignment="Right"
+                       Visibility="{Binding FloatingLanEnabled, Converter={StaticResource Bool}}"/>
+        </Grid>
+      </Button>
       <Border Background="{DynamicResource Line}" Height="1" Margin="3,5,3,5"/>
       <Button Style="{StaticResource TrayAction}" Click="Quit_Click"><Grid><local:Glyph Data="{DynamicResource IconQuit}" Size="16" Foreground="{DynamicResource Danger}" HorizontalAlignment="Left"/><TextBlock Text="Quit CydLan" Margin="27,0,0,0" FontSize="12" Foreground="{DynamicResource Danger}"/></Grid></Button>
     </StackPanel>

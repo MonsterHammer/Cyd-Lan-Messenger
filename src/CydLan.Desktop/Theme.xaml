@@ -9,6 +9,8 @@
     <!-- Message text; Preferences › Messages replaces these at runtime. -->
     <FontFamily x:Key="MessageFontFamily">Segoe UI Variable Text, Segoe UI</FontFamily>
     <sys:Double x:Key="MessageFontSize">15</sys:Double>
+    <SolidColorBrush x:Key="ChromeColorFinishBrush" Color="Transparent"/>
+    <SolidColorBrush x:Key="ChatColorFinishBrush" Color="Transparent"/>
     <SolidColorBrush x:Key="IncomingBubbleBackground" Color="#F1F3F5"/>
     <SolidColorBrush x:Key="OutgoingBubbleBackground" Color="#E6F1F4"/>
     <SolidColorBrush x:Key="IncomingBubbleBorder" Color="Transparent"/>

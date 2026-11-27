@@ -38,6 +38,7 @@ public static class ThemeManager
     public const string Pineapple = "pineapple", CoralStar = "coralstar", NoirPink = "noirpink", Vampire = "vampire";
     public const string VoltSpark = "voltspark", KingdomRed = "kingdomred", Bubblegum = "bubblegum", RibbonBlush = "ribbonblush";
     public const string NoirGold = "noirgold", WebCrimson = "webcrimson", Jester = "jester", Cipher = "cipher";
+    public const string GundamFreedom = "gundamfreedom", IronMan = "ironman";
 
     private static readonly (string Tag, string Name, string File)[] Definitions =
     [
@@ -83,7 +84,9 @@ public static class ThemeManager
         (NoirGold, "Noir Gold", "NoirGold"),
         (WebCrimson, "Web Crimson", "WebCrimson"),
         (Jester, "Jester", "Jester"),
-        (Cipher, "Cipher", "Cipher")
+        (Cipher, "Cipher", "Cipher"),
+        (GundamFreedom, "Gundam Freedom", "GundamFreedom"),
+        (IronMan, "Iron Man", "IronMan")
     ];
 
     private static ResourceDictionary? customControls;
@@ -109,6 +112,8 @@ public static class ThemeManager
         "spiderman" => WebCrimson,
         "joker" => Jester,
         "matrix" => Cipher,
+        "gundam" or "freedom" or "gundamfreedone" => GundamFreedom,
+        "stark" or "tonystark" => IronMan,
         Dark or FollowSystem or Ocean or Lavender or Ember or Pixel or Forest or Sand
             or Anime or Steampunk or Aurora or Paper or Arcade or Sakura
             or Cyberpunk or Midnight or Sunset or Mint or Matcha or Frost
@@ -116,7 +121,8 @@ public static class ThemeManager
             or Rose or Espresso or Cobalt or Sage or Amber
             or Pineapple or CoralStar or NoirPink or Vampire
             or VoltSpark or KingdomRed or Bubblegum or RibbonBlush
-            or NoirGold or WebCrimson or Jester or Cipher => value,
+            or NoirGold or WebCrimson or Jester or Cipher
+            or GundamFreedom or IronMan => value,
         _ => Light
     };
 
@@ -135,22 +141,19 @@ public static class ThemeManager
         foreach (var (key, brush) in Flatten(palette)) app.Resources[key] = brush;
 
         // Opt-in custom accent color remix (empty = bundled theme).
-        var canvasColor = ((SolidColorBrush)app.Resources["Canvas"]).Color;
-        var sidebarColor = ((SolidColorBrush)app.Resources["Sidebar"]).Color;
-        var surfaceColor = ((SolidColorBrush)app.Resources["Surface"]).Color;
-        var lineColor = ((SolidColorBrush)app.Resources["Line"]).Color;
-        var inkColor = ((SolidColorBrush)app.Resources["Ink"]).Color;
-        bool isDark = AppearanceOptions.RelativeLuminance(canvasColor) < .50;
+        var rawCanvasColor = ((SolidColorBrush)app.Resources["Canvas"]).Color;
+        var rawSidebarColor = ((SolidColorBrush)app.Resources["Sidebar"]).Color;
+        bool rawIsDark = AppearanceOptions.RelativeLuminance(rawCanvasColor) < .50;
 
         if (AppearanceOptions.TryParseHex(activeOverrides.CustomAccentColor, out var customAccent))
         {
             var accentInkColor = AppearanceOptions.RelativeLuminance(customAccent) >= .56
                 ? System.Windows.Media.Color.FromRgb(0x16, 0x1B, 0x20)
                 : System.Windows.Media.Colors.White;
-            var accentSoftColor = EffectPalette.Blend(canvasColor, customAccent, isDark ? .26 : .14);
-            var rowSelectedColor = EffectPalette.Blend(sidebarColor, customAccent, isDark ? .24 : .15);
-            var navSelectedColor = EffectPalette.Blend(sidebarColor, customAccent, isDark ? .28 : .18);
-            var avatarColor = EffectPalette.Blend(sidebarColor, customAccent, isDark ? .30 : .16);
+            var accentSoftColor = EffectPalette.Blend(rawCanvasColor, customAccent, rawIsDark ? .26 : .14);
+            var rowSelectedColor = EffectPalette.Blend(rawSidebarColor, customAccent, rawIsDark ? .24 : .15);
+            var navSelectedColor = EffectPalette.Blend(rawSidebarColor, customAccent, rawIsDark ? .28 : .18);
+            var avatarColor = EffectPalette.Blend(rawSidebarColor, customAccent, rawIsDark ? .30 : .16);
             app.Resources["Accent"] = FrozenBrush(customAccent);
             app.Resources["AccentInk"] = FrozenBrush(accentInkColor);
             app.Resources["AccentSoft"] = FrozenBrush(accentSoftColor);
@@ -159,31 +162,118 @@ public static class ThemeManager
             app.Resources["Avatar"] = FrozenBrush(avatarColor);
         }
 
-        var accentColor = ((SolidColorBrush)app.Resources["Accent"]).Color;
-        var accentInk = ((SolidColorBrush)app.Resources["AccentInk"]).Color;
-        var accentSoft = ((SolidColorBrush)app.Resources["AccentSoft"]).Color;
-        var effectColor = AppearanceOptions.TryParseHex(activeOverrides.CustomEffectColor, out var customEffect) ? customEffect : accentColor;
+        System.Windows.Media.Color KeyColor(string key) => ((SolidColorBrush)app.Resources[key]).Color;
+
+        var rawPalette = new ColorPaletteSet(
+            rawCanvasColor,
+            KeyColor("Rail"),
+            rawSidebarColor,
+            KeyColor("Surface"),
+            KeyColor("Hover"),
+            KeyColor("Input"),
+            KeyColor("Line"),
+            KeyColor("Ink"),
+            KeyColor("Muted"),
+            KeyColor("Faint"),
+            KeyColor("Accent"),
+            KeyColor("AccentSoft"),
+            KeyColor("AccentInk"),
+            KeyColor("Avatar"),
+            KeyColor("Online"),
+            KeyColor("Away"),
+            KeyColor("Danger"),
+            KeyColor("NavSelected"),
+            KeyColor("RowHover"),
+            KeyColor("RowSelected"));
+
+        // Preserve un-graded theme + custom colors so swatch cards preview live from raw sources.
+        app.Resources["RawCanvasColor"] = rawPalette.Canvas;
+        app.Resources["RawRailColor"] = rawPalette.Rail;
+        app.Resources["RawSidebarColor"] = rawPalette.Sidebar;
+        app.Resources["RawSurfaceColor"] = rawPalette.Surface;
+        app.Resources["RawLineColor"] = rawPalette.Line;
+        app.Resources["RawInkColor"] = rawPalette.Ink;
+        app.Resources["RawAccentColor"] = rawPalette.Accent;
+        app.Resources["RawAccentSoftColor"] = rawPalette.AccentSoft;
+        app.Resources["RawRowSelectedColor"] = rawPalette.RowSelected;
+
+        var finishKind = ColorFinish.KindFor(activeOverrides.ColorFinish);
+        double finishIntensity = double.IsFinite(activeOverrides.ColorFinishIntensity)
+            ? Math.Clamp(activeOverrides.ColorFinishIntensity, .1, 1.0)
+            : .65;
+        var graded = ColorFinish.TransformPalette(in rawPalette, finishKind, finishIntensity);
+
+        if (finishKind != ColorFinishKind.Off)
+        {
+            app.Resources["Canvas"] = FrozenBrush(graded.Canvas);
+            app.Resources["Rail"] = FrozenBrush(graded.Rail);
+            app.Resources["Sidebar"] = FrozenBrush(graded.Sidebar);
+            app.Resources["Surface"] = FrozenBrush(graded.Surface);
+            app.Resources["Hover"] = FrozenBrush(graded.Hover);
+            app.Resources["Input"] = FrozenBrush(graded.Input);
+            app.Resources["Line"] = FrozenBrush(graded.Line);
+            app.Resources["Ink"] = FrozenBrush(graded.Ink);
+            app.Resources["Muted"] = FrozenBrush(graded.Muted);
+            app.Resources["Faint"] = FrozenBrush(graded.Faint);
+            app.Resources["Accent"] = FrozenBrush(graded.Accent);
+            app.Resources["AccentSoft"] = FrozenBrush(graded.AccentSoft);
+            app.Resources["AccentInk"] = FrozenBrush(graded.AccentInk);
+            app.Resources["Avatar"] = FrozenBrush(graded.Avatar);
+            app.Resources["Online"] = FrozenBrush(graded.Online);
+            app.Resources["Away"] = FrozenBrush(graded.Away);
+            app.Resources["Danger"] = FrozenBrush(graded.Danger);
+            app.Resources["NavSelected"] = FrozenBrush(graded.NavSelected);
+            app.Resources["RowHover"] = FrozenBrush(graded.RowHover);
+            app.Resources["RowSelected"] = FrozenBrush(graded.RowSelected);
+        }
+
+        var canvasColor = graded.Canvas;
+        var railColor = graded.Rail;
+        var sidebarColor = graded.Sidebar;
+        var surfaceColor = graded.Surface;
+        var lineColor = graded.Line;
+        var inkColor = graded.Ink;
+        bool isDark = AppearanceOptions.RelativeLuminance(canvasColor) < .50;
+
+        var accentColor = graded.Accent;
+        var accentInk = graded.AccentInk;
+        var accentSoft = graded.AccentSoft;
+        var effectColor = AppearanceOptions.TryParseHex(activeOverrides.CustomEffectColor, out var customEffect)
+            ? ColorFinish.TransformColor(customEffect, ColorPaletteRole.Accent, finishKind, finishIntensity * .65, rawPalette.Accent, rawPalette.Canvas, rawPalette.Sidebar, rawIsDark)
+            : accentColor;
         app.Resources["EffectColor"] = effectColor;
         app.Resources["ChromeSurfaceColor"] = sidebarColor;
         app.Resources["ChromeLineColor"] = lineColor;
-        var inputColor = ((SolidColorBrush)app.Resources["Input"]).Color;
+        var inputColor = graded.Input;
         app.Resources["ComposerSeamlessBackground"] = FrozenBrush(System.Windows.Media.Color.FromArgb(0x38, inputColor.R, inputColor.G, inputColor.B));
+
+        app.Resources["ChromeColorFinishBrush"] = ColorFinish.BuildWashBrush(sidebarColor, accentColor, railColor, finishKind, finishIntensity, isChat: false, isDark);
+
         string surfaceMode = AppearanceOptions.NormalizeChatSurfaceMode(activeOverrides.ChatSurfaceMode);
+        System.Windows.Media.Color chatBaseForWash = canvasColor;
+        bool chatIsDark = isDark;
         if (surfaceMode == AppearanceOptions.ChatSurfaceTheme)
         {
             app.Resources["ChatSurfaceBackground"] = System.Windows.Media.Brushes.Transparent;
             app.Resources["ChatPreviewBackground"] = app.Resources["Sidebar"];
+            app.Resources["ChatColorFinishBrush"] = System.Windows.Media.Brushes.Transparent;
         }
         else if (AppearanceOptions.TryParseHex(activeOverrides.CustomChatBackgroundColor, out var customChatBg))
         {
-            var customChatBrush = FrozenBrush(customChatBg);
+            bool customChatDark = AppearanceOptions.RelativeLuminance(customChatBg) < .50;
+            var gradedChatBg = ColorFinish.TransformColor(customChatBg, ColorPaletteRole.Canvas, finishKind, finishIntensity, rawPalette.Accent, customChatBg, rawPalette.Sidebar, customChatDark);
+            var customChatBrush = FrozenBrush(gradedChatBg);
             app.Resources["ChatSurfaceBackground"] = customChatBrush;
             app.Resources["ChatPreviewBackground"] = customChatBrush;
+            chatBaseForWash = gradedChatBg;
+            chatIsDark = customChatDark;
+            app.Resources["ChatColorFinishBrush"] = ColorFinish.BuildWashBrush(chatBaseForWash, accentColor, surfaceColor, finishKind, finishIntensity, isChat: true, chatIsDark);
         }
         else
         {
             app.Resources["ChatSurfaceBackground"] = app.Resources["Canvas"];
             app.Resources["ChatPreviewBackground"] = app.Resources["Canvas"];
+            app.Resources["ChatColorFinishBrush"] = ColorFinish.BuildWashBrush(chatBaseForWash, accentColor, surfaceColor, finishKind, finishIntensity, isChat: true, chatIsDark);
         }
         DecorationDesign decoration = mode switch
         {
@@ -227,6 +317,8 @@ public static class ThemeManager
             WebCrimson => DecorationDesign.WebCrimson,
             Jester => DecorationDesign.Jester,
             Cipher => DecorationDesign.Cipher,
+            GundamFreedom => DecorationDesign.GundamFreedom,
+            IronMan => DecorationDesign.IronMan,
             _ => DecorationDesign.None
         };
         app.Resources["ThemeDecorationDesign"] = decoration;
@@ -321,9 +413,29 @@ public static class ThemeManager
     {
         bool hasOutCustom = AppearanceOptions.TryParseHex(overrides.CustomOutgoingBubbleColor, out var outCustom);
         bool hasInCustom = AppearanceOptions.TryParseHex(overrides.CustomIncomingBubbleColor, out var inCustom);
-        string style = AppearanceOptions.NormalizeBubbleStyle(overrides.BubbleStyle);
+        var finishKind = ColorFinish.KindFor(overrides.ColorFinish);
+        double finishIntensity = double.IsFinite(overrides.ColorFinishIntensity)
+            ? Math.Clamp(overrides.ColorFinishIntensity, .1, 1.0)
+            : .65;
+        System.Windows.Media.Color GradeBubble(System.Windows.Media.Color c, ColorPaletteRole role, bool darkRef) =>
+            ColorFinish.TransformColor(c, role, finishKind, finishIntensity, accent, canvas, sidebar, darkRef);
 
-        System.Windows.Media.Color outBase = hasOutCustom ? outCustom : style == AppearanceOptions.BubbleSolid ? accent : accentSoft;
+        if (hasOutCustom && finishKind != ColorFinishKind.Off)
+            outCustom = GradeBubble(outCustom, ColorPaletteRole.AccentSoft, isDark);
+        if (hasInCustom && finishKind != ColorFinishKind.Off)
+            inCustom = GradeBubble(inCustom, ColorPaletteRole.Surface, isDark);
+
+        string style = AppearanceOptions.NormalizeBubbleStyle(overrides.BubbleStyle);
+        string effectiveStyle = style == AppearanceOptions.BubbleSoft
+            ? mode switch
+            {
+                GundamFreedom => AppearanceOptions.BubbleMecha,
+                IronMan => AppearanceOptions.BubbleReactor,
+                _ => style
+            }
+            : style;
+
+        System.Windows.Media.Color outBase = hasOutCustom ? outCustom : effectiveStyle == AppearanceOptions.BubbleSolid ? accent : accentSoft;
         System.Windows.Media.Color inBase = hasInCustom ? inCustom : surface;
 
         System.Windows.Media.Color ContrastInk(System.Windows.Media.Color bg, System.Windows.Media.Color fallback)
@@ -337,10 +449,11 @@ public static class ThemeManager
 
         Brush outBg, inBg, outBorder, inBorder;
         Thickness outThickness, inThickness;
-        System.Windows.Media.Color outFg = hasOutCustom ? ContrastInk(outBase, ink) : style == AppearanceOptions.BubbleSolid ? accentInk : ink;
+        System.Windows.Media.Color outFg = hasOutCustom ? ContrastInk(outBase, ink) : effectiveStyle == AppearanceOptions.BubbleSolid ? accentInk : ink;
         System.Windows.Media.Color inFg = hasInCustom ? ContrastInk(inBase, ink) : ink;
+        DecorationDesign bubbleDesign = DecorationDesign.None;
 
-        switch (style)
+        switch (effectiveStyle)
         {
             case AppearanceOptions.BubbleSolid:
                 outBg = FrozenBrush(outBase);
@@ -404,6 +517,85 @@ public static class ThemeManager
                 inFg = ink;
                 break;
             }
+            case AppearanceOptions.BubbleMecha:
+            {
+                bubbleDesign = DecorationDesign.GundamFreedom;
+                var wingBlue = GradeBubble(System.Windows.Media.Color.FromRgb(0x1D, 0x4E, 0xD8), ColorPaletteRole.Accent, false);
+                var beamCyan = GradeBubble(System.Windows.Media.Color.FromRgb(0x38, 0xBD, 0xF8), ColorPaletteRole.Accent, false);
+                var wingCrimson = GradeBubble(System.Windows.Media.Color.FromRgb(0xE1, 0x1D, 0x48), ColorPaletteRole.Accent, false);
+                var outStart = hasOutCustom ? outCustom : mode == GundamFreedom ? GradeBubble(System.Windows.Media.Color.FromRgb(0xE8, 0xF0, 0xFF), ColorPaletteRole.AccentSoft, false) : outBase;
+                var outEnd = hasOutCustom
+                    ? EffectPalette.Blend(outCustom, beamCyan, .24)
+                    : mode == GundamFreedom ? GradeBubble(System.Windows.Media.Color.FromRgb(0xC5, 0xDA, 0xFF), ColorPaletteRole.AccentSoft, false) : EffectPalette.Blend(outBase, accent, isDark ? .26 : .20);
+                var inStart = hasInCustom ? inCustom : mode == GundamFreedom ? GradeBubble(System.Windows.Media.Color.FromRgb(0xF8, 0xFA, 0xFF), ColorPaletteRole.Surface, false) : inBase;
+                var inEnd = hasInCustom
+                    ? EffectPalette.Blend(inCustom, sidebar, .28)
+                    : mode == GundamFreedom ? GradeBubble(System.Windows.Media.Color.FromRgb(0xE3, 0xEC, 0xFB), ColorPaletteRole.Surface, false) : EffectPalette.Blend(inBase, accentSoft, .24);
+                var og = new System.Windows.Media.LinearGradientBrush(outStart, outEnd, 32); og.Freeze();
+                var ig = new System.Windows.Media.LinearGradientBrush(inStart, inEnd, 32); ig.Freeze();
+                outBg = og;
+                inBg = ig;
+                var ob = new System.Windows.Media.LinearGradientBrush
+                {
+                    StartPoint = new System.Windows.Point(0, 0),
+                    EndPoint = new System.Windows.Point(1, 1),
+                    GradientStops =
+                    [
+                        new System.Windows.Media.GradientStop(mode == GundamFreedom ? wingBlue : accent, 0),
+                        new System.Windows.Media.GradientStop(beamCyan, .55),
+                        new System.Windows.Media.GradientStop(wingCrimson, 1)
+                    ]
+                };
+                ob.Freeze();
+                var ib = new System.Windows.Media.LinearGradientBrush(
+                    EffectPalette.Blend(line, beamCyan, .35),
+                    EffectPalette.Blend(accent, line, .45),
+                    35);
+                ib.Freeze();
+                outBorder = ob;
+                inBorder = ib;
+                outThickness = new Thickness(1.5);
+                inThickness = new Thickness(1.2);
+                outFg = hasOutCustom || mode != GundamFreedom ? ContrastInk(EffectPalette.Blend(outStart, outEnd, .5), ink) : ContrastInk(EffectPalette.Blend(outStart, outEnd, .5), System.Windows.Media.Color.FromRgb(0x0B, 0x15, 0x2B));
+                inFg = hasInCustom || mode != GundamFreedom ? ContrastInk(EffectPalette.Blend(inStart, inEnd, .5), ink) : ContrastInk(EffectPalette.Blend(inStart, inEnd, .5), System.Windows.Media.Color.FromRgb(0x0F, 0x17, 0x2A));
+                break;
+            }
+            case AppearanceOptions.BubbleReactor:
+            {
+                bubbleDesign = DecorationDesign.IronMan;
+                var starkGold = GradeBubble(System.Windows.Media.Color.FromRgb(0xF5, 0xB7, 0x00), ColorPaletteRole.Accent, true);
+                var arcCyan = GradeBubble(System.Windows.Media.Color.FromRgb(0x38, 0xBD, 0xF8), ColorPaletteRole.Accent, true);
+                var brightGold = GradeBubble(System.Windows.Media.Color.FromRgb(0xFD, 0xE0, 0x47), ColorPaletteRole.Accent, true);
+                var outStart = hasOutCustom ? outCustom : mode == IronMan ? GradeBubble(System.Windows.Media.Color.FromRgb(0x64, 0x10, 0x1D), ColorPaletteRole.AccentSoft, true) : EffectPalette.Blend(outBase, GradeBubble(System.Windows.Media.Color.FromRgb(0x5B, 0x0E, 0x1A), ColorPaletteRole.AccentSoft, true), isDark ? .38 : .18);
+                var outEnd = hasOutCustom ? EffectPalette.Blend(outCustom, starkGold, .22) : mode == IronMan ? GradeBubble(System.Windows.Media.Color.FromRgb(0x38, 0x07, 0x0F), ColorPaletteRole.AccentSoft, true) : EffectPalette.Blend(outStart, accent, .20);
+                var inStart = hasInCustom ? inCustom : mode == IronMan ? GradeBubble(System.Windows.Media.Color.FromRgb(0x28, 0x10, 0x18), ColorPaletteRole.Surface, true) : inBase;
+                var inEnd = hasInCustom ? EffectPalette.Blend(inCustom, arcCyan, .16) : mode == IronMan ? GradeBubble(System.Windows.Media.Color.FromRgb(0x18, 0x09, 0x0E), ColorPaletteRole.Surface, true) : EffectPalette.Blend(inBase, sidebar, .35);
+                var og = new System.Windows.Media.LinearGradientBrush(outStart, outEnd, 35); og.Freeze();
+                var ig = new System.Windows.Media.LinearGradientBrush(inStart, inEnd, 35); ig.Freeze();
+                outBg = og;
+                inBg = ig;
+                var ob = new System.Windows.Media.LinearGradientBrush
+                {
+                    StartPoint = new System.Windows.Point(0, 0),
+                    EndPoint = new System.Windows.Point(1, 1),
+                    GradientStops =
+                    [
+                        new System.Windows.Media.GradientStop(starkGold, 0),
+                        new System.Windows.Media.GradientStop(brightGold, .55),
+                        new System.Windows.Media.GradientStop(arcCyan, 1)
+                    ]
+                };
+                ob.Freeze();
+                var ib = new System.Windows.Media.LinearGradientBrush(arcCyan, starkGold, 35);
+                ib.Freeze();
+                outBorder = ob;
+                inBorder = ib;
+                outThickness = new Thickness(1.5);
+                inThickness = new Thickness(1.2);
+                outFg = ContrastInk(EffectPalette.Blend(outStart, outEnd, .5), System.Windows.Media.Color.FromRgb(0xFF, 0xF8, 0xEB));
+                inFg = ContrastInk(EffectPalette.Blend(inStart, inEnd, .5), ink);
+                break;
+            }
             default: // Soft (bundled default)
                 outBg = FrozenBrush(outBase);
                 inBg = FrozenBrush(inBase);
@@ -421,20 +613,31 @@ public static class ThemeManager
         app.Resources["IncomingBubbleBorderThickness"] = inThickness;
         app.Resources["OutgoingBubbleForeground"] = FrozenBrush(outFg);
         app.Resources["IncomingBubbleForeground"] = FrozenBrush(inFg);
+        bool useOutFgForIcon = effectiveStyle == AppearanceOptions.BubbleSolid || hasOutCustom;
+        bool useInFgForIcon = hasInCustom;
+        app.Resources["OutgoingFileIconBrush"] = FrozenBrush(useOutFgForIcon ? outFg : accent);
+        app.Resources["IncomingFileIconBrush"] = FrozenBrush(useInFgForIcon ? inFg : accent);
+        app.Resources["BubbleDecorationDesign"] = bubbleDesign;
+        app.Resources["BubbleDecorationVisibility"] = bubbleDesign == DecorationDesign.None ? Visibility.Collapsed : Visibility.Visible;
 
         var defaultCorner = app.Resources["MessageBubbleCorner"] is CornerRadius mcr ? mcr : new CornerRadius(12);
-        var (inCorner, outCorner, fileCorner) = overrides.BubbleShape switch
+        var defaultFileCorner = app.Resources["FileBubbleCorner"] is CornerRadius fcr ? fcr : new CornerRadius(12);
+        var (inCorner, outCorner, inFileCorner, outFileCorner) = overrides.BubbleShape switch
         {
-            AppearanceOptions.ShapeSharp => (new CornerRadius(2), new CornerRadius(2), new CornerRadius(2)),
-            AppearanceOptions.ShapeSubtle => (new CornerRadius(6), new CornerRadius(6), new CornerRadius(6)),
-            AppearanceOptions.ShapeRounded => (new CornerRadius(12), new CornerRadius(12), new CornerRadius(10)),
-            AppearanceOptions.ShapePill => (new CornerRadius(18), new CornerRadius(18), new CornerRadius(14)),
-            AppearanceOptions.ShapeTail => (new CornerRadius(14, 14, 14, 3), new CornerRadius(14, 14, 3, 14), new CornerRadius(12)),
-            _ => (defaultCorner, defaultCorner, app.Resources["FileBubbleCorner"] is CornerRadius fcr ? fcr : new CornerRadius(12))
+            AppearanceOptions.ShapeSharp => (new CornerRadius(2), new CornerRadius(2), new CornerRadius(2), new CornerRadius(2)),
+            AppearanceOptions.ShapeSubtle => (new CornerRadius(6), new CornerRadius(6), new CornerRadius(6), new CornerRadius(6)),
+            AppearanceOptions.ShapeRounded => (new CornerRadius(12), new CornerRadius(12), new CornerRadius(10), new CornerRadius(10)),
+            AppearanceOptions.ShapePill => (new CornerRadius(18), new CornerRadius(18), new CornerRadius(14), new CornerRadius(14)),
+            AppearanceOptions.ShapeTail => (new CornerRadius(14, 14, 14, 3), new CornerRadius(14, 14, 3, 14), new CornerRadius(12, 12, 12, 3), new CornerRadius(12, 12, 3, 12)),
+            _ when effectiveStyle == AppearanceOptions.BubbleMecha => (new CornerRadius(3, 13, 13, 13), new CornerRadius(13, 3, 13, 13), new CornerRadius(3, 10, 10, 10), new CornerRadius(10, 3, 10, 10)),
+            _ when effectiveStyle == AppearanceOptions.BubbleReactor => (new CornerRadius(4, 11, 4, 11), new CornerRadius(11, 4, 11, 4), new CornerRadius(4, 9, 4, 9), new CornerRadius(9, 4, 9, 4)),
+            _ => (defaultCorner, defaultCorner, defaultFileCorner, defaultFileCorner)
         };
         app.Resources["IncomingBubbleCorner"] = inCorner;
         app.Resources["OutgoingBubbleCorner"] = outCorner;
-        app.Resources["FileBubbleCorner"] = fileCorner;
+        app.Resources["IncomingFileBubbleCorner"] = inFileCorner;
+        app.Resources["OutgoingFileBubbleCorner"] = outFileCorner;
+        app.Resources["FileBubbleCorner"] = outFileCorner;
 
         var (padding, rowMargin, maxWidth) = overrides.ChatDensity switch
         {
@@ -532,6 +735,8 @@ public static class ThemeManager
         WebCrimson => "WebCrimson",
         Jester => "Jester",
         Cipher => "Cipher",
+        GundamFreedom => "GundamFreedom",
+        IronMan => "IronMan",
         _ => "Light"
     };
 

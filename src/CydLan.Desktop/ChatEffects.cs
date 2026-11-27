@@ -15,14 +15,18 @@ public sealed class ChatEffects : Canvas
     private static readonly Geometry InkBloom = Geometry.Parse("M14,3 C18,2 19,8 23,9 C29,9 30,15 25,18 C22,20 24,25 19,26 C14,29 13,23 9,24 C4,25 1,19 5,16 C7,14 3,10 6,7 C8,3 11,6 14,3 Z M26,5 A1.5,1.5 0 1 0 29,5 A1.5,1.5 0 1 0 26,5 Z");
     private static readonly Geometry Burst = Geometry.Parse("M14,2 V8 M14,20 V26 M2,14 H8 M20,14 H26 M6,6 L10,10 M18,18 L22,22 M22,6 L18,10 M10,18 L6,22");
     private static readonly Geometry Petals = Geometry.Parse("M14,4 C11,7 11,11 14,13 C17,11 17,7 14,4 Z M6,14 C9,12 12,14 12,17 C9,19 6,17 6,14 Z M22,14 C19,12 16,14 16,17 C19,19 22,17 22,14 Z");
+    private static readonly Geometry Feather = Geometry.Parse("M22,4 C16,7 11,13 8,20 L5,25 L11,22 C16,18 20,12 24,6 L17,12 Z");
+    private static readonly Geometry Repulsor = Geometry.Parse("M23,14 A9,9 0 1 1 5,14 A9,9 0 1 1 23,14 Z M17.5,14 A3.5,3.5 0 1 1 10.5,14 A3.5,3.5 0 1 1 17.5,14 Z M14,2 V6 M14,22 V26 M2,14 H6 M22,14 H26");
 
     internal static string Normalize(string? effect, bool typing = false) =>
-        effect is "theme" or "sparkles" or "steam" or "ripple" or "burst" or "petals" || (typing && effect == "ink") ? effect : "off";
+        effect is "theme" or "sparkles" or "steam" or "ripple" or "burst" or "petals" or "feathers" or "repulsor" || (typing && effect == "ink") ? effect : "off";
 
     internal static string Resolve(string? effect, string theme, bool typing) => Normalize(effect, typing) switch
     {
         "theme" when theme == ThemeManager.Steampunk => "steam",
         "theme" when theme is ThemeManager.Sakura => "petals",
+        "theme" when theme == ThemeManager.GundamFreedom => "feathers",
+        "theme" when theme == ThemeManager.IronMan => "repulsor",
         "theme" when theme is ThemeManager.Cyberpunk or ThemeManager.Arcade => "burst",
         "theme" when theme is ThemeManager.Anime or ThemeManager.Aurora or ThemeManager.Midnight => "sparkles",
         "theme" => typing ? "sparkles" : "ripple",
@@ -33,7 +37,7 @@ public sealed class ChatEffects : Canvas
     {
         string selected = Resolve(effect, theme, typing);
         if (selected == "off" || !SystemParameters.ClientAreaAnimation || !IsVisible) return;
-        bool filled = selected is "ink" or "petals";
+        bool filled = selected is "ink" or "petals" or "feathers";
         var shape = selected switch
         {
             "ink" => InkBloom,
@@ -41,9 +45,11 @@ public sealed class ChatEffects : Canvas
             "sparkles" => Sparkles,
             "burst" => Burst,
             "petals" => Petals,
+            "feathers" => Feather,
+            "repulsor" => Repulsor,
             _ => Ripple
         };
-        AnimateMark(position, shape, filled, intensity, lift: typing || selected is "steam" or "petals", milliseconds: typing ? 620 : 430);
+        AnimateMark(position, shape, filled, intensity, lift: typing || selected is "steam" or "petals" or "feathers", milliseconds: typing ? 620 : 430);
     }
 
     internal void PlaySendPulse(Point position, double intensity)
