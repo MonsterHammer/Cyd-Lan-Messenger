@@ -197,18 +197,31 @@ public partial class FloatingPetWindow : Window
         else
         {
             stepPhase = 0;
-            if (vibe == "zoomies" && hopProgress == 0 && !dragging && !isQuickChatOpen() && Random.Shared.Next(220) == 0)
-                hopProgress = .02;
+            bool idleFree = hopProgress == 0 && !dragging && !hovered && !isQuickChatOpen() && !IsSleepy();
+            if (idleFree)
+            {
+                // Idle life while perched: glance around and give the occasional hop.
+                if (Random.Shared.Next(vibe == "calm" ? 260 : 170) == 0)
+                    facing = -facing;
+                else if (Random.Shared.Next(vibe == "zoomies" ? 220 : vibe == "calm" ? 600 : 360) == 0)
+                    hopProgress = .02;
+            }
         }
 
         UpdateVisual();
     }
 
-    private void UpdateVisual()
+    private bool IsSleepy()
     {
         bool online = model.OnlineCount > 0;
         bool sleepyVibe = model.PetAppearance.Vibe == "sleepy" && !hovered && !excited && !model.IsMediaPlaying;
-        bool sleepy = sleepyVibe || model.Settings.Status == "dnd" || (!online && !hovered && !excited && !model.IsMediaPlaying);
+        return sleepyVibe || model.Settings.Status == "dnd" || (!online && !hovered && !excited && !model.IsMediaPlaying);
+    }
+
+    private void UpdateVisual()
+    {
+        bool online = model.OnlineCount > 0;
+        bool sleepy = IsSleepy();
         PetVisual.SetMotionState(
             breathPhase,
             blinkProgress,

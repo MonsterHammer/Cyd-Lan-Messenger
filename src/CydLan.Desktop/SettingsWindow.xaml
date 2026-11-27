@@ -231,6 +231,7 @@
               <TextBlock Text="General" Style="{StaticResource Heading}"/>
               <CheckBox x:Name="StartWithWindowsBox" Content="Start CydLan when Windows starts"/>
               <CheckBox x:Name="MinimizedBox" Content="Start in the tray"/>
+              <CheckBox x:Name="AnimateWhenUnfocusedBox" Content="Animate in the background" Checked="AnimateUnfocused_Changed" Unchecked="AnimateUnfocused_Changed"/>
               <TextBlock Text="Availability" Style="{StaticResource Label}" Margin="0,8,0,6"/>
               <ComboBox x:Name="StatusBox"><ComboBoxItem Content="Available" Tag="chat"/><ComboBoxItem Content="Away" Tag="away"/><ComboBoxItem Content="Busy" Tag="busy"/><ComboBoxItem Content="Do not disturb" Tag="dnd"/></ComboBox>
             </StackPanel>
@@ -827,7 +828,6 @@
                   </CheckBox>
                 </WrapPanel>
                 <CheckBox x:Name="AmbientOnSidebarBox" Content="Show on side panel" Margin="0,4,0,6"/>
-                <CheckBox x:Name="AnimateWhenUnfocusedBox" Content="Animate when unfocused" Margin="0,0,0,10" Checked="AnimateUnfocused_Changed" Unchecked="AnimateUnfocused_Changed"/>
                 <DockPanel Margin="0,0,0,4">
                   <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=EffectSpeedBox, StringFormat={}{0:0.0}x}" Foreground="{DynamicResource Muted}"/>
                   <TextBlock Text="Effect speed" Style="{StaticResource Label}" Margin="0"/>

@@ -159,7 +159,7 @@ public sealed partial class FloatingPetVisual : FrameworkElement
             _ => 1.0
         };
         double breath = sleepyMood
-            ? Math.Sin(breathPhase * .6) * .9
+            ? Math.Sin(breathPhase * .6) * 1.8
             : Math.Sin(breathPhase * cadence) * (style.Vibe == "zoomies" ? 1.55 : 1.35);
         double hopArc = hopProgress > 0 ? Math.Sin(hopProgress * Math.PI) * 12.0 : 0;
         double walkHop = isRoaming ? Math.Abs(Math.Sin(stepPhase)) * (style.Vibe == "zoomies" ? 3.8 : 2.8) : 0;
@@ -167,13 +167,18 @@ public sealed partial class FloatingPetVisual : FrameworkElement
         double hoverBob = style.Feet == "hover"
             ? 5.0 + Math.Sin(breathPhase * cadence * 1.3) * 2.2
             : style.Body == "ghost" ? 3.0 + Math.Sin(breathPhase * cadence * 1.1) * 1.6 : 0;
-        double totalLift = hopArc + Math.Max(walkHop, danceHop) + hoverBob;
+        // Resting bob keeps a perched companion visibly alive, slow and deep while asleep.
+        double idleBob = isRoaming || isDancing || hopArc > 0 || style.Feet == "hover" || style.Body == "ghost" ? 0
+            : sleepyMood ? (Math.Sin(breathPhase * .6) + 1) * .8
+            : (Math.Sin(breathPhase * cadence * .5) + 1) * .9;
+        double totalLift = hopArc + Math.Max(walkHop, danceHop) + hoverBob + idleBob;
         double tiltDeg = isRoaming
             ? Math.Sin(stepPhase) * 4.5
             : isDancing ? Math.Sin(breathPhase * 3.1) * 4.8
             : hopArc > 2 ? facing * 3.5
             : isHovered ? -3.0 * facing
-            : Math.Sin(breathPhase * .55 * cadence) * (style.Vibe == "zoomies" ? 2.2 : 1.1);
+            : sleepyMood ? Math.Sin(breathPhase * .3) * 2.4
+            : Math.Sin(breathPhase * .55 * cadence) * (style.Vibe == "zoomies" ? 3.0 : 2.2);
 
         double baseFit = Math.Min(w / 144.0, h / 130.0);
         double totalScale = baseFit * FloatingPetStyle.ClampSize(style.Size);
