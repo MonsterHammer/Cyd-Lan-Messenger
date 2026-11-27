@@ -250,15 +250,15 @@ public sealed class RailEffect : AmbientEffect
 
     private static readonly Lazy<Pen[]> FreedomCyanPens = new(() => BuildPens(Color.FromRgb(0x38, 0xBD, 0xF8), 1.5));
     private static readonly Lazy<Pen[]> FreedomCrimsonPens = new(() => BuildPens(Color.FromRgb(0xE1, 0x1D, 0x48), 1.25));
-    private static readonly Lazy<Pen[]> StarkGoldPens = new(() => BuildPens(Color.FromRgb(0xF5, 0xB7, 0x00), 1.35));
+    private static readonly Lazy<Pen[]> ArcGoldPens = new(() => BuildPens(Color.FromRgb(0xF5, 0xB7, 0x00), 1.35));
     private static readonly Lazy<BitmapSource[]> ArcCyanSprites = new(() => BuildOrbSprites(Color.FromRgb(0x38, 0xBD, 0xF8)));
-    private static readonly Lazy<BitmapSource[]> StarkGoldSprites = new(() => BuildOrbSprites(Color.FromRgb(0xF5, 0xB7, 0x00)));
+    private static readonly Lazy<BitmapSource[]> ArcGoldSprites = new(() => BuildOrbSprites(Color.FromRgb(0xF5, 0xB7, 0x00)));
 
     private void DrawWingTrail(DrawingContext dc, double width, double height, double intensity)
     {
         var cyanPens = FreedomCyanPens.Value;
         var crimsonPens = FreedomCrimsonPens.Value;
-        var goldPens = StarkGoldPens.Value;
+        var goldPens = ArcGoldPens.Value;
         var cyanOrbs = ArcCyanSprites.Value;
 
         int beams = Math.Clamp((int)(height / 54), 4, 8);
@@ -283,10 +283,10 @@ public sealed class RailEffect : AmbientEffect
     private void DrawArcReactor(DrawingContext dc, double width, double height, double intensity)
     {
         var cyanPens = FreedomCyanPens.Value;
-        var goldPens = StarkGoldPens.Value;
+        var goldPens = ArcGoldPens.Value;
         var crimsonPens = FreedomCrimsonPens.Value;
         var cyanOrbs = ArcCyanSprites.Value;
-        var goldOrbs = StarkGoldSprites.Value;
+        var goldOrbs = ArcGoldSprites.Value;
 
         double cx = width * .50;
         double cy = height * .50 + Math.Sin(Time * Math.Tau) * Math.Min(height * .26, 70);

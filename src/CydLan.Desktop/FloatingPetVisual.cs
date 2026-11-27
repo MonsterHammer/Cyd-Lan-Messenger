@@ -209,7 +209,7 @@ public sealed partial class FloatingPetVisual : FrameworkElement
 
         // 2. Ears / horns (behind upper head edge).
         string effectiveEars = style.Ears == FloatingPetStyle.Auto
-            ? (ThemeDesign == DecorationDesign.GundamFreedom ? "mecha" : "cat")
+            ? (ThemeDesign == DecorationDesign.FreedomWings ? "mecha" : "cat")
             : style.Ears;
         if (effectiveEars != FloatingPetStyle.None && effectiveEars != "mecha")
             DrawEars(dc, effectiveEars, bodyTop, bodyW, surface, accent, accentSoft, detail, outlinePen, breathPhase, isHovered, isExcited);
@@ -240,7 +240,7 @@ public sealed partial class FloatingPetVisual : FrameworkElement
 
         // 5. Outfit / chest badge.
         string effectiveOutfit = style.Outfit == FloatingPetStyle.Auto
-            ? (ThemeDesign == DecorationDesign.IronMan ? "arc" : FloatingPetStyle.None)
+            ? (ThemeDesign == DecorationDesign.ArcReactor ? "arc" : FloatingPetStyle.None)
             : style.Outfit;
         if (effectiveOutfit != FloatingPetStyle.None)
             DrawOutfit(dc, effectiveOutfit, bodyBottom, bodyW, bodyH, surface, accent, accentSoft, detail, featureInk, outlinePen, facing);

@@ -183,7 +183,7 @@ internal static class Program
                 ("pineapple", "#FF332609"), ("coralstar", "#FF341522"), ("noirpink", "#FFFFF0F7"), ("vampire", "#FFF9ECEF"),
                 ("voltspark", "#FF2E2307"), ("kingdomred", "#FF18223A"), ("bubblegum", "#FF351126"), ("ribbonblush", "#FF2C1720"),
                 ("noirgold", "#FFF3F5F8"), ("webcrimson", "#FFF4F6FF"), ("jester", "#FFF5F0FF"), ("cipher", "#FFD9FFE6"),
-                ("gundamfreedom", "#FF0F172A"), ("ironman", "#FFFFF7EB")
+                ("freedomwings", "#FF0F172A"), ("arcreactor", "#FFFFF7EB")
             })
             {
                 themeBox.SelectedValue = mode;
@@ -1253,7 +1253,7 @@ internal static class Program
             (ThemeManager.Bubblegum, DecorationDesign.Bubblegum), (ThemeManager.RibbonBlush, DecorationDesign.RibbonBlush),
             (ThemeManager.NoirGold, DecorationDesign.NoirGold), (ThemeManager.WebCrimson, DecorationDesign.WebCrimson),
             (ThemeManager.Jester, DecorationDesign.Jester), (ThemeManager.Cipher, DecorationDesign.Cipher),
-            (ThemeManager.GundamFreedom, DecorationDesign.GundamFreedom), (ThemeManager.IronMan, DecorationDesign.IronMan)
+            (ThemeManager.FreedomWings, DecorationDesign.FreedomWings), (ThemeManager.ArcReactor, DecorationDesign.ArcReactor)
         })
         {
             ThemeManager.Apply(theme);
@@ -1263,7 +1263,7 @@ internal static class Program
             if (theme is ThemeManager.Sakura or ThemeManager.Steampunk or ThemeManager.Forest or ThemeManager.Paper or
                 ThemeManager.Anime or ThemeManager.Aurora or ThemeManager.Arcade or ThemeManager.Ocean or
                 ThemeManager.Cyberpunk or ThemeManager.Midnight or ThemeManager.Sunset or ThemeManager.Mint or
-                ThemeManager.Matcha or ThemeManager.Frost or ThemeManager.GundamFreedom or ThemeManager.IronMan)
+                ThemeManager.Matcha or ThemeManager.Frost or ThemeManager.FreedomWings or ThemeManager.ArcReactor)
                 Capture(window, Path.Combine(artifacts, $"theme-{theme}-details-tested.png"));
         }
         await model.SavePreferencesAsync(settings => settings.ThemeDetailsEnabled = false);
@@ -1492,7 +1492,7 @@ internal static class Program
         await model.SavePreferencesAsync(s =>
         {
             AppearanceCodec.ResetDefaults(s);
-            s.Theme = ThemeManager.GundamFreedom;
+            s.Theme = ThemeManager.FreedomWings;
             s.ThemeDetailsEnabled = true;
             s.ChromeTexture = ChromeTexture.FreedomWings;
             s.ChromeTextureIntensity = .85;
@@ -1516,16 +1516,16 @@ internal static class Program
         });
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
         if (SystemParameters.ClientAreaAnimation) await Until(() => titleWings.Progress > .005 && headerBurst.Progress > .005 && railWings.Progress > .005 && sidebarWings.Progress > .005 && contentWingPlumes.Progress > .005);
-        Check((DecorationDesign)Application.Current.Resources["BubbleDecorationDesign"] == DecorationDesign.GundamFreedom &&
+        Check((DecorationDesign)Application.Current.Resources["BubbleDecorationDesign"] == DecorationDesign.FreedomWings &&
             Application.Current.Resources["OutgoingBubbleBackground"] is LinearGradientBrush &&
-            ChatEffects.Resolve("theme", ThemeManager.GundamFreedom, true) == "feathers",
-            "Gundam Freedom should activate mecha gradient bubbles, bubble corner markings, and wing plume typing effect.");
-        Capture(window, Path.Combine(artifacts, "gundamfreedom-showcase-tested.png"));
+            ChatEffects.Resolve("theme", ThemeManager.FreedomWings, true) == "feathers",
+            "Freedom Wings should activate mecha gradient bubbles, bubble corner markings, and wing plume typing effect.");
+        Capture(window, Path.Combine(artifacts, "freedomwings-showcase-tested.png"));
 
         await model.SavePreferencesAsync(s =>
         {
             AppearanceCodec.ResetDefaults(s);
-            s.Theme = ThemeManager.IronMan;
+            s.Theme = ThemeManager.ArcReactor;
             s.ThemeDetailsEnabled = true;
             s.ChromeTexture = ChromeTexture.ArcReactor;
             s.ChromeTextureIntensity = .88;
@@ -1550,11 +1550,11 @@ internal static class Program
         });
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
         if (SystemParameters.ClientAreaAnimation) await Until(() => titleReactor.Progress > .005 && headerArc.Progress > .005 && railArc.Progress > .005 && sidebarHud.Progress > .005 && contentRepulsor.Progress > .005);
-        Check((DecorationDesign)Application.Current.Resources["BubbleDecorationDesign"] == DecorationDesign.IronMan &&
+        Check((DecorationDesign)Application.Current.Resources["BubbleDecorationDesign"] == DecorationDesign.ArcReactor &&
             Application.Current.Resources["OutgoingBubbleBackground"] is LinearGradientBrush &&
-            ChatEffects.Resolve("theme", ThemeManager.IronMan, false) == "repulsor",
-            "Iron Man should activate reactor gradient bubbles, arc emblems, and repulsor click effect.");
-        Capture(window, Path.Combine(artifacts, "ironman-showcase-tested.png"));
+            ChatEffects.Resolve("theme", ThemeManager.ArcReactor, false) == "repulsor",
+            "Arc Reactor should activate reactor gradient bubbles, arc emblems, and repulsor click effect.");
+        Capture(window, Path.Combine(artifacts, "arcreactor-showcase-tested.png"));
 
         window.WindowState = WindowState.Minimized;
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
@@ -1653,8 +1653,8 @@ internal static class Program
             (ThemeManager.Midnight, ChromeTexture.GrassyFields, ChromeTextureKind.GrassyFields, true),
             (ThemeManager.Cipher, ChromeTexture.Cipher, ChromeTextureKind.Cipher, false),
             (ThemeManager.RibbonBlush, ChromeTexture.Watercolor, ChromeTextureKind.Watercolor, false),
-            (ThemeManager.GundamFreedom, ChromeTexture.FreedomWings, ChromeTextureKind.FreedomWings, false),
-            (ThemeManager.IronMan, ChromeTexture.ArcReactor, ChromeTextureKind.ArcReactor, false)
+            (ThemeManager.FreedomWings, ChromeTexture.FreedomWings, ChromeTextureKind.FreedomWings, false),
+            (ThemeManager.ArcReactor, ChromeTexture.ArcReactor, ChromeTextureKind.ArcReactor, false)
         })
         {
             await model.SavePreferencesAsync(s =>
@@ -1760,8 +1760,8 @@ internal static class Program
             (ThemeManager.Rose, ChromeTexture.Marble, TargetAura.Sakura, TargetAuraKind.Sakura),
             (ThemeManager.Obsidian, ChromeTexture.Mesh, TargetAura.Prism, TargetAuraKind.Prism),
             (ThemeManager.Emerald, ChromeTexture.Circuit, TargetAura.Pulse, TargetAuraKind.Pulse),
-            (ThemeManager.GundamFreedom, ChromeTexture.FreedomWings, TargetAura.WingFlare, TargetAuraKind.WingFlare),
-            (ThemeManager.IronMan, ChromeTexture.ArcReactor, TargetAura.ArcReactor, TargetAuraKind.ArcReactor)
+            (ThemeManager.FreedomWings, ChromeTexture.FreedomWings, TargetAura.WingFlare, TargetAuraKind.WingFlare),
+            (ThemeManager.ArcReactor, ChromeTexture.ArcReactor, TargetAura.ArcReactor, TargetAuraKind.ArcReactor)
         })
         {
             await model.SavePreferencesAsync(s => { s.Theme = theme; s.ChromeTexture = texture; s.TargetAura = style; s.TargetAuraIntensity = .85; });
@@ -1861,9 +1861,9 @@ internal static class Program
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
         Capture(window, Path.Combine(artifacts, "pineapple-stylized-tested.png"));
 
-        themeSelector.SelectedValue = ThemeManager.IronMan;
+        themeSelector.SelectedValue = ThemeManager.ArcReactor;
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
-        Capture(window, Path.Combine(artifacts, "ironman-stylized-tested.png"));
+        Capture(window, Path.Combine(artifacts, "arcreactor-stylized-tested.png"));
 
         // Restore Light + Original finish before verifying un-graded hex channel overrides.
         colorFinishBox.SelectedValue = ColorFinish.Off;
@@ -2017,18 +2017,18 @@ internal static class Program
             ReferenceEquals(inFileBorder.Background, Application.Current.Resources["IncomingBubbleBackground"]),
             "Rendered outgoing & incoming text and file bubbles must both reflect live custom colors, gradient style, and tail corners.");
 
-        // Switching to GundamFreedom / IronMan while keeping custom colors must keep Mecha/Reactor style on both sides.
+        // Switching to FreedomWings / ArcReactor while keeping custom colors must keep Mecha/Reactor style on both sides.
         var prevTheme = themeSelector.SelectedValue;
         ((System.Windows.Controls.ListBox)preferences.FindName("BubbleStyleBox")).SelectedValue = AppearanceOptions.BubbleSoft;
         ((System.Windows.Controls.ListBox)preferences.FindName("BubbleShapeBox")).SelectedValue = AppearanceOptions.Default;
-        themeSelector.SelectedValue = ThemeManager.IronMan;
+        themeSelector.SelectedValue = ThemeManager.ArcReactor;
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
         Check(outTextBorder.BorderBrush is LinearGradientBrush && inTextBorder.BorderBrush is LinearGradientBrush &&
             outTextBorder.CornerRadius.TopLeft > outTextBorder.CornerRadius.TopRight &&
             inTextBorder.CornerRadius.TopRight > inTextBorder.CornerRadius.TopLeft &&
             outFileBorder.CornerRadius.TopLeft > outFileBorder.CornerRadius.TopRight &&
             inFileBorder.CornerRadius.TopRight > inFileBorder.CornerRadius.TopLeft,
-            "Iron Man theme should apply Reactor borders and directional bevels to both outgoing and incoming text and file bubbles even with custom colors.");
+            "Arc Reactor theme should apply Reactor borders and directional bevels to both outgoing and incoming text and file bubbles even with custom colors.");
         // Restore theme & Pill/Gradient overrides for downstream assertions in this test.
         themeSelector.SelectedValue = prevTheme;
         ((System.Windows.Controls.ListBox)preferences.FindName("BubbleStyleBox")).SelectedValue = AppearanceOptions.BubbleGradient;
@@ -2457,9 +2457,9 @@ internal static class Program
             "Speech bubble should show the message snippet when NotificationPreviews is enabled.");
         Capture(petWindow, Path.Combine(artifacts, "floating-pet-pineapple-tested.png"));
 
-        ThemeManager.Apply(ThemeManager.IronMan, AppearanceOverrides.Default);
+        ThemeManager.Apply(ThemeManager.ArcReactor, AppearanceOverrides.Default);
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
-        Capture(petWindow, Path.Combine(artifacts, "floating-pet-ironman-tested.png"));
+        Capture(petWindow, Path.Combine(artifacts, "floating-pet-arcreactor-tested.png"));
 
         // 3. Toggle compact quick-chat popup, verify active-chatters-only tab filter, send reply + shared Look card, and mark read.
         controller.ToggleQuickChat();

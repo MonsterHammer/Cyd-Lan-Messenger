@@ -971,7 +971,7 @@ public sealed partial class ChromeTexture : FrameworkElement
         var group = new DrawingGroup();
         using var dc = group.Open();
         Color arcCyan = Color.FromRgb(0x38, 0xBD, 0xF8);
-        Color starkGold = Color.FromRgb(0xF5, 0xB7, 0x00);
+        Color arcGold = Color.FromRgb(0xF5, 0xB7, 0x00);
         Color armorRed = Color.FromRgb(0xDC, 0x26, 0x26);
 
         var center = new Point(width * (compact ? .64 : .72), height * (compact ? .52 : .36));
@@ -986,13 +986,13 @@ public sealed partial class ChromeTexture : FrameworkElement
             RadiusY = compact ? .55 : .42
         };
         glow.GradientStops.Add(new GradientStop(WithAlpha(arcCyan, (byte)Math.Round((isLight ? 44 : 68) * intensity)), 0));
-        glow.GradientStops.Add(new GradientStop(WithAlpha(starkGold, (byte)Math.Round((isLight ? 18 : 26) * intensity)), .52));
+        glow.GradientStops.Add(new GradientStop(WithAlpha(arcGold, (byte)Math.Round((isLight ? 18 : 26) * intensity)), .52));
         glow.GradientStops.Add(new GradientStop(WithAlpha(armorRed, 0), 1));
         glow.Freeze();
         dc.DrawRectangle(glow, null, new Rect(0, 0, width, height));
 
         var cyanPen = FrozenPen(WithAlpha(arcCyan, (byte)Math.Round((isLight ? 54 : 88) * intensity)), compact ? 1.1 : 1.5);
-        var goldPen = FrozenPen(WithAlpha(starkGold, (byte)Math.Round((isLight ? 42 : 68) * intensity)), compact ? 1.0 : 1.35);
+        var goldPen = FrozenPen(WithAlpha(arcGold, (byte)Math.Round((isLight ? 42 : 68) * intensity)), compact ? 1.0 : 1.35);
         var redPen = FrozenPen(WithAlpha(armorRed, (byte)Math.Round((isLight ? 34 : 58) * intensity)), .95);
 
         dc.DrawEllipse(null, cyanPen, center, coreRadius, coreRadius);
@@ -1009,7 +1009,7 @@ public sealed partial class ChromeTexture : FrameworkElement
             dc.DrawLine(i % 2 == 0 ? goldPen : cyanPen, p0, p1);
         }
 
-        // Triangular / beveled Stark armor seam lines across the panel
+        // Triangular / beveled armor seam lines across the panel
         if (!compact)
         {
             dc.DrawLine(redPen, new Point(0, height * .18), new Point(width * .28, height * .18));

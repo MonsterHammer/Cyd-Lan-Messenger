@@ -2,6 +2,16 @@
 
 A Windows desktop LAN messenger with a modern interface, system tray support, and a direct implementation of the original LAN Messenger protocol. No central server, cloud account, web backend, or internet connection is needed for messaging.
 
+| Light | Sakura | Cyberpunk |
+| --- | --- | --- |
+| ![CydLan chat in the Light theme](docs/images/showcase/chat-light.png) | ![CydLan chat in the Sakura theme](docs/images/showcase/chat-sakura.png) | ![CydLan chat in the Cyberpunk theme](docs/images/showcase/chat-cyberpunk.png) |
+
+See the [feature showcase](docs/features.md) for themes, the floating companion, scene effects, and more.
+
+## Works with LAN Messenger
+
+CydLan connects to existing **LAN Messenger** clients on the same network: chat, group rooms, file transfers, broadcasts, and profile pictures. Install it on one PC and keep talking to everyone still on the old client. Tested with LAN Messenger 1.2.39. See [Using CydLan with LAN Messenger](docs/lan-messenger-compatibility.md).
+
 ## Install and run
 
 Download the Windows x64 installer and its SHA-256 checksum from the [latest release](https://github.com/MonsterHammer/Cyd-Lan-Messenger/releases/latest). The unsigned installer includes the .NET runtime and installs for the current Windows user. The optional **Open CydLan** checkbox starts live LAN mode after setup.

@@ -15,7 +15,7 @@ public enum DecorationDesign
     Cyberpunk, Midnight, Sunset, Mint, Matcha, Frost,
     Obsidian, Nord, Synthwave, Crimson, Emerald, Rose, Espresso, Cobalt, Sage, Amber,
     Pineapple, CoralStar, NoirPink, Vampire, VoltSpark, KingdomRed, Bubblegum, RibbonBlush, NoirGold, WebCrimson, Jester, Cipher,
-    GundamFreedom, IronMan
+    FreedomWings, ArcReactor
 }
 
 /// <summary>Draws optional static theme details across the rail, side panel, title bar, header, and composer.</summary>
@@ -706,51 +706,51 @@ public sealed class ThemeDecoration : FrameworkElement
                 DrawCornerBrackets(dc, width, height, 10, accentLine, margin: 3);
                 break;
 
-            case (DecorationDesign.GundamFreedom, DecorationZone.Sidebar):
+            case (DecorationDesign.FreedomWings, DecorationZone.Sidebar):
                 dc.DrawRectangle(subtleWash, null, bounds);
                 DrawMechaWings(dc, width - 30, height - 24, 1.15);
                 DrawVFin(dc, width - 22, 18, .9);
                 break;
-            case (DecorationDesign.GundamFreedom, DecorationZone.Rail):
+            case (DecorationDesign.FreedomWings, DecorationZone.Rail):
                 dc.DrawRectangle(subtleWash, null, bounds);
                 DrawVFin(dc, width / 2, height * .55, .95);
                 dc.DrawLine(FreedomBeamPen, new Point(width - 2.5, 14), new Point(width - 2.5, height - 14));
                 break;
-            case (DecorationDesign.GundamFreedom, DecorationZone.Title):
+            case (DecorationDesign.FreedomWings, DecorationZone.Title):
                 DrawVFin(dc, width - 48, height / 2 + 1, 1.0);
                 DrawMechaWings(dc, width - 24, height / 2 + 2, .7);
                 break;
-            case (DecorationDesign.GundamFreedom, DecorationZone.Header):
+            case (DecorationDesign.FreedomWings, DecorationZone.Header):
                 dc.DrawRectangle(headerWash, null, bounds);
                 DrawMechaWings(dc, Math.Max(200, width - 196), height * .46, 1.2);
                 dc.DrawLine(FreedomBeamPen, new Point(16, height - 2), new Point(width * .62, height - 2));
                 dc.DrawLine(FreedomCrimsonPen, new Point(width * .64, height - 2), new Point(width - 16, height - 2));
                 break;
-            case (DecorationDesign.GundamFreedom, DecorationZone.Composer):
+            case (DecorationDesign.FreedomWings, DecorationZone.Composer):
                 DrawCornerBrackets(dc, width, height, 10, FreedomBeamPen, margin: 3);
                 dc.DrawLine(FreedomCrimsonPen, new Point(14, 2.5), new Point(44, 2.5));
                 break;
 
-            case (DecorationDesign.IronMan, DecorationZone.Sidebar):
+            case (DecorationDesign.ArcReactor, DecorationZone.Sidebar):
                 dc.DrawRectangle(subtleWash, null, bounds);
                 DrawArcReactor(dc, width - 28, height - 28, 12);
                 DrawCornerBrackets(dc, width, height, 11, IronGoldPen, margin: 4);
                 break;
-            case (DecorationDesign.IronMan, DecorationZone.Rail):
+            case (DecorationDesign.ArcReactor, DecorationZone.Rail):
                 dc.DrawRectangle(subtleWash, null, bounds);
                 DrawArcReactor(dc, width / 2, height * .55, 8.5);
                 break;
-            case (DecorationDesign.IronMan, DecorationZone.Title):
+            case (DecorationDesign.ArcReactor, DecorationZone.Title):
                 DrawArcReactor(dc, width - 30, height / 2, 7.5);
                 dc.DrawLine(IronGoldPen, new Point(8, height - 2.5), new Point(width - 46, height - 2.5));
                 break;
-            case (DecorationDesign.IronMan, DecorationZone.Header):
+            case (DecorationDesign.ArcReactor, DecorationZone.Header):
                 dc.DrawRectangle(headerWash, null, bounds);
                 DrawArcReactor(dc, Math.Max(200, width - 196), height * .48, 13);
                 dc.DrawLine(IronGoldPen, new Point(16, height - 2.5), new Point(width - 66, height - 2.5));
                 dc.DrawLine(IronArcPen, new Point(width - 62, height - 2.5), new Point(width - 16, height - 2.5));
                 break;
-            case (DecorationDesign.IronMan, DecorationZone.Composer):
+            case (DecorationDesign.ArcReactor, DecorationZone.Composer):
                 DrawCornerBrackets(dc, width, height, 10, IronGoldPen, margin: 3);
                 dc.DrawEllipse(null, IronArcPen, new Point(width - 12, 10), 3, 3);
                 break;
@@ -1005,7 +1005,7 @@ public sealed class BubbleDecoration : FrameworkElement
 
         switch (Design)
         {
-            case DecorationDesign.GundamFreedom:
+            case DecorationDesign.FreedomWings:
             {
                 double topX = IsOutgoing ? w - 4.5 : 4.5;
                 double dir = IsOutgoing ? -1 : 1;
@@ -1017,7 +1017,7 @@ public sealed class BubbleDecoration : FrameworkElement
                 dc.DrawLine(FreedomCrimson, new Point(botX, h - 4), new Point(botX + bDir * 9, h - 4));
                 break;
             }
-            case DecorationDesign.IronMan:
+            case DecorationDesign.ArcReactor:
             {
                 var cx = IsOutgoing ? w - 9.5 : 9.5;
                 var center = new Point(cx, 9.5);

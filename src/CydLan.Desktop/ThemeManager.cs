@@ -38,7 +38,7 @@ public static class ThemeManager
     public const string Pineapple = "pineapple", CoralStar = "coralstar", NoirPink = "noirpink", Vampire = "vampire";
     public const string VoltSpark = "voltspark", KingdomRed = "kingdomred", Bubblegum = "bubblegum", RibbonBlush = "ribbonblush";
     public const string NoirGold = "noirgold", WebCrimson = "webcrimson", Jester = "jester", Cipher = "cipher";
-    public const string GundamFreedom = "gundamfreedom", IronMan = "ironman";
+    public const string FreedomWings = "freedomwings", ArcReactor = "arcreactor";
 
     private static readonly (string Tag, string Name, string File)[] Definitions =
     [
@@ -85,8 +85,8 @@ public static class ThemeManager
         (WebCrimson, "Web Crimson", "WebCrimson"),
         (Jester, "Jester", "Jester"),
         (Cipher, "Cipher", "Cipher"),
-        (GundamFreedom, "Gundam Freedom", "GundamFreedom"),
-        (IronMan, "Iron Man", "IronMan")
+        (FreedomWings, "Freedom Wings", "FreedomWings"),
+        (ArcReactor, "Arc Reactor", "ArcReactor")
     ];
 
     private static ResourceDictionary? customControls;
@@ -118,8 +118,8 @@ public static class ThemeManager
         "spiderman" => WebCrimson,
         "joker" => Jester,
         "matrix" => Cipher,
-        "gundam" or "freedom" or "gundamfreedone" => GundamFreedom,
-        "stark" or "tonystark" => IronMan,
+        "gundam" or "freedom" or "gundamfreedone" or "gundamfreedom" => FreedomWings,
+        "stark" or "tonystark" or "ironman" => ArcReactor,
         Dark or FollowSystem or Ocean or Lavender or Ember or Pixel or Forest or Sand
             or Anime or Steampunk or Aurora or Paper or Arcade or Sakura
             or Cyberpunk or Midnight or Sunset or Mint or Matcha or Frost
@@ -128,7 +128,7 @@ public static class ThemeManager
             or Pineapple or CoralStar or NoirPink or Vampire
             or VoltSpark or KingdomRed or Bubblegum or RibbonBlush
             or NoirGold or WebCrimson or Jester or Cipher
-            or GundamFreedom or IronMan => value,
+            or FreedomWings or ArcReactor => value,
         _ => Light
     };
 
@@ -332,8 +332,8 @@ public static class ThemeManager
             WebCrimson => DecorationDesign.WebCrimson,
             Jester => DecorationDesign.Jester,
             Cipher => DecorationDesign.Cipher,
-            GundamFreedom => DecorationDesign.GundamFreedom,
-            IronMan => DecorationDesign.IronMan,
+            FreedomWings => DecorationDesign.FreedomWings,
+            ArcReactor => DecorationDesign.ArcReactor,
             _ => DecorationDesign.None
         };
         app.Resources["ThemeDecorationDesign"] = decoration;
@@ -581,8 +581,8 @@ public static class ThemeManager
         string effectiveStyle = style == AppearanceOptions.BubbleSoft
             ? mode switch
             {
-                GundamFreedom => AppearanceOptions.BubbleMecha,
-                IronMan => AppearanceOptions.BubbleReactor,
+                FreedomWings => AppearanceOptions.BubbleMecha,
+                ArcReactor => AppearanceOptions.BubbleReactor,
                 _ => style
             }
             : style;
@@ -671,18 +671,18 @@ public static class ThemeManager
             }
             case AppearanceOptions.BubbleMecha:
             {
-                bubbleDesign = DecorationDesign.GundamFreedom;
+                bubbleDesign = DecorationDesign.FreedomWings;
                 var wingBlue = GradeBubble(System.Windows.Media.Color.FromRgb(0x1D, 0x4E, 0xD8), ColorPaletteRole.Accent, false);
                 var beamCyan = GradeBubble(System.Windows.Media.Color.FromRgb(0x38, 0xBD, 0xF8), ColorPaletteRole.Accent, false);
                 var wingCrimson = GradeBubble(System.Windows.Media.Color.FromRgb(0xE1, 0x1D, 0x48), ColorPaletteRole.Accent, false);
-                var outStart = hasOutCustom ? outCustom : mode == GundamFreedom ? GradeBubble(System.Windows.Media.Color.FromRgb(0xE8, 0xF0, 0xFF), ColorPaletteRole.AccentSoft, false) : outBase;
+                var outStart = hasOutCustom ? outCustom : mode == FreedomWings ? GradeBubble(System.Windows.Media.Color.FromRgb(0xE8, 0xF0, 0xFF), ColorPaletteRole.AccentSoft, false) : outBase;
                 var outEnd = hasOutCustom
                     ? EffectPalette.Blend(outCustom, beamCyan, .24)
-                    : mode == GundamFreedom ? GradeBubble(System.Windows.Media.Color.FromRgb(0xC5, 0xDA, 0xFF), ColorPaletteRole.AccentSoft, false) : EffectPalette.Blend(outBase, accent, isDark ? .26 : .20);
-                var inStart = hasInCustom ? inCustom : mode == GundamFreedom ? GradeBubble(System.Windows.Media.Color.FromRgb(0xF8, 0xFA, 0xFF), ColorPaletteRole.Surface, false) : inBase;
+                    : mode == FreedomWings ? GradeBubble(System.Windows.Media.Color.FromRgb(0xC5, 0xDA, 0xFF), ColorPaletteRole.AccentSoft, false) : EffectPalette.Blend(outBase, accent, isDark ? .26 : .20);
+                var inStart = hasInCustom ? inCustom : mode == FreedomWings ? GradeBubble(System.Windows.Media.Color.FromRgb(0xF8, 0xFA, 0xFF), ColorPaletteRole.Surface, false) : inBase;
                 var inEnd = hasInCustom
                     ? EffectPalette.Blend(inCustom, sidebar, .28)
-                    : mode == GundamFreedom ? GradeBubble(System.Windows.Media.Color.FromRgb(0xE3, 0xEC, 0xFB), ColorPaletteRole.Surface, false) : EffectPalette.Blend(inBase, accentSoft, .24);
+                    : mode == FreedomWings ? GradeBubble(System.Windows.Media.Color.FromRgb(0xE3, 0xEC, 0xFB), ColorPaletteRole.Surface, false) : EffectPalette.Blend(inBase, accentSoft, .24);
                 var og = new System.Windows.Media.LinearGradientBrush(outStart, outEnd, 32); og.Freeze();
                 var ig = new System.Windows.Media.LinearGradientBrush(inStart, inEnd, 32); ig.Freeze();
                 outBg = og;
@@ -693,7 +693,7 @@ public static class ThemeManager
                     EndPoint = new System.Windows.Point(1, 1),
                     GradientStops =
                     [
-                        new System.Windows.Media.GradientStop(mode == GundamFreedom ? wingBlue : accent, 0),
+                        new System.Windows.Media.GradientStop(mode == FreedomWings ? wingBlue : accent, 0),
                         new System.Windows.Media.GradientStop(beamCyan, .55),
                         new System.Windows.Media.GradientStop(wingCrimson, 1)
                     ]
@@ -708,20 +708,20 @@ public static class ThemeManager
                 inBorder = ib;
                 outThickness = new Thickness(1.5);
                 inThickness = new Thickness(1.2);
-                outFg = hasOutCustom || mode != GundamFreedom ? ContrastInk(EffectPalette.Blend(outStart, outEnd, .5), ink) : ContrastInk(EffectPalette.Blend(outStart, outEnd, .5), System.Windows.Media.Color.FromRgb(0x0B, 0x15, 0x2B));
-                inFg = hasInCustom || mode != GundamFreedom ? ContrastInk(EffectPalette.Blend(inStart, inEnd, .5), ink) : ContrastInk(EffectPalette.Blend(inStart, inEnd, .5), System.Windows.Media.Color.FromRgb(0x0F, 0x17, 0x2A));
+                outFg = hasOutCustom || mode != FreedomWings ? ContrastInk(EffectPalette.Blend(outStart, outEnd, .5), ink) : ContrastInk(EffectPalette.Blend(outStart, outEnd, .5), System.Windows.Media.Color.FromRgb(0x0B, 0x15, 0x2B));
+                inFg = hasInCustom || mode != FreedomWings ? ContrastInk(EffectPalette.Blend(inStart, inEnd, .5), ink) : ContrastInk(EffectPalette.Blend(inStart, inEnd, .5), System.Windows.Media.Color.FromRgb(0x0F, 0x17, 0x2A));
                 break;
             }
             case AppearanceOptions.BubbleReactor:
             {
-                bubbleDesign = DecorationDesign.IronMan;
-                var starkGold = GradeBubble(System.Windows.Media.Color.FromRgb(0xF5, 0xB7, 0x00), ColorPaletteRole.Accent, true);
+                bubbleDesign = DecorationDesign.ArcReactor;
+                var arcGold = GradeBubble(System.Windows.Media.Color.FromRgb(0xF5, 0xB7, 0x00), ColorPaletteRole.Accent, true);
                 var arcCyan = GradeBubble(System.Windows.Media.Color.FromRgb(0x38, 0xBD, 0xF8), ColorPaletteRole.Accent, true);
                 var brightGold = GradeBubble(System.Windows.Media.Color.FromRgb(0xFD, 0xE0, 0x47), ColorPaletteRole.Accent, true);
-                var outStart = hasOutCustom ? outCustom : mode == IronMan ? GradeBubble(System.Windows.Media.Color.FromRgb(0x64, 0x10, 0x1D), ColorPaletteRole.AccentSoft, true) : EffectPalette.Blend(outBase, GradeBubble(System.Windows.Media.Color.FromRgb(0x5B, 0x0E, 0x1A), ColorPaletteRole.AccentSoft, true), isDark ? .38 : .18);
-                var outEnd = hasOutCustom ? EffectPalette.Blend(outCustom, starkGold, .22) : mode == IronMan ? GradeBubble(System.Windows.Media.Color.FromRgb(0x38, 0x07, 0x0F), ColorPaletteRole.AccentSoft, true) : EffectPalette.Blend(outStart, accent, .20);
-                var inStart = hasInCustom ? inCustom : mode == IronMan ? GradeBubble(System.Windows.Media.Color.FromRgb(0x28, 0x10, 0x18), ColorPaletteRole.Surface, true) : inBase;
-                var inEnd = hasInCustom ? EffectPalette.Blend(inCustom, arcCyan, .16) : mode == IronMan ? GradeBubble(System.Windows.Media.Color.FromRgb(0x18, 0x09, 0x0E), ColorPaletteRole.Surface, true) : EffectPalette.Blend(inBase, sidebar, .35);
+                var outStart = hasOutCustom ? outCustom : mode == ArcReactor ? GradeBubble(System.Windows.Media.Color.FromRgb(0x64, 0x10, 0x1D), ColorPaletteRole.AccentSoft, true) : EffectPalette.Blend(outBase, GradeBubble(System.Windows.Media.Color.FromRgb(0x5B, 0x0E, 0x1A), ColorPaletteRole.AccentSoft, true), isDark ? .38 : .18);
+                var outEnd = hasOutCustom ? EffectPalette.Blend(outCustom, arcGold, .22) : mode == ArcReactor ? GradeBubble(System.Windows.Media.Color.FromRgb(0x38, 0x07, 0x0F), ColorPaletteRole.AccentSoft, true) : EffectPalette.Blend(outStart, accent, .20);
+                var inStart = hasInCustom ? inCustom : mode == ArcReactor ? GradeBubble(System.Windows.Media.Color.FromRgb(0x28, 0x10, 0x18), ColorPaletteRole.Surface, true) : inBase;
+                var inEnd = hasInCustom ? EffectPalette.Blend(inCustom, arcCyan, .16) : mode == ArcReactor ? GradeBubble(System.Windows.Media.Color.FromRgb(0x18, 0x09, 0x0E), ColorPaletteRole.Surface, true) : EffectPalette.Blend(inBase, sidebar, .35);
                 var og = new System.Windows.Media.LinearGradientBrush(outStart, outEnd, 35); og.Freeze();
                 var ig = new System.Windows.Media.LinearGradientBrush(inStart, inEnd, 35); ig.Freeze();
                 outBg = og;
@@ -732,13 +732,13 @@ public static class ThemeManager
                     EndPoint = new System.Windows.Point(1, 1),
                     GradientStops =
                     [
-                        new System.Windows.Media.GradientStop(starkGold, 0),
+                        new System.Windows.Media.GradientStop(arcGold, 0),
                         new System.Windows.Media.GradientStop(brightGold, .55),
                         new System.Windows.Media.GradientStop(arcCyan, 1)
                     ]
                 };
                 ob.Freeze();
-                var ib = new System.Windows.Media.LinearGradientBrush(arcCyan, starkGold, 35);
+                var ib = new System.Windows.Media.LinearGradientBrush(arcCyan, arcGold, 35);
                 ib.Freeze();
                 outBorder = ob;
                 inBorder = ib;
@@ -887,8 +887,8 @@ public static class ThemeManager
         WebCrimson => "WebCrimson",
         Jester => "Jester",
         Cipher => "Cipher",
-        GundamFreedom => "GundamFreedom",
-        IronMan => "IronMan",
+        FreedomWings => "FreedomWings",
+        ArcReactor => "ArcReactor",
         _ => "Light"
     };
 

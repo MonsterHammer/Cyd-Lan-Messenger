@@ -25,8 +25,8 @@ public sealed class ChatEffects : Canvas
     {
         "theme" when theme == ThemeManager.Steampunk => "steam",
         "theme" when theme is ThemeManager.Sakura => "petals",
-        "theme" when theme == ThemeManager.GundamFreedom => "feathers",
-        "theme" when theme == ThemeManager.IronMan => "repulsor",
+        "theme" when theme == ThemeManager.FreedomWings => "feathers",
+        "theme" when theme == ThemeManager.ArcReactor => "repulsor",
         "theme" when theme is ThemeManager.Cyberpunk or ThemeManager.Arcade => "burst",
         "theme" when theme is ThemeManager.Anime or ThemeManager.Aurora or ThemeManager.Midnight => "sparkles",
         "theme" => typing ? "sparkles" : "ripple",

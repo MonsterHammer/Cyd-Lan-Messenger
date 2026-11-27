@@ -564,7 +564,7 @@ public sealed class HeaderEffect : AmbientEffect
 
     private static readonly Lazy<Pen[]> BeamBluePens = new(() => BuildShimmerPens(Color.FromRgb(0x38, 0xBD, 0xF8), 1.45));
     private static readonly Lazy<Pen[]> FreedomCrimsonPens = new(() => BuildShimmerPens(Color.FromRgb(0xE1, 0x1D, 0x48), 1.25));
-    private static readonly Lazy<Pen[]> StarkGoldPens = new(() => BuildShimmerPens(Color.FromRgb(0xF5, 0xB7, 0x00), 1.35));
+    private static readonly Lazy<Pen[]> ArcGoldPens = new(() => BuildShimmerPens(Color.FromRgb(0xF5, 0xB7, 0x00), 1.35));
     private static readonly Lazy<Brush[]> BeamRibbonFills = new(() => BuildRibbonBrushes(Color.FromRgb(0x38, 0xBD, 0xF8), .34));
     private static readonly Lazy<Brush[]> CrimsonRibbonFills = new(() => BuildRibbonBrushes(Color.FromRgb(0xE1, 0x1D, 0x48), .22));
     private static readonly Lazy<Brush[]> ReactorGoldFills = new(() => BuildSparkleBrushes(Color.FromRgb(0xF5, 0xB7, 0x00)));
@@ -574,7 +574,7 @@ public sealed class HeaderEffect : AmbientEffect
     {
         var beamPens = BeamBluePens.Value;
         var crimsonPens = FreedomCrimsonPens.Value;
-        var goldPens = StarkGoldPens.Value;
+        var goldPens = ArcGoldPens.Value;
         var cyanFills = ReactorCyanFills.Value;
 
         double midY = height * .50;
@@ -608,7 +608,7 @@ public sealed class HeaderEffect : AmbientEffect
     private void DrawTitleReactor(DrawingContext dc, double width, double height, double intensity)
     {
         var cyanPens = BeamBluePens.Value;
-        var goldPens = StarkGoldPens.Value;
+        var goldPens = ArcGoldPens.Value;
         var crimsonPens = FreedomCrimsonPens.Value;
         var cyanFills = ReactorCyanFills.Value;
         var goldFills = ReactorGoldFills.Value;
@@ -640,7 +640,7 @@ public sealed class HeaderEffect : AmbientEffect
     {
         var cyanPens = BeamBluePens.Value;
         var crimsonPens = FreedomCrimsonPens.Value;
-        var goldPens = StarkGoldPens.Value;
+        var goldPens = ArcGoldPens.Value;
         var cyanFills = ReactorCyanFills.Value;
 
         double time = Time * Math.Tau;
@@ -672,7 +672,7 @@ public sealed class HeaderEffect : AmbientEffect
     private void DrawHeaderArc(DrawingContext dc, double width, double height, double intensity)
     {
         var cyanPens = BeamBluePens.Value;
-        var goldPens = StarkGoldPens.Value;
+        var goldPens = ArcGoldPens.Value;
         var crimsonPens = FreedomCrimsonPens.Value;
         var cyanFills = ReactorCyanFills.Value;
         var goldFills = ReactorGoldFills.Value;

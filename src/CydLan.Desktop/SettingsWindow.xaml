@@ -1598,7 +1598,7 @@
                       <local:SidebarEffect x:Name="SidebarWingsPreview" Kind="BeamWings" Intensity="{Binding Value, ElementName=SidebarWingsIntensityBox}"/>
                     </Border>
                   </CheckBox>
-                  <CheckBox x:Name="SidebarHudBox" Style="{StaticResource EffectCard}" Tag="Stark HUD" AutomationProperties.Name="Stark HUD">
+                  <CheckBox x:Name="SidebarHudBox" Style="{StaticResource EffectCard}" Tag="Arc HUD" AutomationProperties.Name="Arc HUD">
                     <Border Background="{DynamicResource Sidebar}">
                       <local:SidebarEffect x:Name="SidebarHudPreview" Kind="HudMatrix" Intensity="{Binding Value, ElementName=SidebarHudIntensityBox}"/>
                     </Border>
@@ -1687,10 +1687,10 @@
                 <StackPanel Visibility="{Binding IsChecked, ElementName=SidebarHudBox, Converter={StaticResource Bool}}">
                   <DockPanel Margin="0,4,0,4">
                     <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=SidebarHudIntensityBox, StringFormat=P0}" Foreground="{DynamicResource Muted}"/>
-                    <TextBlock Text="Stark HUD intensity" Style="{StaticResource Label}" Margin="0"/>
+                    <TextBlock Text="Arc HUD intensity" Style="{StaticResource Label}" Margin="0"/>
                   </DockPanel>
                   <Slider x:Name="SidebarHudIntensityBox" Style="{StaticResource BackgroundSlider}" Minimum=".1" Maximum="1" TickFrequency=".05"
-                          SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True" AutomationProperties.Name="Stark HUD intensity" Margin="0,0,0,8"/>
+                          SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True" AutomationProperties.Name="Arc HUD intensity" Margin="0,0,0,8"/>
                 </StackPanel>
               </StackPanel>
               <StackPanel x:Name="AppearanceAuraSection" Visibility="Collapsed">

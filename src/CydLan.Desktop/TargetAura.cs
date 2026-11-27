@@ -664,16 +664,16 @@ public sealed class TargetAura : AmbientEffect
 
     private static readonly Lazy<Pen[]> WingBluePens = new(() => BuildPens(Color.FromRgb(0x38, 0xBD, 0xF8), 1.45));
     private static readonly Lazy<Pen[]> WingCrimsonPens = new(() => BuildPens(Color.FromRgb(0xE1, 0x1D, 0x48), 1.25));
-    private static readonly Lazy<Pen[]> StarkGoldPens = new(() => BuildPens(Color.FromRgb(0xF5, 0xB7, 0x00), 1.35));
+    private static readonly Lazy<Pen[]> ArcGoldPens = new(() => BuildPens(Color.FromRgb(0xF5, 0xB7, 0x00), 1.35));
     private static readonly Lazy<BitmapSource[]> ArcCyanOrbs = new(() => BuildOrbSprites(Color.FromRgb(0x38, 0xBD, 0xF8)));
-    private static readonly Lazy<BitmapSource[]> StarkGoldOrbs = new(() => BuildOrbSprites(Color.FromRgb(0xF5, 0xB7, 0x00)));
+    private static readonly Lazy<BitmapSource[]> ArcGoldOrbs = new(() => BuildOrbSprites(Color.FromRgb(0xF5, 0xB7, 0x00)));
     private static readonly Lazy<Brush[]> WhiteCoreFills = new(() => BuildSolidBrushes(Colors.White));
 
     private void DrawWingFlare(DrawingContext dc, double width, double height, double intensity)
     {
         var bluePens = WingBluePens.Value;
         var crimsonPens = WingCrimsonPens.Value;
-        var goldPens = StarkGoldPens.Value;
+        var goldPens = ArcGoldPens.Value;
         var orbs = ArcCyanOrbs.Value;
         var whiteFills = WhiteCoreFills.Value;
 
@@ -703,10 +703,10 @@ public sealed class TargetAura : AmbientEffect
     private void DrawArcReactor(DrawingContext dc, double width, double height, double intensity)
     {
         var cyanPens = WingBluePens.Value;
-        var goldPens = StarkGoldPens.Value;
+        var goldPens = ArcGoldPens.Value;
         var redPens = WingCrimsonPens.Value;
         var cyanOrbs = ArcCyanOrbs.Value;
-        var goldOrbs = StarkGoldOrbs.Value;
+        var goldOrbs = ArcGoldOrbs.Value;
 
         var target = TargetBounds(width, height);
         var frame = target;

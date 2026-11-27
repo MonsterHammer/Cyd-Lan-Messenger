@@ -26,8 +26,8 @@ public sealed class WeatherEffect : AmbientEffect
     private static readonly Lazy<Brush[]> FreedomCrimsonFills = new(() => BuildTintedFills(Color.FromRgb(0xE1, 0x1D, 0x48)));
     private static readonly Lazy<Pen[]> FreedomCyanPens = new(() => BuildTintedPens(Color.FromRgb(0x38, 0xBD, 0xF8), 1.35));
     private static readonly Lazy<Pen[]> FreedomCobaltPens = new(() => BuildTintedPens(Color.FromRgb(0x1D, 0x4E, 0xD8), 1.25));
-    private static readonly Lazy<Pen[]> StarkGoldPens = new(() => BuildTintedPens(Color.FromRgb(0xF5, 0xB7, 0x00), 1.2));
-    private static readonly Lazy<Brush[]> StarkGoldFills = new(() => BuildTintedFills(Color.FromRgb(0xF5, 0xB7, 0x00)));
+    private static readonly Lazy<Pen[]> ArcGoldPens = new(() => BuildTintedPens(Color.FromRgb(0xF5, 0xB7, 0x00), 1.2));
+    private static readonly Lazy<Brush[]> ArcGoldFills = new(() => BuildTintedFills(Color.FromRgb(0xF5, 0xB7, 0x00)));
     private static readonly Lazy<BitmapSource[]> ArcCyanSprites = new(() => BuildColorFireflySprites(Color.FromRgb(0x38, 0xBD, 0xF8)));
     private static readonly Geometry WingFeather = Geometry.Parse("M-8,-1.5 L3,-3.2 L10,0 L3,2.6 L-5,1.2 Z");
     private BitmapSource[]? fireflySprites;
@@ -180,8 +180,8 @@ public sealed class WeatherEffect : AmbientEffect
     {
         var arcSprites = ArcCyanSprites.Value;
         var cyanPens = FreedomCyanPens.Value;
-        var goldPens = StarkGoldPens.Value;
-        var goldFills = StarkGoldFills.Value;
+        var goldPens = ArcGoldPens.Value;
+        var goldFills = ArcGoldFills.Value;
         var cyanFills = FreedomCyanFills.Value;
         fireflySprites ??= BuildFireflySprites();
 
