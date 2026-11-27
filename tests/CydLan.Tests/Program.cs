@@ -801,18 +801,36 @@ static async Task TestProfileAndAvatar()
         var picture = Path.Combine(directory, "me.png");
         File.WriteAllBytes(picture, [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, .. Enumerable.Range(0, 200).Select(i => (byte)i)]);
         var a = Settings("Alex"); a.FirstName = "Alex"; a.LastName = "Rivera"; a.About = "Front desk 🙂"; a.AvatarPath = picture;
+        a.PetBody = "heart"; a.PetEars = "elf"; a.PetEyes = "sparkle"; a.PetBrows = "focused";
+        a.PetMouth = "kiss"; a.PetHat = "chef"; a.PetOutfit = "bib"; a.PetBack = "shark";
+        a.PetProp = "gamepad"; a.PetAura = "stars"; a.PetBodyColor = "#FEE2E2";
+        string expectedPet = CompanionProfileCodec.Encode(a);
+        Check(expectedPet.StartsWith(CompanionProfileCodec.Prefix, StringComparison.Ordinal) && expectedPet.Length <= CompanionProfileCodec.MaxLength,
+            "Companion wire code must use the CYDPET1 prefix and stay bounded.");
+        var decoded = new AppSettings();
+        Check(CompanionProfileCodec.TryDecodeInto(expectedPet, decoded) && decoded.PetBody == "heart" &&
+            decoded.PetBrows == "focused" && decoded.PetAura == "stars" && decoded.PetHat == "chef" && decoded.PetProp == "gamepad",
+            "Companion wire codec must round-trip all expanded traits.");
+        Check(CompanionProfileCodec.SanitizeWireCode("not-a-code") == "" && !CompanionProfileCodec.TryDecodeInto("CYDPET1:!!!", new AppSettings()),
+            "Invalid companion codes must be rejected cleanly.");
+        Check(new Peer { Id = "cyd", Version = "CydLan 0.1.0", PetCode = expectedPet }.HasPetCode &&
+            !new Peer { Id = "leg", Version = "LAN Messenger 1.2.35", PetCode = expectedPet }.HasPetCode,
+            "Only CydLan peers may expose companion customization codes.");
+
         var b = Settings("Jamie");
         await using var one = new LanService(a); await using var two = new LanService(b) { AvatarDirectory = Path.Combine(directory, "avatars") };
-        string? avatar = null; (string First, string Last, string About)? profile = null; int files = 0;
+        string? avatar = null; (string First, string Last, string About)? profile = null; string? petCode = null; int files = 0;
         two.AvatarReceived += (id, path) => { if (id == a.UserId) avatar = path; };
         two.ProfileReceived += (id, first, last, about) => { if (id == a.UserId) profile = (first, last, about); };
+        two.PetCodeReceived += (id, code) => { if (id == a.UserId) petCode = code; };
         two.TransferChanged += _ => Interlocked.Increment(ref files);
         await one.StartAsync(false, IPAddress.Loopback); await two.StartAsync(false, IPAddress.Loopback);
         await one.ConnectAsync(b.UserId, "127.0.0.1", two.ListeningPort);
-        await Until(() => avatar is not null && profile is not null);
+        await Until(() => avatar is not null && profile is not null && petCode is not null);
         Check(File.ReadAllBytes(avatar!).SequenceEqual(File.ReadAllBytes(picture)), "The profile picture must arrive intact.");
         Check(Path.GetDirectoryName(avatar) == Path.Combine(directory, "avatars"), "Profile pictures are stored in the avatar folder under our own name.");
         Check(profile == ("Alex", "Rivera", "Front desk 🙂"), "First name, last name and About must arrive in the query reply.");
+        Check(petCode == expectedPet, "Companion wire code must arrive in the query reply.");
         Check(files == 0, "Profile pictures must not appear as file transfers.");
     }
     finally { try { Directory.Delete(directory, true); } catch (IOException) { } }

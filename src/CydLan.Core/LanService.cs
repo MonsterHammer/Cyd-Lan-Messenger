@@ -58,6 +58,7 @@ public sealed partial class LanService : IAsyncDisposable
     public event Action<string, string>? AvatarReceived;
     /// <summary>A contact's details arrived in reply to a query: (peer id, first name, last name, about).</summary>
     public event Action<string, string, string, string>? ProfileReceived;
+    public event Action<string, string>? PetCodeReceived;
     public const long MaxInlineImageBytes = 20 * 1024 * 1024;
     public static readonly string[] InlineImageExtensions = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp"];
     public static bool IsInlineImageName(string name) => InlineImageExtensions.Contains(System.IO.Path.GetExtension(name).ToLowerInvariant());
@@ -542,7 +543,8 @@ public sealed partial class LanService : IAsyncDisposable
                 if (message.Get("queryop") == "get") await SendUserDataAsync(session, "result");
                 PeerOnline?.Invoke(new() { Id = session.Id, Name = Limit(message.Get("name"), 100), Address = session.Address,
                     Port = session.Port, Version = session.Version, Status = message.Get("status"), Online = true,
-                    FirstName = Limit(message.Get("firstname"), 100), LastName = Limit(message.Get("lastname"), 100), About = Limit(message.Get("about"), 1000) });
+                    FirstName = Limit(message.Get("firstname"), 100), LastName = Limit(message.Get("lastname"), 100), About = Limit(message.Get("about"), 1000),
+                    PetCode = IsCydLanVersion(session.Version) ? CompanionProfileCodec.SanitizeWireCode(message.Get("cydpet")) : "" });
                 if (!session.Introduced)
                 {
                     // LAN Messenger only shares first name, last name and About in reply to a query, and
@@ -594,12 +596,15 @@ public sealed partial class LanService : IAsyncDisposable
                     ["queryop"] = "result", ["messageid"] = message.Id, ["userid"] = settings.UserId, ["name"] = settings.DisplayName,
                     ["address"] = LocalAddress, ["version"] = WireVersion, ["status"] = settings.Status, ["note"] = "",
                     ["logon"] = Environment.UserName, ["host"] = Environment.MachineName, ["os"] = "Windows",
-                    ["firstname"] = settings.FirstName, ["lastname"] = settings.LastName, ["about"] = settings.About });
+                    ["firstname"] = settings.FirstName, ["lastname"] = settings.LastName, ["about"] = settings.About,
+                    ["cydpet"] = CompanionProfileCodec.Encode(settings) });
                 else if (message.Get("queryop") == "result")
                 {
                     // LAN Messenger fills blank fields with "N/A".
                     static string Field(WireMessage m, string name, int max) { var v = m.Get(name).Trim(); return v == "N/A" ? "" : (v.Length > max ? v[..max] : v); }
                     ProfileReceived?.Invoke(session.Id, Field(message, "firstname", 100), Field(message, "lastname", 100), Field(message, "about", 1000));
+                    if (IsCydLanVersion(session.Version))
+                        PetCodeReceived?.Invoke(session.Id, CompanionProfileCodec.SanitizeWireCode(message.Get("cydpet")));
                 }
                 break;
         }
@@ -707,7 +712,8 @@ public sealed partial class LanService : IAsyncDisposable
         ["userid"] = settings.UserId, ["name"] = settings.DisplayName, ["address"] = LocalAddress,
         // UC_File | UC_GroupMessage | UC_Folder
         ["version"] = WireVersion, ["status"] = settings.Status, ["note"] = "", ["usercaps"] = "7", ["queryop"] = operation, ["tcpport"] = ListeningPort.ToString(),
-        ["firstname"] = settings.FirstName, ["lastname"] = settings.LastName, ["about"] = settings.About });
+        ["firstname"] = settings.FirstName, ["lastname"] = settings.LastName, ["about"] = settings.About,
+        ["cydpet"] = CompanionProfileCodec.Encode(settings) });
     private byte[] Encode(string type, string? to, Dictionary<string, string> body, string? id = null) =>
         LegacyProtocol.Encode(type, settings.UserId, to, id ?? Interlocked.Increment(ref sequence).ToString(), body);
     private Task SendAsync(string id, string type, Dictionary<string, string> body, string? messageId = null)

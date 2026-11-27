@@ -32,13 +32,17 @@ public sealed class Peer : Observable
     public string Preview { get => preview; set => Set(ref preview, value); }
     public int Unread { get => unread; set => Set(ref unread, value); }
     public string Typing { get => typing; set => Set(ref typing, value); }
-    private string firstName = "", lastName = "", about = "", avatarPath = "";
+    private string firstName = "", lastName = "", about = "", avatarPath = "", petCode = "";
     public string FirstName { get => firstName; set { Set(ref firstName, value); Changed(nameof(FullName)); Changed(nameof(HasFullName)); } }
     public string LastName { get => lastName; set { Set(ref lastName, value); Changed(nameof(FullName)); Changed(nameof(HasFullName)); } }
     public string About { get => about; set { Set(ref about, value); Changed(nameof(HasAbout)); } }
     public string FullName => $"{FirstName} {LastName}".Trim();
     public bool HasFullName => FullName.Length > 0;
     public bool HasAbout => About.Length > 0;
+    /// <summary>Compact companion profile shared by CydLan peers; empty for legacy LAN Messenger peers.</summary>
+    public string PetCode { get => petCode; set { Set(ref petCode, value); Changed(nameof(HasPetCode)); } }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool HasPetCode => petCode.Length > 0 && LanService.IsCydLanVersion(Version);
     /// <summary>Local copy of this contact's profile picture; empty when they have not sent one.</summary>
     public string AvatarPath { get => avatarPath; set => Set(ref avatarPath, value); }
     public string Presence => !Online ? "Offline" : Status switch { "busy" => "Busy", "dnd" => "Do not disturb", "brb" or "away" => "Away", _ => "Online" };
@@ -186,10 +190,37 @@ public sealed class AppSettings
     public bool FloatingLanRoam { get; set; }
     public double? FloatingLanLeft { get; set; }
     public double? FloatingLanTop { get; set; }
+    public string PetBody { get; set; } = "squircle";
+    public string PetEars { get; set; } = "auto";
+    public string PetEyes { get; set; } = "dot";
+    public string PetMouth { get; set; } = "smile";
+    public string PetCheeks { get; set; } = "blush";
+    public string PetGlasses { get; set; } = "none";
+    public string PetHat { get; set; } = "auto";
+    public string PetOutfit { get; set; } = "auto";
+    public string PetBack { get; set; } = "none";
+    public string PetProp { get; set; } = "none";
+    public string PetFeet { get; set; } = "paws";
+    public string PetPattern { get; set; } = "solid";
+    public string PetVibe { get; set; } = "bouncy";
+    public string PetBrows { get; set; } = "none";
+    public string PetAura { get; set; } = "none";
+    public string PetBodyColor { get; set; } = "";
+    public string PetAccentColor { get; set; } = "";
+    public string PetDetailColor { get; set; } = "";
+    public double PetSize { get; set; } = 1.0;
     /// <summary>Desktop colour theme: "light", "dark" or "system".</summary>
     public string Theme { get; set; } = "light";
     public string ChatBackgroundPath { get; set; } = "";
     public double ChatBackgroundOpacity { get; set; } = .26;
+    public double ChatBackgroundDim { get; set; }
+    public double ChatBackgroundScale { get; set; } = 1.0;
+    public string ChatBackgroundFit { get; set; } = "fill";
+    public string ChatBackgroundAnchor { get; set; } = "center";
+    public bool ChatBackgroundGrayscale { get; set; }
+    public string ChatBackgroundTransition { get; set; } = "off";
+    public double ChatBackgroundTransitionStrength { get; set; } = .55;
+    public bool AnimateWhenUnfocused { get; set; }
     public string TypingEffect { get; set; } = "off";
     public string ClickEffect { get; set; } = "off";
     public bool SteampunkEngineEnabled { get; set; }
@@ -391,6 +422,9 @@ public sealed class AppSettings
     // Preferences dialog navigation memory
     public string LastSettingsPage { get; set; } = "GeneralPage";
     public string LastAppearanceTab { get; set; } = "Themes";
+    public List<string> MediaFolders { get; set; } = [];
+    public List<string> MediaFiles { get; set; } = [];
+    public double MediaVolume { get; set; } = .8;
 }
 
 /// <summary>A user-saved appearance configuration encoded as a compact look code.</summary>
