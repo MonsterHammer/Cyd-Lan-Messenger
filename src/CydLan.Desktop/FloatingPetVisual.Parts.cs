@@ -14,6 +14,7 @@ public sealed partial class FloatingPetVisual
         DrawingContext dc, string pattern, double top, double bottom, double w, double h,
         Color surface, Color accent, Color accentSoft, Color detail, Color topFill, bool darkBody)
     {
+        if (DrawMorePattern(dc, pattern, top, bottom, w, h, surface, accent, detail, darkBody)) return;
         switch (pattern)
         {
             case "belly":
@@ -91,6 +92,7 @@ public sealed partial class FloatingPetVisual
         Brush outer = FrozenBrush(EffectPalette.Blend(surface, accentSoft, .42));
         Brush inner = FrozenBrush(EffectPalette.Blend(detail, accent, .32));
         double perk = hovered || excited ? 1.8 : Math.Sin(breathPhase) * .7;
+        if (DrawMoreEars(dc, ears, bodyTop, bodyW, surface, accent, accentSoft, detail, outline, breathPhase, hovered, excited)) return;
 
         switch (ears)
         {
@@ -279,6 +281,7 @@ public sealed partial class FloatingPetVisual
         if (back == FloatingPetStyle.None) return;
         double flap = Math.Sin(breathPhase * (hopArc > 1 || isRoaming ? 4.4 : 2.1)) * (hopArc > 1 ? 15 : 8);
         double midY = bodyTop + bodyH * .54;
+        if (DrawMoreBack(dc, back, bodyBottom, bodyTop, bodyW, bodyH, accent, detail, outline, breathPhase, hopArc, isRoaming)) return;
 
         switch (back)
         {
@@ -562,6 +565,7 @@ public sealed partial class FloatingPetVisual
         Pen featurePen = FrozenPen(featureInk, 1.85);
         Brush inkBrush = FrozenBrush(featureInk);
         bool happyState = excited || (hovered && !sleepy);
+        if (DrawMoreEyes(dc, eyes, lookX, eyeY, eyeSep, accent, detail, featureInk, sleepy ? 1 : blinkProgress, happyState)) return;
 
         if (eyes == "visor")
         {
@@ -706,6 +710,7 @@ public sealed partial class FloatingPetVisual
     {
         if (mouth == FloatingPetStyle.None) return;
         Pen pen = FrozenPen(ink, 1.7);
+        if (!(sleepy && blinkProgress <= .45) && DrawMoreMouth(dc, mouth, cx, cy, ink, detail, hovered || excited)) return;
         if (sleepy && blinkProgress <= .45)
         {
             dc.DrawEllipse(null, FrozenPen(ink, 1.35), new Point(cx, cy + 1.1), 1.9, 1.6);
@@ -867,6 +872,7 @@ public sealed partial class FloatingPetVisual
     {
         if (hat == FloatingPetStyle.None) return;
         string effectiveHat = hat == FloatingPetStyle.Auto ? "antenna" : hat;
+        if (DrawMoreHeadwear(dc, effectiveHat, bodyTop, bodyW, accent, accentSoft, surface, detail, outline, breathPhase, facing)) return;
 
         switch (effectiveHat)
         {
@@ -1080,7 +1086,7 @@ public sealed partial class FloatingPetVisual
         bool isExcited, bool sleepy, bool isDancing = false)
     {
         double floatOrb = Math.Sin(breathPhase * 2.0) * 3.0;
-        switch (prop)
+        switch (DrawMoreProp(dc, prop, bodyTop, bodyBottom, bodyW, accent, detail, ink, breathPhase, facing) ? "" : prop)
         {
             case "sparkles":
                 DrawStarShape(dc, -bodyW * .5 - 8, bodyTop + 8 + floatOrb, 3.4, FrozenBrush(detail), null);

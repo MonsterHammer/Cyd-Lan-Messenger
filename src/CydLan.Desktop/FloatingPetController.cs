@@ -31,6 +31,44 @@ public sealed class FloatingPetController : IDisposable
         model.ReminderDue += OnReminderDue;
         model.ReminderResolved += OnReminderResolved;
         model.PeerCameOnline += OnPeerCameOnline;
+        model.Arena.PetAction += OnArenaAction;
+        model.Arena.PetLine += OnArenaLine;
+        model.Arena.InviteReceived += OnInvite;
+        model.Arena.BattleStarted += OnBattleStarted;
+    }
+
+    private void OpenArena()
+    {
+        openMainWindow();
+        model.PetsOpen = true;
+    }
+
+    private void OnArenaAction(string action, string? food)
+    {
+        if (!disposed && model.FloatingLanEnabled && petWindow is { IsVisible: true }) petWindow.PlayAction(action, food);
+    }
+
+    private void OnArenaLine(string line)
+    {
+        if (!disposed && model.FloatingLanEnabled && petWindow is { IsVisible: true }) petWindow.ShowLine(line);
+    }
+
+    private void OnInvite(PetInvite invite)
+    {
+        if (disposed) return;
+        if (model.PetsOpen) return;
+        if (model.FloatingLanEnabled && petWindow is { IsVisible: true })
+        {
+            petWindow.PlayAction("surprise");
+            petWindow.ShowLine($"{invite.PeerName} wants to battle!");
+        }
+        PetInviteToast.Show(model, invite);
+    }
+
+    private void OnBattleStarted(PetBattleSession session)
+    {
+        if (disposed) return;
+        OpenArena();
     }
 
     public void SyncVisibility()
@@ -44,7 +82,8 @@ public sealed class FloatingPetController : IDisposable
                 openMainWindow,
                 () => quickChatWindow?.IsVisible == true,
                 customizePet ?? openMainWindow,
-                openReminders);
+                openReminders,
+                OpenArena);
             if (!petWindow.IsVisible) petWindow.Show();
         }
         else
@@ -137,6 +176,11 @@ public sealed class FloatingPetController : IDisposable
         model.ReminderDue -= OnReminderDue;
         model.ReminderResolved -= OnReminderResolved;
         model.PeerCameOnline -= OnPeerCameOnline;
+        model.Arena.PetAction -= OnArenaAction;
+        model.Arena.PetLine -= OnArenaLine;
+        model.Arena.InviteReceived -= OnInvite;
+        model.Arena.BattleStarted -= OnBattleStarted;
+        PetInviteToast.CloseAll();
         reminderToast?.Close();
         quickChatWindow?.Close();
         petWindow?.Close();

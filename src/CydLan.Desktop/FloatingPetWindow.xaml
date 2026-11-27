@@ -31,11 +31,24 @@
           <MenuItem Header="Reminders" Click="Reminders_Click"/>
           <Separator/>
           <MenuItem Header="Pet" Click="PetPet_Click"/>
-          <MenuItem Header="Feed" Click="PetFeed_Click"/>
+          <MenuItem x:Name="FeedMenuItem" Header="Feed"/>
           <MenuItem Header="Play" Click="PetPlay_Click"/>
+          <MenuItem x:Name="ActionsMenuItem" Header="Actions">
+            <MenuItem Header="Laugh" Tag="laugh" Click="PetAction_Click"/>
+            <MenuItem Header="Cry" Tag="cry" Click="PetAction_Click"/>
+            <MenuItem Header="Dance" Tag="dance" Click="PetAction_Click"/>
+            <MenuItem Header="Spin" Tag="spin" Click="PetAction_Click"/>
+            <MenuItem Header="Backflip" Tag="flip" Click="PetAction_Click"/>
+            <MenuItem Header="Surprise" Tag="surprise" Click="PetAction_Click"/>
+            <MenuItem Header="Yawn" Tag="yawn" Click="PetAction_Click"/>
+            <MenuItem Header="Fired up" Tag="fired" Click="PetAction_Click"/>
+            <MenuItem Header="Nervous" Tag="nervous" Click="PetAction_Click"/>
+          </MenuItem>
           <MenuItem x:Name="SleepMenuItem" Header="Tuck in" Click="PetSleep_Click"/>
+          <MenuItem Header="Pet arena" Click="Arena_Click"/>
           <Separator/>
           <MenuItem x:Name="RoamMenuItem" Header="Roam" IsCheckable="True" Click="Roam_Click"/>
+          <MenuItem x:Name="WanderMenuItem" Header="Wander anywhere" IsCheckable="True" Click="Wander_Click"/>
           <MenuItem Header="Customize..." Click="Customize_Click"/>
           <MenuItem Header="Open CydLan" Click="OpenApp_Click"/>
           <Separator/>

@@ -59,6 +59,7 @@ public partial class PeerProfileWindow : Window
             CompanionSection.Visibility = Visibility.Visible;
             PeerPetVisual.PetStyle = peerCompanion;
             UseCompanionButton.IsEnabled = peerCompanion != model.PetAppearance;
+            // LAN battles are parked; the Battle button stays hidden until they come back.
             RenderPet();
             if (SystemParameters.ClientAreaAnimation)
             {
@@ -131,6 +132,13 @@ public partial class PeerProfileWindow : Window
 
     private void CompanionStage_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e) { stageHovered = true; RenderPet(); }
     private void CompanionStage_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e) { stageHovered = false; RenderPet(); }
+
+    private async void Battle_Click(object sender, RoutedEventArgs e)
+    {
+        Close();
+        model.PetsOpen = true;
+        await model.Arena.ChallengeAsync(peer);
+    }
 
     private async void UseCompanion_Click(object sender, RoutedEventArgs e)
     {

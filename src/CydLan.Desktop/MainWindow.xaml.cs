@@ -26,6 +26,7 @@ public partial class MainWindow : Window
         InitializeComponent(); this.model = model; DataContext = model;
         InitMediaController();
         InitReminderEditor();
+        InitPets();
         InteractionEffects.Install();
         PreviewMouseMove += (_, args) =>
         {
@@ -119,7 +120,7 @@ public partial class MainWindow : Window
         if (model.Preview && System.Windows.Application.Current is App app) await app.QuitAsync();
         else Hide();
     }
-    private void Chat_Click(object sender, RoutedEventArgs e) { model.RemindersOpen = false; model.TransfersOpen = false; model.MediaOpen = false; model.Broadcasting = false; model.GroupsOpen = false; }
+    private void Chat_Click(object sender, RoutedEventArgs e) { model.PetsOpen = false; model.RemindersOpen = false; model.TransfersOpen = false; model.MediaOpen = false; model.Broadcasting = false; model.GroupsOpen = false; }
     private void PeopleTab_Click(object sender, RoutedEventArgs e) => model.ShowRecentChats = false;
     private void RecentTab_Click(object sender, RoutedEventArgs e) => model.ShowRecentChats = true;
     private void Groups_Click(object sender, RoutedEventArgs e)
@@ -370,6 +371,12 @@ public partial class MainWindow : Window
             ShowPeerProfile(peer);
     }
     internal void ShowPeerProfile(Peer peer) => PopupHost.ShowModal(this, new PeerProfileWindow(peer, model));
+    private async void BattleRow_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: Peer peer }) return;
+        model.PetsOpen = true;
+        await model.Arena.ChallengeAsync(peer);
+    }
     internal void ShowConnectionDetails() { if (model.HasPeer) DetailsPanel.Visibility = Visibility.Visible; UpdateCompactLayout(); }
     private void UpdateCompactLayout(bool animate = false)
     {
@@ -600,7 +607,7 @@ public partial class MainWindow : Window
             return;
         }
         if (!model.CanAttach) { model.Toast = "No online contact selected"; return; }
-        model.RemindersOpen = false; model.TransfersOpen = false; model.MediaOpen = false; AttachFiles(files); Composer.Focus(); e.Handled = true;
+        model.PetsOpen = false; model.RemindersOpen = false; model.TransfersOpen = false; model.MediaOpen = false; AttachFiles(files); Composer.Focus(); e.Handled = true;
     }
     private void RemoveAttachment_Click(object sender, RoutedEventArgs e) { if (((FrameworkElement)sender).DataContext is Attachment item) model.RemoveAttachment(item); }
     private void MessageImage_Click(object sender, MouseButtonEventArgs e)

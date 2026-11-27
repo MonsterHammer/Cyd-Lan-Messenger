@@ -33,6 +33,8 @@ internal static partial class Program
                 else if (args.Contains("--reminders-only")) await RunReminderVerificationAsync();
                 else if (args.Contains("--custom-only")) await RunLookAndBrandVerificationAsync();
                 else if (args.Contains("--effects-pack-only")) await RunEffectsPackVerificationAsync();
+                else if (args.Contains("--pet-game-only")) await RunPetGameVerificationAsync();
+                else if (args.Contains("--pets-probe")) await RunPetsProbeAsync(args[Array.IndexOf(args, "--pets-probe") + 1]);
                 else if (args.Contains("--opacity-only")) { await TestWindowOpacityAsync(); Console.WriteLine("PASS  Window opacity"); }
                 else if (args.Contains("--floating-only")) { Directory.CreateDirectory("artifacts"); await TestFloatingLanSuiteAsync(Path.GetFullPath("artifacts")); Console.WriteLine("PASS  Floating companion suite"); }
                 else await RunAsync(args.Contains("--offline"), args.Contains("--startup-loopback"));

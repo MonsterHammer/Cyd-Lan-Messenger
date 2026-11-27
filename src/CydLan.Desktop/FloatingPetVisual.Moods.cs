@@ -29,7 +29,7 @@ public sealed partial class FloatingPetVisual
     private static readonly Color TearBlue = Color.FromRgb(0x60, 0xA5, 0xFA);
     private static readonly Color LovePink = Color.FromRgb(0xF4, 0x72, 0xB6);
 
-    private bool MoodIsHappy => mood is PetMood.Love or PetMood.Celebrate or PetMood.Happy;
+    private bool MoodIsHappy => mood is PetMood.Love or PetMood.Celebrate or PetMood.Happy or PetMood.Laughing;
 
     /// <summary>Extra tilt and sideways jitter from the mood.</summary>
     private (double Tilt, double ShakeX, double Squash) MoodMotion(double phase, double facingSign) => mood switch
@@ -41,6 +41,14 @@ public sealed partial class FloatingPetVisual
         PetMood.Shy => (-facingSign * 6, 0, .975),
         PetMood.Celebrate => (Math.Sin(phase * 5.2) * 7, 0, 1),
         PetMood.Curious => (facingSign * 9, 0, 1),
+        PetMood.Crying => (Math.Sin(phase * 7) * 2.4, Math.Sin(phase * 23) * .7, .965 + Math.Abs(Math.Sin(phase * 3.5)) * .03),
+        PetMood.Laughing => (Math.Sin(phase * 4.2) * 7, 0, .93 + Math.Abs(Math.Sin(phase * 8.5)) * .1),
+        PetMood.Surprised => (0, 0, 1.06),
+        PetMood.Nervous => (0, Math.Sin(phase * 37) * .9, .985),
+        PetMood.Fired => (facingSign * 5, 0, 1.02),
+        PetMood.Hurt => (-facingSign * 12, Math.Sin(phase * 41) * 1.8, .9),
+        PetMood.Eating => (0, 0, .97 + Math.Abs(Math.Sin(phase * 6)) * .04),
+        PetMood.Yawning => (-facingSign * 4, 0, 1.05),
         _ => (0, 0, 1)
     };
 
@@ -62,6 +70,7 @@ public sealed partial class FloatingPetVisual
     {
         double lx = lookX - eyeSep, rx = lookX + eyeSep;
         Pen pen = FrozenPen(ink, 1.85);
+        if (DrawActionEyes(dc, lx, rx, eyeY, ink, accent, phase, blink)) return true;
         switch (mood)
         {
             case PetMood.Fainted:
@@ -145,6 +154,7 @@ public sealed partial class FloatingPetVisual
     {
         Pen p = FrozenPen(ink, 1.9);
         double lx = lookX - eyeSep, rx = lookX + eyeSep;
+        if (DrawActionBrows(dc, lx, rx, browY, ink)) return true;
         switch (mood)
         {
             case PetMood.Angry:
@@ -176,6 +186,7 @@ public sealed partial class FloatingPetVisual
     private bool DrawMoodMouth(DrawingContext dc, double cx, double cy, Color ink, Color detail, double phase)
     {
         Pen pen = FrozenPen(ink, 1.7);
+        if (DrawActionMouth(dc, cx, cy, ink, detail, phase)) return true;
         switch (mood)
         {
             case PetMood.Angry:
@@ -261,6 +272,7 @@ public sealed partial class FloatingPetVisual
     private void DrawMoodCues(DrawingContext dc, double bodyTop, double bodyBottom, double bodyW, double eyeY, double eyeSep, double lookX,
         Color accent, Color detail, Color ink, double phase)
     {
+        DrawActionCues(dc, bodyTop, bodyBottom, bodyW, eyeY, eyeSep, lookX, accent, detail, ink, phase);
         switch (mood)
         {
             case PetMood.Angry:

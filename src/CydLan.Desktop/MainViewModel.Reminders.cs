@@ -100,7 +100,7 @@ public sealed partial class MainViewModel
         {
             if (remindersOpen == value) return;
             remindersOpen = value;
-            if (value) { transfersOpen = false; mediaOpen = false; broadcasting = false; groupsOpen = false; RefreshReminderRows(); }
+            if (value) { transfersOpen = false; mediaOpen = false; broadcasting = false; groupsOpen = false; petsOpen = false; RefreshReminderRows(); }
             SectionChanged();
         }
     }

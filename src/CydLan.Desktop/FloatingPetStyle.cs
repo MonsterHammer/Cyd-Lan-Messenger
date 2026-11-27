@@ -93,7 +93,13 @@ public static class FloatingPetStyle
         new("cloud", "Cloud"),
         new("ghost", "Spirit"),
         new("heart", "Heart"),
-        new("cube", "Voxel")
+        new("cube", "Voxel"),
+        new("slime", "Slime"),
+        new("egg", "Egg"),
+        new("mushroom", "Mushroom"),
+        new("octo", "Octo"),
+        new("drop", "Droplet"),
+        new("chonk", "Chonk")
     ];
 
     public static IReadOnlyList<StyleOption> Ears { get; } =
@@ -109,6 +115,12 @@ public static class FloatingPetStyle
         new("antler", "Antlers"),
         new("mecha", "V-fin"),
         new("fin", "Axolotl"),
+        new("mouse", "Mouse"),
+        new("panda", "Panda"),
+        new("unicorn", "Unicorn"),
+        new("dragon", "Dragon"),
+        new("sheep", "Sheep"),
+        new("leaf", "Leaves"),
         new(None, "None")
     ];
 
@@ -125,7 +137,12 @@ public static class FloatingPetStyle
         new("wink", "Wink"),
         new("sleepy", "Comfy"),
         new("spiral", "Dizzy"),
-        new("button", "Plush")
+        new("button", "Plush"),
+        new("anime", "Anime"),
+        new("uwu", "UwU"),
+        new("robot", "LED"),
+        new("tiny", "Beady"),
+        new("glow", "Glow")
     ];
 
     public static IReadOnlyList<StyleOption> Brows { get; } =
@@ -151,6 +168,10 @@ public static class FloatingPetStyle
         new("beak", "Beak"),
         new("whistle", "Pout"),
         new("mustache", "Dapper"),
+        new("buck", "Buck teeth"),
+        new("tongue", "Tongue out"),
+        new("wide", "Big laugh"),
+        new("vampire", "Vampire"),
         new(None, "Quiet")
     ];
 
@@ -192,7 +213,13 @@ public static class FloatingPetStyle
         new("beret", "Beret"),
         new("tophat", "Top hat"),
         new("chef", "Chef"),
-        new("flower", "Flower")
+        new("flower", "Flower"),
+        new("pirate", "Pirate"),
+        new("witch", "Witch"),
+        new("party", "Party"),
+        new("headband", "Headband"),
+        new("cowboy", "Cowboy"),
+        new("viking", "Viking")
     ];
 
     public static IReadOnlyList<StyleOption> Outfits { get; } =
@@ -221,7 +248,10 @@ public static class FloatingPetStyle
         new("cape", "Cape"),
         new("tail", "Fluffy tail"),
         new("shell", "Shell"),
-        new("shark", "Shark fin")
+        new("shark", "Shark fin"),
+        new("dragon", "Dragon wings"),
+        new("butterfly", "Butterfly"),
+        new("backpack", "Backpack")
     ];
 
     public static IReadOnlyList<StyleOption> Props { get; } =
@@ -236,7 +266,11 @@ public static class FloatingPetStyle
         new("wand", "Star wand"),
         new("balloon", "Balloon"),
         new("gamepad", "Gamepad"),
-        new("lantern", "Lantern")
+        new("lantern", "Lantern"),
+        new("sword", "Sword"),
+        new("shield", "Shield"),
+        new("book", "Book"),
+        new("bubbletea", "Bubble tea")
     ];
 
     public static IReadOnlyList<StyleOption> Auras { get; } =
@@ -269,7 +303,10 @@ public static class FloatingPetStyle
         new("stripes", "Tabby"),
         new("cosmic", "Cosmic"),
         new("tuxedo", "Tuxedo"),
-        new("grid", "Cyber")
+        new("grid", "Cyber"),
+        new("hearts", "Hearts"),
+        new("cow", "Cow"),
+        new("zigzag", "Zigzag")
     ];
 
     public static IReadOnlyList<StyleOption> Vibes { get; } =

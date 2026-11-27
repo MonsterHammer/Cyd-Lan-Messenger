@@ -22,6 +22,7 @@ public partial class FloatingPetWindow : Window
     private readonly Func<bool> isQuickChatOpen;
     private readonly Action? customizePet;
     private readonly Action<string?>? openReminders;
+    private readonly Action? openArena;
     private readonly DispatcherTimer animTimer = new(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(33) };
     private readonly DispatcherTimer speechTimer = new() { Interval = TimeSpan.FromSeconds(4.5) };
     private readonly DispatcherTimer mindTimer = new() { Interval = TimeSpan.FromSeconds(1) };
@@ -77,9 +78,11 @@ public partial class FloatingPetWindow : Window
         Action openMainWindow,
         Func<bool> isQuickChatOpen,
         Action? customizePet = null,
-        Action<string?>? openReminders = null)
+        Action<string?>? openReminders = null,
+        Action? openArena = null)
     {
         InitializeComponent();
+        this.openArena = openArena;
         this.model = model;
         this.toggleQuickChat = toggleQuickChat;
         this.openMainWindow = openMainWindow;
@@ -101,6 +104,7 @@ public partial class FloatingPetWindow : Window
 
         animTimer.Tick += (_, _) => StepAnimation();
         speechTimer.Tick += (_, _) => HideSpeech();
+        mindTimer.Tick += (_, _) => TickAction();
         mindTimer.Tick += (_, _) => ApplyMind(mind.Tick(1.0, DateTime.Now, hovered, model.Settings.Status == "dnd"));
         gentleReminderTimer.Tick += (_, _) => { gentleReminderTimer.Stop(); if (currentReminder?.Reminder.Priority == "gentle") CollapseReminder(); };
         PetContextMenu.Opened += (_, _) => SyncContextMenu();
@@ -178,6 +182,136 @@ public partial class FloatingPetWindow : Window
         // Ignore the burst of peers that appear right after startup.
         if ((DateTime.UtcNow - shownAtUtc).TotalSeconds < 20 || string.IsNullOrWhiteSpace(name)) return;
         if (mind.PeerOnlineLine(name) is { } line) { mind.Say(line); ApplyMindNow(); }
+    }
+
+    // ── Actions ──────────────────────────────────────────────────────────
+
+    private string actionName = "", actionFood = "";
+    private double actionTime, actionLength;
+    private DateTime actionStartedUtc;
+    private Point? wanderTarget;
+    private DateTime lastWanderUtc;
+    private int wanderPauseTicks = 30;
+
+    public string CurrentAction => actionName;
+
+    /// <summary>Acts something out for a few seconds: laugh, cry, dance, spin, flip, surprise, yawn, eat, fired, nervous, hurt.</summary>
+    public void PlayAction(string action, string? food = null)
+    {
+        double length = action switch
+        {
+            "laugh" => 3.2, "cry" => 4.4, "dance" => 4.2, "spin" => .9, "flip" => 1.1, "surprise" => 1.7,
+            "yawn" => 2.6, "eat" => 3.0, "fired" => 2.6, "nervous" => 2.8, "hurt" => 1.0, _ => 0
+        };
+        if (length == 0) return;
+        actionName = action; actionFood = food ?? ""; actionTime = 0; actionLength = length; actionStartedUtc = DateTime.UtcNow;
+        if (action is "surprise" or "laugh") hopProgress = .02;
+        if (action == "cry") ShowLine(Random.Shared.Next(3) switch { 0 => "Waaah!", 1 => "*sniff*", _ => "It's not fair..." });
+        else if (action == "laugh") ShowLine(Random.Shared.Next(3) switch { 0 => "Hahaha!", 1 => "LOL", _ => "Hehe!" });
+        UpdateVisual();
+    }
+
+    /// <summary>Actions run on wall-clock time so a slow or paused animation timer can't stretch them.</summary>
+    private void TickAction()
+    {
+        if (actionName.Length == 0) return;
+        actionTime = (DateTime.UtcNow - actionStartedUtc).TotalSeconds;
+        if (actionTime >= actionLength) { actionName = ""; actionFood = ""; PetVisual.SetPose(0, 0); }
+    }
+
+    private string? ActionMood => actionName switch
+    {
+        "laugh" => PetMood.Laughing, "cry" => PetMood.Crying, "dance" or "spin" or "flip" => PetMood.Happy, "surprise" => PetMood.Surprised,
+        "yawn" => PetMood.Yawning, "eat" => PetMood.Eating, "fired" => PetMood.Fired, "nervous" => PetMood.Nervous, "hurt" => PetMood.Hurt,
+        _ => null
+    };
+
+    private void ApplyActionPose()
+    {
+        double t = actionLength > 0 ? Math.Clamp(actionTime / actionLength, 0, 1) : 0;
+        switch (actionName)
+        {
+            case "spin":
+                PetVisual.SetPose(360 * (1 - Math.Pow(1 - t, 2)) * facing, Math.Sin(t * Math.PI) * 8);
+                break;
+            case "flip":
+                PetVisual.SetPose(-360 * (t < .15 ? 0 : (t - .15) / .85) * facing, Math.Sin(t * Math.PI) * 30,
+                    1, t < .15 ? 1 - Math.Sin(t / .15 * Math.PI) * .18 : 1);
+                break;
+            case "dance":
+                PetVisual.SetPose(Math.Sin(actionTime * 9) * 12, Math.Abs(Math.Sin(actionTime * 9)) * 6, 1 + Math.Sin(actionTime * 18) * .04, 1 - Math.Sin(actionTime * 18) * .04);
+                break;
+            case "laugh":
+                PetVisual.SetPose(0, Math.Abs(Math.Sin(actionTime * 14)) * 3);
+                break;
+            case "surprise":
+                PetVisual.SetPose(0, 0, t < .2 ? 1 - t : .92, t < .2 ? 1 + t * .8 : 1.08);
+                break;
+            default:
+                PetVisual.SetPose(0, 0);
+                break;
+        }
+    }
+
+    /// <summary>Free roaming: picks spots anywhere on the screen and hops, walks or floats there.</summary>
+    private void Wander(double dt, string vibe, bool zoom)
+    {
+        var work = WorkAreaDipForCurrentWindow();
+        double side = (Width - PetHitArea.Width) * .5;
+        double minLeft = work.Left - side + 6, maxLeft = Math.Max(minLeft, work.Right - Width + side - 6);
+        double minTop = work.Top - (Height - PetHitArea.Height) + 6, maxTop = Math.Max(minTop, work.Bottom - Height - 6);
+        if (wanderPauseTicks > 0 && !zoom)
+        {
+            lastWanderUtc = default;
+            wanderPauseTicks--;
+            stepPhase = 0;
+            if (Random.Shared.Next(vibe == "calm" ? 260 : 170) == 0) facing = -facing;
+            return;
+        }
+        if (wanderTarget is not { } target)
+        {
+            // Mostly short trips, sometimes all the way across the screen.
+            bool far = Random.Shared.Next(4) == 0;
+            double range = far ? 1 : .35;
+            double tx = Math.Clamp(Left + (Random.Shared.NextDouble() * 2 - 1) * (maxLeft - minLeft) * range, minLeft, maxLeft);
+            double ty = Math.Clamp(Top + (Random.Shared.NextDouble() * 2 - 1) * (maxTop - minTop) * range, minTop, maxTop);
+            if (Random.Shared.Next(3) == 0) ty = maxTop; // likes to come back down to the taskbar
+            wanderTarget = target = new Point(tx, ty);
+        }
+        double dx = target.X - Left, dy = target.Y - Top, dist = Math.Sqrt(dx * dx + dy * dy);
+        var look = model.PetAppearance;
+        bool flyer = look.Feet == "hover" || look.Body is "ghost" or "cloud"
+            || look.Back is "angel" or "bat" or "fairy" or "mecha" or "jetpack" or "dragon" or "butterfly";
+        // Speed follows real time so a slow timer doesn't slow the walk.
+        var now = DateTime.UtcNow;
+        double pace = lastWanderUtc == default ? 1 : Math.Clamp((now - lastWanderUtc).TotalSeconds / .033, .5, 3);
+        lastWanderUtc = now;
+        double speed = (zoom ? 4.2 : vibe == "zoomies" ? 2.4 : vibe == "calm" ? 1.1 : vibe == "sleepy" ? .9 : 1.6) * (flyer ? 1.15 : 1) * pace;
+        if (dist <= speed)
+        {
+            Left = target.X; Top = target.Y;
+            wanderTarget = null;
+            stepPhase = 0;
+            wanderPauseTicks = zoom ? 0 : Random.Shared.Next(45, 160);
+            if (!zoom && Random.Shared.Next(100) < 30)
+            {
+                string[] moves = vibe switch
+                {
+                    "sleepy" => ["yawn", "yawn", "spin"],
+                    "calm" => ["yawn", "dance", "spin"],
+                    "zoomies" => ["flip", "spin", "dance", "laugh"],
+                    _ => ["dance", "spin", "flip", "laugh", "surprise"]
+                };
+                PlayAction(moves[Random.Shared.Next(moves.Length)]);
+            }
+            return;
+        }
+        if (Math.Abs(dx) > .5) facing = dx > 0 ? 1 : -1;
+        Left += dx / dist * speed;
+        Top += dy / dist * speed;
+        stepPhase = (stepPhase + dt * (zoom ? 15 : 10)) % (Math.PI * 2);
+        // Walkers hop to climb; flyers just glide.
+        if (!flyer && hopProgress == 0 && (Math.Abs(dy) > Math.Abs(dx) * .35 || Random.Shared.Next(90) == 0)) hopProgress = .02;
     }
 
     public void TriggerHop()
@@ -352,6 +486,8 @@ public partial class FloatingPetWindow : Window
     private void SyncContextMenu()
     {
         RoamMenuItem.IsChecked = model.FloatingLanRoam;
+        WanderMenuItem.IsChecked = model.PetFreeRoam;
+        BuildFeedMenu();
         MoodMenuItem.Header = MoodLabel(currentMood, mindAsleep);
         SleepMenuItem.Header = mindAsleep ? "Wake up" : "Tuck in";
     }
@@ -373,11 +509,49 @@ public partial class FloatingPetWindow : Window
         PetMood.Sleeping => "Sleeping",
         PetMood.Curious => "Curious",
         PetMood.Smug => "Feeling smug",
+        PetMood.Crying => "Crying",
+        PetMood.Laughing => "Laughing",
+        PetMood.Surprised => "Surprised",
+        PetMood.Eating => "Eating",
+        PetMood.Yawning => "Yawning",
+        PetMood.Nervous => "Nervous",
+        PetMood.Fired => "Fired up",
+        PetMood.Hurt => "Ouch",
         _ => "Feeling fine"
     };
 
     private void PetPet_Click(object sender, RoutedEventArgs e) { mind.Poke(PetPoke.Pet); hopProgress = .02; ApplyMindNow(); }
-    private void PetFeed_Click(object sender, RoutedEventArgs e) { mind.Poke(PetPoke.Feed); hopProgress = .02; ApplyMindNow(); }
+    private void BuildFeedMenu()
+    {
+        FeedMenuItem.Items.Clear();
+        var progress = model.Arena.Progress;
+        foreach (var food in CydLan.Core.PetGame.Foods)
+        {
+            int count = CydLan.Core.PetGame.FoodCount(progress, food.Id);
+            if (count <= 0) continue;
+            var item = new System.Windows.Controls.MenuItem { Header = $"{food.Name} ×{count}", Tag = food.Id };
+            item.Click += (_, _) => FeedFood(food.Id);
+            FeedMenuItem.Items.Add(item);
+        }
+        if (FeedMenuItem.Items.Count == 0) FeedMenuItem.Items.Add(new System.Windows.Controls.MenuItem { Header = "No food", IsEnabled = false });
+        FeedMenuItem.Items.Add(new System.Windows.Controls.Separator());
+        var shop = new System.Windows.Controls.MenuItem { Header = "Shop" };
+        shop.Click += (_, _) => openArena?.Invoke();
+        FeedMenuItem.Items.Add(shop);
+    }
+
+    private void FeedFood(string food)
+    {
+        var result = model.Arena.Feed(food);
+        if (result == CydLan.Core.PetGame.FeedResult.TooFull) { ShowLine("I'm stuffed!"); return; }
+        if (result != CydLan.Core.PetGame.FeedResult.Fed) return;
+        mind.Poke(PetPoke.Feed);
+        ApplyMindNow();
+    }
+
+    private void PetAction_Click(object sender, RoutedEventArgs e) { if (sender is FrameworkElement { Tag: string action }) PlayAction(action); }
+    private void Arena_Click(object sender, RoutedEventArgs e) => openArena?.Invoke();
+    private void Wander_Click(object sender, RoutedEventArgs e) => model.UpdateFloatingState(freeRoam: !model.PetFreeRoam);
     private void PetPlay_Click(object sender, RoutedEventArgs e) { mind.Poke(PetPoke.Play); zoomiesUntilUtc = DateTime.UtcNow.AddSeconds(5.5); hopProgress = .02; ApplyMindNow(); }
     private void PetSleep_Click(object sender, RoutedEventArgs e)
     {
@@ -435,6 +609,7 @@ public partial class FloatingPetWindow : Window
     {
         const double dt = .033;
         breathPhase = (breathPhase + dt * 2.3) % (Math.PI * 20);
+        TickAction();
 
         if (excited && DateTime.UtcNow >= excitedUntilUtc)
             excited = false;
@@ -468,8 +643,14 @@ public partial class FloatingPetWindow : Window
         else if (ReminderShake.X != 0) ReminderShake.X = 0;
 
         string vibe = model.PetAppearance.Vibe;
-        bool busy = dragging || hovered || isQuickChatOpen() || Fainted || mindAsleep || IsSleepy();
+        bool busy = dragging || hovered || isQuickChatOpen() || Fainted || mindAsleep || IsSleepy() || actionName.Length > 0;
         bool zoom = Zoomies;
+        if (model.PetFreeRoam && !busy)
+        {
+            Wander(dt, vibe, zoom);
+            UpdateVisual();
+            return;
+        }
         Point? cursor = followCursor || faceCursor ? CursorDip() : null;
         double centerX = Left + Width * .5;
 
@@ -544,8 +725,11 @@ public partial class FloatingPetWindow : Window
     private void UpdateVisual()
     {
         bool online = model.OnlineCount > 0;
-        bool sleepy = IsSleepy();
-        PetVisual.SetMood(sleepy ? PetMood.Neutral : currentMood);
+        string? acting = ActionMood;
+        bool sleepy = acting is null && IsSleepy();
+        PetVisual.SetMood(acting ?? (sleepy ? PetMood.Neutral : currentMood));
+        PetVisual.SetHeldFood(actionName == "eat" ? actionFood : "");
+        ApplyActionPose();
         PetVisual.SetMotionState(
             breathPhase,
             blinkProgress,
@@ -556,9 +740,10 @@ public partial class FloatingPetWindow : Window
             excited,
             sleepy,
             online,
-            (model.FloatingLanRoam || Zoomies) && !dragging && !hovered && !isQuickChatOpen() && roamPauseTicks == 0 && !sleepy && !Fainted,
+            (model.PetFreeRoam ? wanderTarget is not null && wanderPauseTicks == 0 : (model.FloatingLanRoam || Zoomies) && roamPauseTicks == 0)
+                && !dragging && !hovered && !isQuickChatOpen() && !sleepy && !Fainted && actionName.Length == 0,
             model.Settings.Status,
-            model.IsMediaPlaying);
+            model.IsMediaPlaying || actionName == "dance");
     }
 
     // ── Mouse ────────────────────────────────────────────────────────────

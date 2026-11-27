@@ -5,7 +5,9 @@ public static class PetMood
 {
     public const string Neutral = "", Happy = "happy", Love = "love", Angry = "angry", Sad = "sad", Bored = "bored",
         Alert = "alert", Shy = "shy", Dizzy = "dizzy", Hungry = "hungry", Fainted = "fainted", Celebrate = "celebrate",
-        Drowsy = "drowsy", Sleeping = "sleeping", Curious = "curious", Smug = "smug";
+        Drowsy = "drowsy", Sleeping = "sleeping", Curious = "curious", Smug = "smug",
+        Crying = "crying", Laughing = "laughing", Surprised = "surprised", Eating = "eating", Yawning = "yawning",
+        Nervous = "nervous", Fired = "fired", Hurt = "hurt";
 }
 
 /// <summary>Personality traits for the companion. Traits stack: a pet can be needy, sleepy and grumpy at once.</summary>

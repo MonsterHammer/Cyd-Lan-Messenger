@@ -419,6 +419,11 @@
               </Grid>
               <Button.Style><Style TargetType="Button" BasedOn="{StaticResource RailNavIcon}"><Style.Triggers><DataTrigger Binding="{Binding IsRemindersSection}" Value="True"><Setter Property="Background" Value="{DynamicResource RailNavSelected}"/><Setter Property="Foreground" Value="{DynamicResource Accent}"/></DataTrigger></Style.Triggers></Style></Button.Style>
             </Button>
+            <Button x:Name="PetsNav" ToolTip="Pets" Click="Pets_Click" AutomationProperties.Name="Pets"
+                    local:ButtonEffects.IsHighlight="{Binding IsPetsSection}" local:TargetAura.Role="Module">
+              <local:Glyph Data="{DynamicResource IconPet}" Size="19"/>
+              <Button.Style><Style TargetType="Button" BasedOn="{StaticResource RailNavIcon}"><Style.Triggers><DataTrigger Binding="{Binding IsPetsSection}" Value="True"><Setter Property="Background" Value="{DynamicResource RailNavSelected}"/><Setter Property="Foreground" Value="{DynamicResource Accent}"/></DataTrigger></Style.Triggers></Style></Button.Style>
+            </Button>
           </StackPanel>
           <StackPanel Grid.Row="2" VerticalAlignment="Bottom" Margin="0,0,0,18">
             <Button Style="{StaticResource RailNavIcon}" ToolTip="Preferences" Click="Settings_Click" AutomationProperties.Name="Preferences"><local:Glyph Data="{DynamicResource IconSettings}" Size="19"/></Button>
@@ -487,6 +492,7 @@
                 <local:Glyph Data="{DynamicResource IconPlus}" Size="18"/>
                 <Button.Style><Style TargetType="Button" BasedOn="{StaticResource SidebarIcon}"><Setter Property="ToolTip" Value="Connect"/><Style.Triggers>
                   <DataTrigger Binding="{Binding IsGroupsSection}" Value="True"><Setter Property="ToolTip" Value="New group"/></DataTrigger>
+                  <DataTrigger Binding="{Binding IsPetsSection}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
                   <DataTrigger Binding="{Binding IsMediaSection}" Value="True"><Setter Property="ToolTip" Value="Add files"/></DataTrigger>
                   <DataTrigger Binding="{Binding IsRemindersSection}" Value="True"><Setter Property="ToolTip" Value="New reminder"/></DataTrigger>
                   <DataTrigger Binding="{Binding IsFilesSection}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
@@ -609,6 +615,14 @@
                   <Button Content="Add folder" Style="{StaticResource Secondary}" HorizontalAlignment="Stretch" Margin="0,8,0,0" Click="AddMediaFolder_Click" AutomationProperties.Name="Add media folder"/>
                   <Button Content="Clear added" Style="{StaticResource Secondary}" HorizontalAlignment="Stretch" Margin="0,8,0,0" Click="ClearMediaAdded_Click" Visibility="{Binding HasAddedMediaSources, Converter={StaticResource Bool}}" AutomationProperties.Name="Clear added media"/>
                 </StackPanel>
+              </StackPanel>
+              <StackPanel Margin="8,0" Visibility="{Binding IsPetsSection, Converter={StaticResource Bool}}">
+                <Border Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="{DynamicResource PanelCorner}"
+                        Margin="8,0,8,0" Height="132" ClipToBounds="True" Cursor="Hand" MouseLeftButtonDown="SidebarPet_Click">
+                  <local:FloatingPetVisual x:Name="SidebarPetVisual" Width="150" Height="124" VerticalAlignment="Bottom" PetStyle="{Binding PetAppearance}"/>
+                </Border>
+                <Button Content="Card battle" Style="{StaticResource Primary}" HorizontalAlignment="Stretch" Margin="8,12,8,0" Padding="0,8" Click="PetsCardBattle_Click"/>
+                <Button Content="Customize pet" Style="{StaticResource Secondary}" HorizontalAlignment="Stretch" Margin="8,8,8,0" Click="PetsCustomize_Click"/>
               </StackPanel>
               <StackPanel Margin="8,0" Visibility="{Binding IsRemindersSection, Converter={StaticResource Bool}}">
                 <RadioButton x:Name="ReminderFilterToday" Style="{StaticResource FilterRow}" Tag="today" Checked="ReminderFilter_Checked" IsChecked="True" AutomationProperties.Name="Today's reminders"><Grid><TextBlock Text="Today"/><TextBlock Text="{Binding RemindersTodayCount}" Foreground="{DynamicResource Faint}" HorizontalAlignment="Right"/></Grid></RadioButton>
@@ -1187,6 +1201,7 @@
                 </ScrollViewer>
               </Border>
             </Grid>
+            <ContentControl x:Name="PetsHost" Grid.Row="1" Visibility="{Binding PetsOpen, Converter={StaticResource Bool}}" Margin="26,12,26,16" Focusable="False"/>
             <Grid x:Name="MediaSectionGrid" Grid.Row="1" Visibility="{Binding MediaOpen, Converter={StaticResource Bool}}" Margin="26,12,26,16">
               <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
               <Border x:Name="MediaStageBorder" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Line}" BorderThickness="1"

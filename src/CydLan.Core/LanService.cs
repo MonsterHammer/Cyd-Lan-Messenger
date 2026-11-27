@@ -59,6 +59,15 @@ public sealed partial class LanService : IAsyncDisposable
     /// <summary>A contact's details arrived in reply to a query: (peer id, first name, last name, about).</summary>
     public event Action<string, string, string, string>? ProfileReceived;
     public event Action<string, string>? PetCodeReceived;
+    /// <summary>Companion mini-game traffic from a CydLan peer: peer id and the message fields.</summary>
+    public event Action<string, IReadOnlyDictionary<string, string>>? GameMessageReceived;
+    /// <summary>First CydLan build that understands companion battles.</summary>
+    public static bool SupportsPetBattles(string version)
+    {
+        if (!IsCydLanVersion(version)) return false;
+        var parts = version["CydLan".Length..].Trim().Split('.');
+        return parts.Length >= 2 && int.TryParse(parts[0], out int major) && int.TryParse(parts[1], out int minor) && (major > 0 || minor >= 2);
+    }
     public const long MaxInlineImageBytes = 20 * 1024 * 1024;
     public static readonly string[] InlineImageExtensions = [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp"];
     public static bool IsInlineImageName(string name) => InlineImageExtensions.Contains(System.IO.Path.GetExtension(name).ToLowerInvariant());
@@ -67,7 +76,7 @@ public sealed partial class LanService : IAsyncDisposable
     /// Version sent in userdata. LAN Messenger compares the first three dot-separated numbers (without bounds checks)
     /// and leaves anyone at 1.2.10 or below out of chat rooms, so the wire value leads with a current legacy version.
     /// </summary>
-    public const string WireVersion = "1.2.39.CydLan.0.1";
+    public const string WireVersion = "1.2.39.CydLan.0.2";
     private const string CydLanMarker = ".CydLan.";
     /// <summary>Shows a CydLan wire version as "CydLan 0.1"; other versions are unchanged.</summary>
     public static string DisplayVersion(string wire)
@@ -589,6 +598,9 @@ public sealed partial class LanService : IAsyncDisposable
                     GroupMessageReceived?.Invoke(session.Id, thread, op, op == "message" ? Limit(message.Get("message"), MaxMessageChars) : "");
                 break;
             case "avatar": await HandleAvatarAsync(session, message); break;
+            case "cydgame":
+                if (IsCydLanVersion(session.Version)) HandleGame(session, message);
+                break;
             case "folder": await HandleFolderAsync(session, message); break;
             case "query":
                 // LAN Messenger's "Get Information" window reads every one of these fields, including status.

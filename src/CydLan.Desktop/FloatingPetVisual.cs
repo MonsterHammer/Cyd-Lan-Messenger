@@ -168,7 +168,7 @@ public sealed partial class FloatingPetVisual : FrameworkElement
         double idleBob = isRoaming || isDancing || hopArc > 0 || style.Feet == "hover" || style.Body == "ghost" ? 0
             : sleepyMood ? (Math.Sin(breathPhase * .6) + 1) * .8
             : (Math.Sin(breathPhase * cadence * .5) + 1) * .9;
-        double totalLift = hopArc + Math.Max(walkHop, danceHop) + hoverBob + idleBob;
+        double totalLift = hopArc + Math.Max(walkHop, danceHop) + hoverBob + idleBob + poseLift;
         double tiltDeg = isRoaming
             ? Math.Sin(stepPhase) * 4.5
             : isDancing ? Math.Sin(breathPhase * 3.1) * 4.8
@@ -187,7 +187,7 @@ public sealed partial class FloatingPetVisual : FrameworkElement
         double groundScreenY = h - Math.Max(6, 7 * baseFit);
 
         dc.PushTransform(new TranslateTransform(w * .5 + moodShake * totalScale, groundScreenY));
-        dc.PushTransform(new ScaleTransform(totalScale, totalScale * moodSquash));
+        dc.PushTransform(new ScaleTransform(totalScale * poseStretchX, totalScale * moodSquash * poseStretchY));
 
         // Ground shadow (softly shrinks/fades as the companion rises).
         double shadowScale = Math.Clamp(1.0 - totalLift / 34.0, .58, 1.0);
@@ -210,6 +210,7 @@ public sealed partial class FloatingPetVisual : FrameworkElement
         Pen outlinePen = FrozenPen(outlineColor, 1.5);
 
         dc.PushTransform(new RotateTransform(tiltDeg, 0, bodyBottom));
+        dc.PushTransform(new RotateTransform(poseSpin, 0, bodyBottom - bodyH * .5));
 
         // 1. Back wings / cape / tail / jetpack (drawn behind ears & body).
         DrawBackAccessory(dc, style.Back, 0, bodyBottom, bodyTop, bodyW, bodyH, accent, accentSoft, surface, detail, outlinePen, breathPhase, hopArc, isRoaming, facing);
@@ -278,6 +279,7 @@ public sealed partial class FloatingPetVisual : FrameworkElement
         DrawPropAndCues(dc, style.Prop, bodyTop, bodyBottom, bodyW, accent, detail, featureInk, breathPhase, hopArc, facing, isExcited, sleepyMood, isDancing);
         if (!sleepyMood) DrawMoodCues(dc, bodyTop, bodyBottom, bodyW, eyeY, eyeSep, lookX, accent, detail, featureInk, breathPhase);
 
+        dc.Pop(); // pose spin
         dc.Pop(); // tilt
         dc.Pop(); // scale
         dc.Pop(); // translate
@@ -286,6 +288,7 @@ public sealed partial class FloatingPetVisual : FrameworkElement
     private static (Geometry Geo, double Width, double Height, double Top, double FaceY) BuildBodyMetrics(
         string body, double bodyBottom, double breath)
     {
+        if (MoreBody(body, bodyBottom, breath) is { } more) return more;
         switch (body)
         {
             case "round":

@@ -23,6 +23,11 @@ if (args.Contains("--isolated-mixed"))
     return 0;
 }
 
+if (args.Contains("--pet-game-only"))
+{
+    try { await PetGameTests.RunAsync().WaitAsync(TimeSpan.FromSeconds(60)); Console.WriteLine("PASS  Pet game rules, deterministic battles and a lockstep LAN battle"); return 0; }
+    catch (Exception e) { Console.WriteLine("FAIL  " + e); return 1; }
+}
 if (args.Contains("--reminders-only"))
 {
     try { await ReminderTests.RunAsync(); Console.WriteLine("PASS  Reminder schedules, nudges, snooze, streaks and storage"); return 0; }
@@ -31,6 +36,7 @@ if (args.Contains("--reminders-only"))
 
 var tests = new (string Name, Func<Task> Run)[] {
     ("Reminder schedules, nudges, snooze, streaks and storage", ReminderTests.RunAsync),
+    ("Pet game rules, deterministic battles and a lockstep LAN battle", PetGameTests.RunAsync),
     ("Persistent diagnostics: rotation, concurrency, privacy and disk failures", DiagnosticLogTests.RunAsync),
     ("Legacy XML fixtures, escaping and Unicode", TestXml),
     ("LAN Messenger emoticon codes", TestSmileys),

@@ -36,6 +36,7 @@
                        Visibility="{Binding FloatingLanEnabled, Converter={StaticResource Bool}}"/>
         </Grid>
       </Button>
+      <Button Style="{StaticResource TrayAction}" Click="Arena_Click"><Grid><local:Glyph Data="{DynamicResource IconPet}" Size="16" Foreground="{DynamicResource Muted}" HorizontalAlignment="Left"/><TextBlock Text="Pet arena" Margin="27,0,0,0" FontSize="12"/></Grid></Button>
       <Border Background="{DynamicResource Line}" Height="1" Margin="3,5,3,5"/>
       <Button Style="{StaticResource TrayAction}" Click="Quit_Click"><Grid><local:Glyph Data="{DynamicResource IconQuit}" Size="16" Foreground="{DynamicResource Danger}" HorizontalAlignment="Left"/><TextBlock Text="Quit CydLan" Margin="27,0,0,0" FontSize="12" Foreground="{DynamicResource Danger}"/></Grid></Button>
     </StackPanel>

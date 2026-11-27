@@ -139,7 +139,7 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
     private bool groupsOpen;
     private string transferFilter = "all";
     private string search = "", messageSearch = "", networkStatus = "Starting local network…", toast = "";
-    private bool transfersOpen, mediaOpen, broadcasting, connected;
+    private bool transfersOpen, mediaOpen, broadcasting, connected, petsOpen;
     private bool replying;
     /// <summary>The user has clicked or typed in the composer of the open conversation; until then its messages stay unread.</summary>
     public bool Replying { get => replying; set { replying = value; MarkConversationRead(); } }
@@ -196,11 +196,14 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
         return t;
     }
     // Sections (left rail): Chats, Groups, Files, Media, Broadcast. Exactly one is active.
-    public bool TransfersOpen { get => transfersOpen; set { if (transfersOpen == value) return; transfersOpen = value; if (value) { mediaOpen = false; remindersOpen = false; } SectionChanged(); } }
-    public bool MediaOpen { get => mediaOpen; set { if (mediaOpen == value) return; mediaOpen = value; if (value) { transfersOpen = false; broadcasting = false; groupsOpen = false; remindersOpen = false; _ = EnsureMediaLoadedAsync(); } SectionChanged(); } }
-    public bool Broadcasting { get => broadcasting; set { if (broadcasting == value) return; broadcasting = value; if (value) { groupsOpen = false; transfersOpen = false; mediaOpen = false; remindersOpen = false; } SectionChanged(); } }
-    public bool GroupsOpen { get => groupsOpen; set { if (groupsOpen == value) return; groupsOpen = value; if (value) { broadcasting = false; transfersOpen = false; mediaOpen = false; remindersOpen = false; } SectionChanged(); } }
-    public bool ChatOpen => !TransfersOpen && !MediaOpen && !RemindersOpen;
+    public bool TransfersOpen { get => transfersOpen; set { if (transfersOpen == value) return; transfersOpen = value; if (value) { mediaOpen = false; remindersOpen = false; petsOpen = false; } SectionChanged(); } }
+    public bool MediaOpen { get => mediaOpen; set { if (mediaOpen == value) return; mediaOpen = value; if (value) { transfersOpen = false; broadcasting = false; groupsOpen = false; remindersOpen = false; petsOpen = false; _ = EnsureMediaLoadedAsync(); } SectionChanged(); } }
+    public bool Broadcasting { get => broadcasting; set { if (broadcasting == value) return; broadcasting = value; if (value) { groupsOpen = false; transfersOpen = false; mediaOpen = false; remindersOpen = false; petsOpen = false; } SectionChanged(); } }
+    public bool GroupsOpen { get => groupsOpen; set { if (groupsOpen == value) return; groupsOpen = value; if (value) { broadcasting = false; transfersOpen = false; mediaOpen = false; remindersOpen = false; petsOpen = false; } SectionChanged(); } }
+    /// <summary>The Pets module: the companion's gear, deck, care and card battles.</summary>
+    public bool PetsOpen { get => petsOpen; set { if (petsOpen == value) return; petsOpen = value; if (value) { transfersOpen = false; mediaOpen = false; broadcasting = false; groupsOpen = false; remindersOpen = false; } SectionChanged(); } }
+    public bool IsPetsSection => PetsOpen;
+    public bool ChatOpen => !TransfersOpen && !MediaOpen && !RemindersOpen && !PetsOpen;
     public bool IsConversationSection => ChatOpen && !Broadcasting && !GroupsOpen;
     public bool IsBroadcastSection => ChatOpen && Broadcasting;
     public bool IsGroupsSection => ChatOpen && GroupsOpen;
@@ -214,7 +217,7 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
     public bool NoGroup => GroupsOpen && SelectedGroup is null && ChatOpen;
     public bool HasDetails => HasPeer || InGroup;
     public IEnumerable<Peer> SelectedGroupMembers => SelectedGroup?.Members.Select(id => Peers.FirstOrDefault(p => p.Id == id) ?? new Peer { Id = id, Name = "Someone" }).ToList() ?? [];
-    public string SectionTitle => RemindersOpen ? "Reminders" : MediaOpen ? "Media" : TransfersOpen ? "Files" : Broadcasting ? "Broadcast" : GroupsOpen ? "Groups" : "Chats";
+    public string SectionTitle => PetsOpen ? "Pets" : RemindersOpen ? "Reminders" : MediaOpen ? "Media" : TransfersOpen ? "Files" : Broadcasting ? "Broadcast" : GroupsOpen ? "Groups" : "Chats";
     public bool CanCompose => Broadcasting || (GroupsOpen ? SelectedGroup is { Left: false } : SelectedPeer is not null);
     private bool GroupReachable => SelectedGroup is { Left: false } g && g.Members.Any(id => Peers.Any(p => p.Id == id && p.Online));
     public bool CanSend => (!string.IsNullOrWhiteSpace(Draft) || HasAttachments) && (Broadcasting ? OnlineCount > 0 : GroupsOpen ? GroupReachable : SelectedPeer?.Online == true);
@@ -229,15 +232,15 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
     }
     public bool HasAttachments => HasPeer && Attachments.Count > 0;
     public bool CanAttach => HasPeer && SelectedPeer?.Online == true;
-    public string ChatTitle => RemindersOpen ? "Reminders" : MediaOpen ? (CurrentMedia?.Title ?? "Media") : TransfersOpen ? "Files" : Broadcasting ? "Broadcast" : GroupsOpen ? SelectedGroup?.Name ?? "Groups" : SelectedPeer?.Name ?? "Conversations";
-    public string ChatSubtitle => RemindersOpen ? ReminderSubtitle : MediaOpen ? (CurrentMedia?.MetaLabel ?? "") : TransfersOpen ? "" : Broadcasting ? $"{OnlineCount} online" : GroupsOpen ? (SelectedGroup is { } g ? GroupPeopleLabel(g) : "") : SelectedPeer is { } p ? p.Presence : "";
+    public string ChatTitle => PetsOpen ? "Pets" : RemindersOpen ? "Reminders" : MediaOpen ? (CurrentMedia?.Title ?? "Media") : TransfersOpen ? "Files" : Broadcasting ? "Broadcast" : GroupsOpen ? SelectedGroup?.Name ?? "Groups" : SelectedPeer?.Name ?? "Conversations";
+    public string ChatSubtitle => PetsOpen ? $"Level {Arena.Progress.Level} · {Arena.Progress.Coins:N0} coins" : RemindersOpen ? ReminderSubtitle : MediaOpen ? (CurrentMedia?.MetaLabel ?? "") : TransfersOpen ? "" : Broadcasting ? $"{OnlineCount} online" : GroupsOpen ? (SelectedGroup is { } g ? GroupPeopleLabel(g) : "") : SelectedPeer is { } p ? p.Presence : "";
     private string GroupPeopleLabel(GroupChat g) => g.Left ? "You left this group" : string.Join(", ", g.Members.Select(NameOf).Append("you"));
     private string NameOf(string peerId) => Peers.FirstOrDefault(p => p.Id == peerId)?.Name ?? "Someone";
     private void SectionChanged()
     {
         replying = false;
         foreach (var name in new[] { nameof(TransfersOpen), nameof(MediaOpen), nameof(Broadcasting), nameof(GroupsOpen), nameof(ChatOpen), nameof(IsConversationSection), nameof(IsBroadcastSection),
-            nameof(IsGroupsSection), nameof(IsFilesSection), nameof(IsMediaSection), nameof(RemindersOpen), nameof(IsRemindersSection), nameof(ShowPeopleList), nameof(ShowPeopleDirectory), nameof(ShowRecentList), nameof(ShowGroupList), nameof(InGroup), nameof(HasPeer), nameof(NoPeer), nameof(NoGroup),
+            nameof(IsGroupsSection), nameof(IsFilesSection), nameof(IsMediaSection), nameof(RemindersOpen), nameof(IsRemindersSection), nameof(PetsOpen), nameof(IsPetsSection), nameof(ShowPeopleList), nameof(ShowPeopleDirectory), nameof(ShowRecentList), nameof(ShowGroupList), nameof(InGroup), nameof(HasPeer), nameof(NoPeer), nameof(NoGroup),
             nameof(HasDetails), nameof(SelectedGroupMembers), nameof(SectionTitle), nameof(ChatTitle), nameof(ChatSubtitle), nameof(Draft), nameof(ShowMiniPlayer) })
             Changed(name);
         Changed(nameof(SelectedGroup)); Changed(nameof(SelectedPeer)); Changed(nameof(SelectedRecentChat));
@@ -255,6 +258,9 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
     private IReadOnlyList<SceneEffectItem>? previewSceneEffects;
     public IReadOnlyList<SceneEffectItem> SceneEffects => previewSceneEffects ?? Settings.SceneEffects;
     public event Action? PetHopRequested;
+    /// <summary>The companion mini-game: feeding, levelling and battles.</summary>
+    public PetArena Arena { get; }
+    internal void SavePetGame() { if (!Preview) store?.SaveSettings(Settings); }
     internal void RequestPetHop() => PetHopRequested?.Invoke();
     public string ProfileName => Settings.DisplayName;
     public string ProfileInitial => Settings.DisplayName.Length > 0 ? Settings.DisplayName[..1].ToUpperInvariant() : "C";
@@ -340,7 +346,8 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
                 if (previous.Length > 0 && previous != path && previous.StartsWith(Path.Combine(ImagesDirectory, "avatars"), StringComparison.OrdinalIgnoreCase))
                     obsoleteAvatars.Add(previous);
             });
-            lan.PeerOffline += id => UI(() => { if (Peers.FirstOrDefault(p => p.Id == id) is { } p) { p.Online = false; p.Typing = ""; } QueueRosterRefresh(); });
+            lan.PeerOffline += id => UI(() => { if (Peers.FirstOrDefault(p => p.Id == id) is { } p) { p.Online = false; p.Typing = ""; } QueueRosterRefresh(); Arena!.OnPeerOffline(id); });
+            lan.GameMessageReceived += (id, fields) => UI(() => { if (!disposed) Arena!.OnMessage(id, fields); });
             lan.MessageReceived += message => UI(() => {
                 var peer = Peers.FirstOrDefault(p => p.Id == message.PeerId);
                 if (peer is null) return;
@@ -357,6 +364,8 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
             lan.GroupMessageReceived += (sender, thread, op, text) => UI(() => OnGroupMessage(sender, thread, op, text));
             lan.Diagnostic += message => UI(() => { Diagnostics.Insert(0, $"{DateTime.Now:HH:mm:ss}  {message}"); while (Diagnostics.Count > 100) Diagnostics.RemoveAt(100); });
         }
+        Arena = new PetArena(this, lan);
+        Arena.PropertyChanged += (_, _) => { if (PetsOpen) Changed(nameof(ChatSubtitle)); };
         TransfersView = new ListCollectionView(Transfers) { Filter = item => item is FileTransfer t && (TransferFilter == "all" || (TransferFilter == "received") != t.Outgoing) };
         ActiveConversationTransfers = new ListCollectionView(activeConversationTransfers);
         void IndexTransfers() => filesByChat = Transfers.ToLookup(t => (t.PeerId, t.Outgoing));
@@ -519,7 +528,11 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
     }
     private async Task DeliverAsync(ChatMessage message)
     {
-        try { message.Delivery = await lan!.SendChatAsync(message.PeerId, message.Text, message.Id) ? "Delivered" : "Unconfirmed"; }
+        try
+        {
+            message.Delivery = await lan!.SendChatAsync(message.PeerId, message.Text, message.Id) ? "Delivered" : "Unconfirmed";
+            if (message.Delivery == "Delivered") Arena.OnChatSent();
+        }
         catch (Exception e) when (e is IOException or System.Net.Sockets.SocketException or OperationCanceledException or InvalidOperationException or ArgumentException) { log?.Write("message.send_failed", e, ("peer", message.PeerId), ("id", message.Id)); message.Delivery = "Failed"; Toast = e.Message; }
         Save();
     }
@@ -1639,10 +1652,12 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
             PetActivity?.Invoke(sender, ShouldShowNotificationPopup ? text : "New message", peerId);
     }
 
-    public void UpdateFloatingState(bool? enabled = null, bool? roam = null, double? left = null, double? top = null)
+    public bool PetFreeRoam => Settings.PetFreeRoam;
+    public void UpdateFloatingState(bool? enabled = null, bool? roam = null, double? left = null, double? top = null, bool? freeRoam = null)
     {
         if (enabled is { } e) Settings.FloatingLanEnabled = e;
         if (roam is { } r) Settings.FloatingLanRoam = r;
+        if (freeRoam is { } fr) { Settings.PetFreeRoam = fr; Changed(nameof(PetFreeRoam)); }
         if (left is { } l && double.IsFinite(l)) Settings.FloatingLanLeft = Math.Round(l, 1);
         if (top is { } t && double.IsFinite(t)) Settings.FloatingLanTop = Math.Round(t, 1);
         Changed(nameof(FloatingLanEnabled));
@@ -1804,7 +1819,7 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
                 Status = status,
                 Online = true,
                 Address = "192.168.1." + (110 + int.Parse(id)),
-                Version = id == "1" ? "LAN Messenger 1.2.35" : "CydLan 0.1",
+                Version = id == "1" ? "LAN Messenger 1.2.35" : "CydLan 0.2",
                 Preview = preview,
                 Unread = id == "2" ? 2 : 0,
                 About = id switch

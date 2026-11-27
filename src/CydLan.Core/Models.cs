@@ -188,6 +188,9 @@ public sealed class AppSettings
     public bool StartMinimized { get; set; }
     public bool FloatingLanEnabled { get; set; }
     public bool FloatingLanRoam { get; set; }
+    /// <summary>The companion wanders anywhere on screen instead of along the bottom edge.</summary>
+    public bool PetFreeRoam { get; set; }
+    public PetProgress PetGame { get; set; } = new();
     public double? FloatingLanLeft { get; set; }
     public double? FloatingLanTop { get; set; }
     public string PetBody { get; set; } = "squircle";
