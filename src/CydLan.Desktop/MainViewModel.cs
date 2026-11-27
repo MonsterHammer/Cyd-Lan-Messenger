@@ -173,13 +173,33 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
     private string DraftKey => GroupsOpen ? (SelectedGroup is { } g ? "group:" + g.Id : "groups") : Broadcasting ? "broadcast" : SelectedPeer?.Id ?? "none";
     public string Draft { get => drafts.GetValueOrDefault(DraftKey, ""); set { drafts[DraftKey] = value; Changed(); Changed(nameof(CanSend)); } }
     public string NetworkStatus { get => networkStatus; set { Set(ref networkStatus, value); Changed(nameof(ConnectionSummary)); } }
-    public string Toast { get => toast; set => Set(ref toast, value); }
+    private System.Windows.Threading.DispatcherTimer? toastTimer;
+    /// <summary>Problems only; floats over the content and clears itself.</summary>
+    public string Toast
+    {
+        get => toast;
+        set
+        {
+            Set(ref toast, value ?? "");
+            if (toast.Length == 0) { toastTimer?.Stop(); return; }
+            toastTimer ??= CreateToastTimer();
+            toastTimer.Stop();
+            toastTimer.Start();
+        }
+    }
+
+    private System.Windows.Threading.DispatcherTimer CreateToastTimer()
+    {
+        var t = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(6) };
+        t.Tick += (_, _) => { t.Stop(); Toast = ""; };
+        return t;
+    }
     // Sections (left rail): Chats, Groups, Files, Media, Broadcast. Exactly one is active.
-    public bool TransfersOpen { get => transfersOpen; set { if (transfersOpen == value) return; transfersOpen = value; if (value) mediaOpen = false; SectionChanged(); } }
-    public bool MediaOpen { get => mediaOpen; set { if (mediaOpen == value) return; mediaOpen = value; if (value) { transfersOpen = false; broadcasting = false; groupsOpen = false; _ = EnsureMediaLoadedAsync(); } SectionChanged(); } }
-    public bool Broadcasting { get => broadcasting; set { if (broadcasting == value) return; broadcasting = value; if (value) { groupsOpen = false; transfersOpen = false; mediaOpen = false; } SectionChanged(); } }
-    public bool GroupsOpen { get => groupsOpen; set { if (groupsOpen == value) return; groupsOpen = value; if (value) { broadcasting = false; transfersOpen = false; mediaOpen = false; } SectionChanged(); } }
-    public bool ChatOpen => !TransfersOpen && !MediaOpen;
+    public bool TransfersOpen { get => transfersOpen; set { if (transfersOpen == value) return; transfersOpen = value; if (value) { mediaOpen = false; remindersOpen = false; } SectionChanged(); } }
+    public bool MediaOpen { get => mediaOpen; set { if (mediaOpen == value) return; mediaOpen = value; if (value) { transfersOpen = false; broadcasting = false; groupsOpen = false; remindersOpen = false; _ = EnsureMediaLoadedAsync(); } SectionChanged(); } }
+    public bool Broadcasting { get => broadcasting; set { if (broadcasting == value) return; broadcasting = value; if (value) { groupsOpen = false; transfersOpen = false; mediaOpen = false; remindersOpen = false; } SectionChanged(); } }
+    public bool GroupsOpen { get => groupsOpen; set { if (groupsOpen == value) return; groupsOpen = value; if (value) { broadcasting = false; transfersOpen = false; mediaOpen = false; remindersOpen = false; } SectionChanged(); } }
+    public bool ChatOpen => !TransfersOpen && !MediaOpen && !RemindersOpen;
     public bool IsConversationSection => ChatOpen && !Broadcasting && !GroupsOpen;
     public bool IsBroadcastSection => ChatOpen && Broadcasting;
     public bool IsGroupsSection => ChatOpen && GroupsOpen;
@@ -443,7 +463,6 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
         if (Preview) { Toast = "Offline preview"; return; }
         if (networkStartup is not null) await networkStartup;
         if (disposed) return;
-        Toast = "Looking for people on your local network…";
         await RunAsync(() => lan!.RefreshAsync());
         UpdateCounts();
     }
@@ -470,7 +489,7 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
         {
             Draft = "";
             int count = 0;
-            await RunAsync(async () => { count = await lan!.BroadcastAsync(text); Toast = $"Announcement sent to {count} connected people."; });
+            await RunAsync(async () => { count = await lan!.BroadcastAsync(text); });
             return count > 0;
         }
         var peer = SelectedPeer!;
@@ -510,7 +529,7 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
         if (parts.Length is < 1 or > 2 || !IPAddress.TryParse(parts[0], out var ip) || ip.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork ||
             (parts.Length == 2 && !int.TryParse(parts[1], out port)) || port is < 1 or > 65535)
         { Toast = "Invalid IP address or port"; return; }
-        await RunAsync(async () => { await lan!.DiscoverAsync(ip, port); Toast = $"Connection requested · {ip}:{port}"; });
+        await RunAsync(async () => { await lan!.DiscoverAsync(ip, port); });
     }
     private long messageSequence = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 100;
     private long NextMessageId() => Interlocked.Increment(ref messageSequence);
@@ -1044,7 +1063,6 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
             AppearanceCodec.Apply(look, s);
             s.ChatBackgroundPath = bgPath;
         });
-        Toast = "Theme applied";
         return true;
     }
 

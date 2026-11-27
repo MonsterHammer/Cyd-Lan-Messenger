@@ -142,7 +142,6 @@ public partial class PeerProfileWindow : Window
         stageExcited = true;
         excitedUntil = DateTime.UtcNow.AddSeconds(1.8);
         RenderPet();
-        model.Toast = $"Companion updated · {peer.Name}";
     }
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();

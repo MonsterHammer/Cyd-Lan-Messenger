@@ -478,7 +478,7 @@ public partial class MainWindow : Window
     {
         if (sender is FrameworkElement { DataContext: SharedLookInfo look })
         {
-            try { System.Windows.Clipboard.SetText(look.Code); model.Toast = "Copied"; }
+            try { System.Windows.Clipboard.SetText(look.Code); }
             catch (System.Runtime.InteropServices.ExternalException) { }
         }
     }
