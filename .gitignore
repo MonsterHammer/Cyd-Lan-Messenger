@@ -6,3 +6,4 @@ artifacts/
 *.user
 tools/lab/share/
 tools/lab/CydLanLab.wsb
+tools/lab/CydLanPeer.wsb
