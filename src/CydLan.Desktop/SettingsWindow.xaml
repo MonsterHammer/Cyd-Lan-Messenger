@@ -2517,6 +2517,12 @@
                   </StackPanel>
                 </Button>
               </StackPanel>
+              <TextBlock Text="Support" Style="{StaticResource Label}" Margin="0,18,0,8"/>
+              <Border x:Name="SupportQrCard" Background="White" CornerRadius="10" Padding="12" HorizontalAlignment="Left"
+                      BorderBrush="{DynamicResource Line}" BorderThickness="1">
+                <Image Source="/CydLan;component/Assets/support/bdo-qr.png" Width="200" Stretch="Uniform"
+                       RenderOptions.BitmapScalingMode="HighQuality" AutomationProperties.Name="BDO InstaPay QR code"/>
+              </Border>
             </StackPanel>
           </Grid>
         </ScrollViewer>

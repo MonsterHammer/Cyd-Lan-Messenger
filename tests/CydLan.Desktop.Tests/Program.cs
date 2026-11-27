@@ -61,6 +61,13 @@ internal static class Program
             ((FrameworkElement)prefs.FindName("ReleasesButton")).IsVisible,
             "About page must render version, developer, GitHub, and updates controls.");
         Capture(prefs, Path.Combine(artifacts, "about-page-tested.png"));
+        var supportQr = (System.Windows.Controls.Border)prefs.FindName("SupportQrCard");
+        supportQr.BringIntoView();
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(supportQr.IsVisible && FindText(prefs, "Support") is { IsVisible: true } &&
+            supportQr.Child is System.Windows.Controls.Image { Source: System.Windows.Media.Imaging.BitmapSource { PixelWidth: > 0 } },
+            "About page must show the support QR code.");
+        Capture(prefs, Path.Combine(artifacts, "about-support-tested.png"));
         prefs.Close();
 
         await TestCustomizationSuiteAsync(artifacts);
