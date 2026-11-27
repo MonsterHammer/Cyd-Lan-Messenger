@@ -305,6 +305,10 @@ public sealed class AppSettings
     public bool TitleShimmerEnabled { get; set; }
     public double TitleShimmerIntensity { get; set; } = .65;
     public bool TitleCometEnabled { get; set; }
+    public List<string> TitleFx { get; set; } = [];
+    public double TitleFxIntensity { get; set; } = .65;
+    public List<string> HeaderFx { get; set; } = [];
+    public double HeaderFxIntensity { get; set; } = .65;
     public double TitleCometIntensity { get; set; } = .65;
     public bool TitleEqualizerEnabled { get; set; }
     public double TitleEqualizerIntensity { get; set; } = .65;

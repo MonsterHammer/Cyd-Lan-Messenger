@@ -1109,7 +1109,7 @@
               </StackPanel>
               <StackPanel x:Name="AppearanceHeadersSection" Visibility="Collapsed">
                 <TextBlock Text="Title bar" Style="{StaticResource Label}" Margin="0,0,0,8"/>
-                <WrapPanel Margin="0,0,0,4">
+                <WrapPanel x:Name="TitleEffectCards" Margin="0,0,0,4">
                   <CheckBox x:Name="SteampunkEngineBox" Style="{StaticResource EffectCard}" Tag="Steampunk engine" AutomationProperties.Name="Steampunk engine">
                     <Border Background="{DynamicResource Sidebar}">
                       <Viewbox Stretch="Uniform" Margin="6,8">
@@ -1164,6 +1164,14 @@
                     </Border>
                   </CheckBox>
                 </WrapPanel>
+                <StackPanel x:Name="TitleFxIntensityPanel" Visibility="Collapsed">
+                  <DockPanel Margin="0,4,0,4">
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=TitleFxIntensityBox, StringFormat=P0}" Foreground="{DynamicResource Muted}"/>
+                    <TextBlock Text="More title effects intensity" Style="{StaticResource Label}" Margin="0"/>
+                  </DockPanel>
+                  <Slider x:Name="TitleFxIntensityBox" Style="{StaticResource BackgroundSlider}" Minimum=".1" Maximum="1" TickFrequency=".05"
+                          SmallChange=".05" LargeChange=".15" IsSnapToTickEnabled="True" Margin="0,0,0,10" AutomationProperties.Name="More title effects intensity"/>
+                </StackPanel>
                 <StackPanel Visibility="{Binding IsChecked, ElementName=SteampunkEngineBox, Converter={StaticResource Bool}}">
                   <DockPanel Margin="0,4,0,4">
                     <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=EngineIntensityBox, StringFormat=P0}" Foreground="{DynamicResource Muted}"/>
@@ -1246,7 +1254,7 @@
                 </StackPanel>
                 <Separator Margin="0,6,0,12" Background="{DynamicResource Line}"/>
                 <TextBlock Text="Chat header" Style="{StaticResource Label}" Margin="0,0,0,8"/>
-                <WrapPanel Margin="0,0,0,4">
+                <WrapPanel x:Name="HeaderEffectCards" Margin="0,0,0,4">
                   <CheckBox x:Name="HeaderAuroraBox" Style="{StaticResource EffectCard}" Tag="Header aurora" AutomationProperties.Name="Header aurora">
                     <Border Background="{DynamicResource Sidebar}">
                       <local:HeaderEffect x:Name="HeaderAuroraPreview" Kind="Aurora" Intensity="{Binding Value, ElementName=HeaderAuroraIntensityBox}"/>
@@ -1303,6 +1311,14 @@
                     </Border>
                   </CheckBox>
                 </WrapPanel>
+                <StackPanel x:Name="HeaderFxIntensityPanel" Visibility="Collapsed">
+                  <DockPanel Margin="0,4,0,4">
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=HeaderFxIntensityBox, StringFormat=P0}" Foreground="{DynamicResource Muted}"/>
+                    <TextBlock Text="More header effects intensity" Style="{StaticResource Label}" Margin="0"/>
+                  </DockPanel>
+                  <Slider x:Name="HeaderFxIntensityBox" Style="{StaticResource BackgroundSlider}" Minimum=".1" Maximum="1" TickFrequency=".05"
+                          SmallChange=".05" LargeChange=".15" IsSnapToTickEnabled="True" Margin="0,0,0,10" AutomationProperties.Name="More header effects intensity"/>
+                </StackPanel>
                 <StackPanel Visibility="{Binding IsChecked, ElementName=HeaderAuroraBox, Converter={StaticResource Bool}}">
                   <DockPanel Margin="0,4,0,4">
                     <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=HeaderAuroraIntensityBox, StringFormat=P0}" Foreground="{DynamicResource Muted}"/>
@@ -2086,6 +2102,7 @@
                 <DockPanel Margin="0,0,0,6">
                   <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock x:Name="SceneCountText" Foreground="{DynamicResource Muted}" FontSize="11.5" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <Button x:Name="EditSceneOnScreenButton" Content="Edit on screen" Style="{StaticResource Primary}" Padding="10,4" FontSize="11.5" Margin="0,0,6,0" Click="EditSceneOnScreen_Click" AutomationProperties.Name="Edit scene on screen"/>
                     <Button x:Name="ClearSceneButton" Content="Clear all" Style="{StaticResource Secondary}" Padding="9,4" FontSize="11.5" Click="ClearScene_Click" AutomationProperties.Name="Clear all scene effects"/>
                   </StackPanel>
                   <TextBlock Text="Effects" Style="{StaticResource Label}" VerticalAlignment="Center" Margin="0"/>
@@ -2114,13 +2131,21 @@
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
-                <TextBlock Text="Page stage" Style="{StaticResource Label}" Margin="0,0,0,6"/>
+                <DockPanel Margin="0,0,0,6">
+                  <Border DockPanel.Dock="Right" Background="{DynamicResource AccentSoft}" CornerRadius="9" Padding="8,2" VerticalAlignment="Center">
+                    <TextBlock x:Name="SceneRightClickHint" Text="Right-click an effect to change its settings" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource Accent}"/>
+                  </Border>
+                  <TextBlock Text="Page stage" Style="{StaticResource Label}" Margin="0" VerticalAlignment="Center"/>
+                </DockPanel>
                 <Border BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="{DynamicResource PanelCorner}" Height="174" Margin="0,0,0,10" ClipToBounds="True">
                   <local:SceneStageCanvas x:Name="SceneStage" AutomationProperties.Name="Scene stage"/>
                 </Border>
 
+                <Popup x:Name="SceneInspectorPopup" PlacementTarget="{Binding ElementName=SceneStage}" Placement="MousePoint"
+                       StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
                 <Border x:Name="SceneInspectorPanel" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Line}" BorderThickness="1"
-                        CornerRadius="{DynamicResource PanelCorner}" Padding="12" Visibility="Collapsed">
+                        CornerRadius="{DynamicResource PanelCorner}" Padding="12" Width="460" Margin="0,0,12,12">
+                  <Border.Effect><DropShadowEffect BlurRadius="14" ShadowDepth="3" Opacity=".28"/></Border.Effect>
                   <StackPanel>
                     <DockPanel Margin="0,0,0,10">
                       <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
@@ -2153,7 +2178,7 @@
                           <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=SceneScaleBox, StringFormat=P0}" Foreground="{DynamicResource Muted}" FontSize="11.5"/>
                           <TextBlock Text="Scale" Style="{StaticResource Label}" Margin="0"/>
                         </DockPanel>
-                        <Slider x:Name="SceneScaleBox" Style="{StaticResource BackgroundSlider}" Minimum=".4" Maximum="2.4" TickFrequency=".05"
+                        <Slider x:Name="SceneScaleBox" Style="{StaticResource BackgroundSlider}" Minimum=".4" Maximum="5.0" TickFrequency=".05"
                                 SmallChange=".05" LargeChange=".20" IsSnapToTickEnabled="True" ValueChanged="SceneProperty_SliderChanged"
                                 AutomationProperties.Name="Scene effect scale" Margin="0,0,0,6"/>
 
@@ -2477,8 +2502,10 @@
                             SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True" ValueChanged="BackgroundTransition_SliderChanged"
                             AutomationProperties.Name="Background transition softness"/>
                   </StackPanel>
-                  <Border Background="{DynamicResource Canvas}" BorderBrush="{DynamicResource Line}" BorderThickness="1"
-                          CornerRadius="{DynamicResource PanelCorner}" Height="142" ClipToBounds="True">
+                  <Border x:Name="BackgroundPreviewFrame" Background="{DynamicResource Canvas}" BorderBrush="{DynamicResource Line}" BorderThickness="1"
+                          CornerRadius="{DynamicResource PanelCorner}" Height="142" ClipToBounds="True" Cursor="SizeAll"
+                          MouseLeftButtonDown="BackgroundPreview_MouseDown" MouseMove="BackgroundPreview_MouseMove" MouseLeftButtonUp="BackgroundPreview_MouseUp"
+                          AutomationProperties.Name="Background focus point">
                     <Grid x:Name="BackgroundPreviewHorizontalMask">
                       <Grid x:Name="BackgroundPreviewVerticalMask">
                         <local:BackgroundImageViewport x:Name="BackgroundPreviewViewport">

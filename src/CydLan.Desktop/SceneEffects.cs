@@ -26,6 +26,26 @@ public static class SceneEffectCatalog
     public const string Butterfly = "butterfly";
     public const string Gear = "gear";
     public const string Ripple = "ripple";
+    public const string Snow = "snow";
+    public const string Rain = "rain";
+    public const string Bubbles = "bubbles";
+    public const string Embers = "embers";
+    public const string Leaves = "leaves";
+    public const string Stars = "stars";
+    public const string Moon = "moon";
+    public const string Sun = "sun";
+    public const string Cloud = "cloud";
+    public const string Hearts = "hearts";
+    public const string Notes = "notes";
+    public const string Bird = "bird";
+    public const string Fish = "fish";
+    public const string Flower = "flower";
+    public const string Mushroom = "mushroom";
+    public const string Candle = "candle";
+    public const string Lightning = "lightning";
+    public const string Comet = "comet";
+    public const string Crystal = "crystal";
+    public const string Jellyfish = "jellyfish";
 
     public const string ZoneContent = "content";
     public const string ZoneSidebar = "sidebar";
@@ -43,8 +63,30 @@ public static class SceneEffectCatalog
         new(Sparkle, "Sparkles", .50, .45),
         new(Butterfly, "Butterfly", .45, .40),
         new(Gear, "Gear", .50, .50),
-        new(Ripple, "Ripple", .50, .50)
+        new(Ripple, "Ripple", .50, .50),
+        new(Snow, "Snow", .50, .40),
+        new(Rain, "Rain", .50, .40),
+        new(Bubbles, "Bubbles", .50, .70),
+        new(Embers, "Embers", .50, .80),
+        new(Leaves, "Falling leaves", .50, .35),
+        new(Stars, "Twinkling stars", .50, .30),
+        new(Moon, "Moon", .85, .20),
+        new(Sun, "Sun", .85, .20),
+        new(Cloud, "Cloud", .30, .20),
+        new(Hearts, "Hearts", .50, .70),
+        new(Notes, "Music notes", .50, .60),
+        new(Bird, "Bird", .40, .25),
+        new(Fish, "Fish", .50, .60),
+        new(Flower, "Flower", .20, .92),
+        new(Mushroom, "Mushroom", .80, .94),
+        new(Candle, "Candle", .12, .90),
+        new(Lightning, "Lightning", .70, .30),
+        new(Comet, "Comet", .50, .25),
+        new(Crystal, "Crystal", .85, .70),
+        new(Jellyfish, "Jellyfish", .60, .50)
     ];
+
+    private static readonly HashSet<string> KnownKinds = [.. Effects.Select(e => e.Kind)];
 
     public static IReadOnlyList<SceneZoneDescriptor> Zones { get; } =
     [
@@ -55,18 +97,11 @@ public static class SceneEffectCatalog
         new(ZoneTitle, "Title bar")
     ];
 
-    public static string NormalizeKind(string? value) => (value ?? "").Trim().ToLowerInvariant() switch
+    public static string NormalizeKind(string? value)
     {
-        Vine => Vine,
-        Sakura => Sakura,
-        Lantern => Lantern,
-        Fireflies => Fireflies,
-        Sparkle => Sparkle,
-        Butterfly => Butterfly,
-        Gear => Gear,
-        Ripple => Ripple,
-        _ => Grass
-    };
+        string kind = (value ?? "").Trim().ToLowerInvariant();
+        return KnownKinds.Contains(kind) ? kind : Grass;
+    }
 
     public static string NormalizeZone(string? value) => (value ?? "").Trim().ToLowerInvariant() switch
     {
@@ -90,7 +125,7 @@ public static class SceneEffectCatalog
         Zone = NormalizeZone(item.Zone),
         X = ClampFinite(item.X, .5, 0, 1),
         Y = ClampFinite(item.Y, .5, 0, 1),
-        Scale = ClampFinite(item.Scale, 1.0, .4, 2.4),
+        Scale = ClampFinite(item.Scale, 1.0, .4, 5.0),
         Opacity = ClampFinite(item.Opacity, .90, .15, 1.0),
         Speed = ClampFinite(item.Speed, 1.0, .2, 2.5),
         Rotation = ClampFinite(item.Rotation, 0, -180, 180),
@@ -116,7 +151,7 @@ public static class SceneEffectCatalog
         double.IsFinite(v) ? Math.Clamp(v, min, max) : fallback;
 }
 
-internal static class SceneEffectRenderer
+internal static partial class SceneEffectRenderer
 {
     private static readonly Geometry StarGlyph = Geometry.Parse("M0,-7 Q0,0 7,0 Q0,0 0,7 Q0,0 -7,0 Q0,0 0,-7 Z");
     private static readonly Geometry BlossomPetal = Geometry.Parse("M0,0 C-3.2,-4.8 -3.0,-9.5 0,-9.2 L1.0,-7.8 L2.0,-9.2 C5.0,-8.8 3.4,-3.4 0,0 Z");
@@ -225,7 +260,7 @@ internal static class SceneEffectRenderer
         Color? customColor = customSet ? custom : null;
         var palette = BuildPalette(surfaceColor, themeTint);
 
-        double scale = Math.Clamp(item.Scale, .4, 2.4) * baseScale;
+        double scale = Math.Clamp(item.Scale, .4, 5.0) * baseScale;
         double opacity = Math.Clamp(item.Opacity, .15, 1.0);
         double t = time * Math.Clamp(item.Speed, .2, 2.5) + item.Seed * 7.13;
 
@@ -265,6 +300,9 @@ internal static class SceneEffectRenderer
                 break;
             case SceneEffectCatalog.Ripple:
                 DrawRipple(dc, t, palette, customColor);
+                break;
+            default:
+                DrawMore(dc, SceneEffectCatalog.NormalizeKind(item.Kind), t, palette, item.Seed, customColor);
                 break;
         }
 

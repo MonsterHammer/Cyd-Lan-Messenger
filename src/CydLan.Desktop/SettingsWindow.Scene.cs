@@ -25,6 +25,7 @@ public partial class SettingsWindow
         SceneStage.ItemDropped += (kind, zone, x, y) => AddSceneEffect(kind, zone, x, y);
         SceneStage.ItemSelected += id => SelectSceneItem(id);
         SceneStage.ItemMoved += (id, zone, x, y) => MoveSceneItem(id, zone, x, y);
+        SceneStage.ItemContextRequested += _ => OpenSceneInspector(SceneStage);
     }
 
     private void DisposeSceneControls()
@@ -61,14 +62,18 @@ public partial class SettingsWindow
         ClearSceneButton.IsEnabled = sceneEffects.Count > 0;
 
         var selected = SelectedSceneItem;
-        SceneInspectorPanel.Visibility = selected is null ? Visibility.Collapsed : Visibility.Visible;
-        if (selected is null) return;
+        if (selected is null)
+        {
+            SceneInspectorPopup.IsOpen = false;
+            SceneChanged?.Invoke();
+            return;
+        }
 
         loadingSceneInspector = true;
         var desc = SceneEffectCatalog.DescriptorFor(selected.Kind);
         SceneSelectedLabel.Text = desc.Name;
         SceneZoneBox.SelectedValue = SceneEffectCatalog.NormalizeZone(selected.Zone);
-        SceneScaleBox.Value = Math.Clamp(selected.Scale, .4, 2.4);
+        SceneScaleBox.Value = Math.Clamp(selected.Scale, .4, 5.0);
         SceneOpacityBox.Value = Math.Clamp(selected.Opacity, .15, 1.0);
         SceneSpeedBox.Value = Math.Clamp(selected.Speed, .2, 2.5);
         SceneRotationBox.Value = Math.Clamp(selected.Rotation, -180, 180);
@@ -77,6 +82,52 @@ public partial class SettingsWindow
         SceneColorPicker.ColorHex = normColor;
         SceneColorHexBox.Text = normColor;
         loadingSceneInspector = false;
+        SceneChanged?.Invoke();
+    }
+
+    internal event Action? SceneChanged;
+    internal IReadOnlyList<SceneEffectItem> SceneItems => sceneEffects;
+    internal string? SelectedSceneId => selectedSceneItemId;
+    internal bool IsSceneInspectorOpen => SceneInspectorPopup.IsOpen;
+    internal void SelectSceneItemById(string? id) => SelectSceneItem(id);
+    internal void MoveSceneItemTo(string id, string zone, double x, double y) => MoveSceneItem(id, zone, x, y);
+    internal void CloseSceneInspector() => SceneInspectorPopup.IsOpen = false;
+
+    internal void OpenSceneInspector(UIElement target)
+    {
+        SceneInspectorPopup.IsOpen = false;
+        SceneInspectorPopup.PlacementTarget = target;
+        SceneInspectorPopup.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
+        SceneInspectorPopup.IsOpen = SelectedSceneItem is not null;
+    }
+
+    internal SceneScreenEditor? ActiveSceneEditor { get; private set; }
+
+    /// <summary>Hides Preferences and edits the scene over the real main window; Done returns here.</summary>
+    private void EditSceneOnScreen_Click(object sender, RoutedEventArgs e)
+    {
+        if (Owner is not MainWindow host || ActiveSceneEditor is not null) return;
+        bool modal = System.Windows.Interop.ComponentDispatcher.IsThreadModal;
+        CloseSceneInspector();
+        var editor = new SceneScreenEditor(host, this);
+        ActiveSceneEditor = editor;
+        editor.Closed += (_, _) =>
+        {
+            ActiveSceneEditor = null;
+            CloseSceneInspector();
+            SceneInspectorPopup.PlacementTarget = SceneStage;
+            if (closing) return;
+            Dispatcher.BeginInvoke(() =>
+            {
+                if (closing) return;
+                if (!modal) { Show(); Activate(); return; }
+                host.SetScrim(true);
+                try { ShowDialog(); }
+                finally { host.SetScrim(false); host.Activate(); }
+            });
+        };
+        Hide();
+        editor.Show();
     }
 
     public SceneEffectItem AddSceneEffect(string kind, string? zone = null, double? x = null, double? y = null)
@@ -243,6 +294,7 @@ public partial class SettingsWindow
     {
         if (SelectedSceneItem is not { } item) return;
         sceneEffects.RemoveAll(i => i.Id == item.Id);
+        SceneInspectorPopup.IsOpen = false;
         selectedSceneItemId = sceneEffects.Count > 0 ? sceneEffects[^1].Id : null;
         ApplyScenePreview();
     }

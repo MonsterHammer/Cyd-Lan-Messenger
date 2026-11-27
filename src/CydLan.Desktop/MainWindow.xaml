@@ -253,6 +253,7 @@
                            Texture="{Binding ChromeTexture}" Intensity="{Binding ChromeTextureIntensity}"
                            Visibility="{Binding ChromeTextureEnabled, Converter={StaticResource Bool}}"/>
       <Grid x:Name="TitleBarGrid" Background="{DynamicResource TitleBarBackground}" TextElement.Foreground="{DynamicResource TitleBarInk}" ClipToBounds="True" MouseLeftButtonDown="TitleBar_MouseDown">
+        <local:FxBand x:Name="TitleBarFx" Kinds="{Binding TitleFx}" Intensity="{Binding TitleFxIntensity}"/>
         <local:HeaderEffect x:Name="TitleBarSparkles" Kind="Sparkles" Intensity="{Binding TitleSparklesIntensity}"
                             Visibility="{Binding TitleSparklesEnabled, Converter={StaticResource Bool}}"/>
         <local:HeaderEffect x:Name="TitleBarShimmer" Kind="Shimmer" Intensity="{Binding TitleShimmerIntensity}"
@@ -582,6 +583,7 @@
                                     Visibility="{Binding HeaderAuroraEnabled, Converter={StaticResource Bool}}"/>
                 <local:HeaderEffect x:Name="ConversationHeaderPulse" Kind="PulseWave" Intensity="{Binding HeaderPulseIntensity}"
                                     Visibility="{Binding HeaderPulseEnabled, Converter={StaticResource Bool}}"/>
+                <local:FxBand x:Name="ConversationHeaderFx" Kinds="{Binding HeaderFx}" Intensity="{Binding HeaderFxIntensity}"/>
                 <local:HeaderEffect x:Name="ConversationHeaderPrism" Kind="Prism" Intensity="{Binding HeaderPrismIntensity}"
                                     Visibility="{Binding HeaderPrismEnabled, Converter={StaticResource Bool}}"/>
                 <local:HeaderEffect x:Name="ConversationHeaderRipples" Kind="Ripples" Intensity="{Binding HeaderRipplesIntensity}"

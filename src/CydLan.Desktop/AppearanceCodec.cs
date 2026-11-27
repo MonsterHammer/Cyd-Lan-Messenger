@@ -123,6 +123,10 @@ public static partial class AppearanceCodec
         public bool? TitleShimmer { get; set; }
         public double? TitleShimmerIntensity { get; set; }
         public bool? TitleComet { get; set; }
+        public List<string>? TitleFx { get; set; }
+        public double? TitleFxIntensity { get; set; }
+        public List<string>? HeaderFx { get; set; }
+        public double? HeaderFxIntensity { get; set; }
         public double? TitleCometIntensity { get; set; }
         public bool? TitleEqualizer { get; set; }
         public double? TitleEqualizerIntensity { get; set; }
@@ -354,6 +358,10 @@ public static partial class AppearanceCodec
         TitleShimmer = s.TitleShimmerEnabled ? true : null,
         TitleShimmerIntensity = s.TitleShimmerEnabled ? Round2(s.TitleShimmerIntensity) : null,
         TitleComet = s.TitleCometEnabled ? true : null,
+        TitleFx = BandEffects.Normalize(s.TitleFx) is { Count: > 0 } tfx ? tfx : null,
+        TitleFxIntensity = BandEffects.Normalize(s.TitleFx).Count > 0 ? Round2(s.TitleFxIntensity) : null,
+        HeaderFx = BandEffects.Normalize(s.HeaderFx) is { Count: > 0 } hfx ? hfx : null,
+        HeaderFxIntensity = BandEffects.Normalize(s.HeaderFx).Count > 0 ? Round2(s.HeaderFxIntensity) : null,
         TitleCometIntensity = s.TitleCometEnabled ? Round2(s.TitleCometIntensity) : null,
         TitleEqualizer = s.TitleEqualizerEnabled ? true : null,
         TitleEqualizerIntensity = s.TitleEqualizerEnabled ? Round2(s.TitleEqualizerIntensity) : null,
@@ -869,6 +877,10 @@ public static partial class AppearanceCodec
         s.TitleShimmerEnabled = d.TitleShimmer == true;
         s.TitleShimmerIntensity = ClampUnit(d.TitleShimmerIntensity, .65);
         s.TitleCometEnabled = d.TitleComet == true;
+        s.TitleFx = BandEffects.Normalize(d.TitleFx);
+        s.TitleFxIntensity = ClampUnit(d.TitleFxIntensity, .65);
+        s.HeaderFx = BandEffects.Normalize(d.HeaderFx);
+        s.HeaderFxIntensity = ClampUnit(d.HeaderFxIntensity, .65);
         s.TitleCometIntensity = ClampUnit(d.TitleCometIntensity, .65);
         s.TitleEqualizerEnabled = d.TitleEqualizer == true;
         s.TitleEqualizerIntensity = ClampUnit(d.TitleEqualizerIntensity, .65);
@@ -1050,6 +1062,10 @@ public static partial class AppearanceCodec
         s.TitleShimmerEnabled = false;
         s.TitleShimmerIntensity = .65;
         s.TitleCometEnabled = false;
+        s.TitleFx = [];
+        s.TitleFxIntensity = .65;
+        s.HeaderFx = [];
+        s.HeaderFxIntensity = .65;
         s.TitleCometIntensity = .65;
         s.TitleEqualizerEnabled = false;
         s.TitleEqualizerIntensity = .65;

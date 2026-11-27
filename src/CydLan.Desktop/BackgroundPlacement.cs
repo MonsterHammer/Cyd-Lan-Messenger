@@ -35,7 +35,42 @@ public static class BackgroundAnchor
         new(BottomRight, "Bottom right", 1.0, 1.0)
     ];
 
-    public static string Normalize(string? value) => (value ?? "").Trim().ToLowerInvariant() switch
+    public const string PointPrefix = "point:";
+
+    /// <summary>A free focus point, stored as "point:x,y" with each axis from 0 to 1.</summary>
+    public static string Point(double x, double y)
+    {
+        x = double.IsFinite(x) ? Math.Clamp(x, 0, 1) : .5;
+        y = double.IsFinite(y) ? Math.Clamp(y, 0, 1) : .5;
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        return PointPrefix + Math.Round(x, 3).ToString("0.###", inv) + "," + Math.Round(y, 3).ToString("0.###", inv);
+    }
+
+    public static bool TryParsePoint(string? value, out double x, out double y)
+    {
+        x = y = .5;
+        string v = (value ?? "").Trim().ToLowerInvariant();
+        if (!v.StartsWith(PointPrefix, StringComparison.Ordinal)) return false;
+        var parts = v[PointPrefix.Length..].Split(',');
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        if (parts.Length != 2 ||
+            !double.TryParse(parts[0], System.Globalization.NumberStyles.Float, inv, out x) ||
+            !double.TryParse(parts[1], System.Globalization.NumberStyles.Float, inv, out y) ||
+            !double.IsFinite(x) || !double.IsFinite(y))
+        {
+            x = y = .5;
+            return false;
+        }
+        x = Math.Clamp(x, 0, 1);
+        y = Math.Clamp(y, 0, 1);
+        return true;
+    }
+
+    public static bool IsPoint(string? value) => TryParsePoint(value, out _, out _);
+
+    public static string Normalize(string? value) => TryParsePoint(value, out double px, out double py) ? Point(px, py) : NormalizePreset(value);
+
+    private static string NormalizePreset(string? value) => (value ?? "").Trim().ToLowerInvariant() switch
     {
         TopLeft or "top left" or "topleft" or "tl" => TopLeft,
         Top or "top center" or "top-center" or "t" => Top,
@@ -58,10 +93,11 @@ public static class BackgroundAnchor
         return Catalog[4];
     }
 
-    public static string DisplayName(string? value) => OptionFor(value).Name;
+    public static string DisplayName(string? value) => IsPoint(value) ? "Custom" : OptionFor(value).Name;
 
     public static (double X, double Y) Coordinates(string? value)
     {
+        if (TryParsePoint(value, out double px, out double py)) return (px, py);
         var opt = OptionFor(value);
         return (opt.X, opt.Y);
     }

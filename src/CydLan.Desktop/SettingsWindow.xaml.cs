@@ -310,6 +310,7 @@ public partial class SettingsWindow : Window
         TitleShimmerBox.IsChecked = s.TitleShimmerEnabled;
         TitleShimmerIntensityBox.Value = ClampUnit(s.TitleShimmerIntensity, .65);
         TitleCometBox.IsChecked = s.TitleCometEnabled;
+        LoadBandEffects(s);
         TitleCometIntensityBox.Value = ClampUnit(s.TitleCometIntensity, .65);
         TitleEqualizerBox.IsChecked = s.TitleEqualizerEnabled;
         TitleEqualizerIntensityBox.Value = ClampUnit(s.TitleEqualizerIntensity, .65);
@@ -445,6 +446,12 @@ public partial class SettingsWindow : Window
             BackgroundAnchor.BottomRight => BgAnchorBottomRight,
             _ => BgAnchorCenter
         }).IsChecked = true;
+        customBackgroundAnchor = null;
+        if (BackgroundAnchor.IsPoint(anchor))
+        {
+            foreach (var cell in BackgroundAnchorCells) cell.IsChecked = false;
+            customBackgroundAnchor = anchor;
+        }
         BackgroundAnchorLabel.Text = BackgroundAnchor.DisplayName(anchor);
         BackgroundGrayscaleBox.IsChecked = s.ChatBackgroundGrayscale;
         LoadSceneControls(s);
@@ -545,6 +552,7 @@ public partial class SettingsWindow : Window
         s.TitleShimmerEnabled = TitleShimmerBox.IsChecked == true;
         s.TitleShimmerIntensity = TitleShimmerIntensityBox.Value;
         s.TitleCometEnabled = TitleCometBox.IsChecked == true;
+        WriteBandEffects(s);
         s.TitleCometIntensity = TitleCometIntensityBox.Value;
         s.TitleEqualizerEnabled = TitleEqualizerBox.IsChecked == true;
         s.TitleEqualizerIntensity = TitleEqualizerIntensityBox.Value;
@@ -876,7 +884,14 @@ public partial class SettingsWindow : Window
         : BgFitStretch.IsChecked == true ? "stretch"
         : BgFitCenter.IsChecked == true ? "center"
         : "fill";
-    private string SelectedBackgroundAnchor =>
+    private string? customBackgroundAnchor;
+    private System.Windows.Point? backgroundDragStart;
+    private (double X, double Y) backgroundDragStartAnchor;
+
+    private System.Windows.Controls.RadioButton[] BackgroundAnchorCells =>
+        [BgAnchorTopLeft, BgAnchorTop, BgAnchorTopRight, BgAnchorLeft, BgAnchorCenter, BgAnchorRight, BgAnchorBottomLeft, BgAnchorBottom, BgAnchorBottomRight];
+
+    private string SelectedBackgroundAnchor => customBackgroundAnchor ?? (
         BgAnchorTopLeft.IsChecked == true ? BackgroundAnchor.TopLeft
         : BgAnchorTop.IsChecked == true ? BackgroundAnchor.Top
         : BgAnchorTopRight.IsChecked == true ? BackgroundAnchor.TopRight
@@ -885,7 +900,7 @@ public partial class SettingsWindow : Window
         : BgAnchorBottomLeft.IsChecked == true ? BackgroundAnchor.BottomLeft
         : BgAnchorBottom.IsChecked == true ? BackgroundAnchor.Bottom
         : BgAnchorBottomRight.IsChecked == true ? BackgroundAnchor.BottomRight
-        : BackgroundAnchor.Center;
+        : BackgroundAnchor.Center);
     private bool IsGrayscaleChecked => BackgroundGrayscaleBox.IsChecked == true;
     private void BackgroundBlur_SliderChanged(object sender, RoutedPropertyChangedEventArgs<double> e) => ApplyBackgroundBlurPreview();
     private void BackgroundOpacity_SliderChanged(object sender, RoutedPropertyChangedEventArgs<double> e) => ApplyChatBackgroundPreview();
@@ -893,7 +908,44 @@ public partial class SettingsWindow : Window
     private void BackgroundTransition_SliderChanged(object sender, RoutedPropertyChangedEventArgs<double> e) => ApplyBackgroundTransitionPreview();
     private void BackgroundOptions_SliderChanged(object sender, RoutedPropertyChangedEventArgs<double> e) => ApplyBackgroundOptionsPreview();
     private void BackgroundFit_Checked(object sender, RoutedEventArgs e) => ApplyBackgroundOptionsPreview();
-    private void BackgroundAnchor_Checked(object sender, RoutedEventArgs e) => ApplyBackgroundOptionsPreview();
+    private void BackgroundAnchor_Checked(object sender, RoutedEventArgs e)
+    {
+        customBackgroundAnchor = null;
+        ApplyBackgroundOptionsPreview();
+    }
+
+    private void BackgroundPreview_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (BackgroundPreview.Source is null) return;
+        backgroundDragStart = e.GetPosition(BackgroundPreviewFrame);
+        backgroundDragStartAnchor = BackgroundAnchor.Coordinates(SelectedBackgroundAnchor);
+        BackgroundPreviewFrame.CaptureMouse();
+        e.Handled = true;
+    }
+
+    private void BackgroundPreview_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        if (backgroundDragStart is not { } start || BackgroundPreview.Source is not { Width: > 0, Height: > 0 } src) return;
+        var size = new System.Windows.Size(BackgroundPreviewViewport.ActualWidth, BackgroundPreviewViewport.ActualHeight);
+        var rect = BackgroundAnchor.CalculateRect(size, new System.Windows.Size(src.Width, src.Height), SelectedBackgroundFit, SelectedBackgroundAnchor, BackgroundScaleBox.Value);
+        var now = e.GetPosition(BackgroundPreviewFrame);
+        double overflowX = rect.Width - size.Width, overflowY = rect.Height - size.Height;
+        // Dragging moves the picture, so the focus point travels the opposite way.
+        double x = Math.Abs(overflowX) > .5 ? backgroundDragStartAnchor.X - (now.X - start.X) / overflowX : backgroundDragStartAnchor.X;
+        double y = Math.Abs(overflowY) > .5 ? backgroundDragStartAnchor.Y - (now.Y - start.Y) / overflowY : backgroundDragStartAnchor.Y;
+        if (customBackgroundAnchor is null)
+            foreach (var cell in BackgroundAnchorCells) cell.IsChecked = false;
+        customBackgroundAnchor = BackgroundAnchor.Point(x, y);
+        SyncBackgroundPreviewVisuals();
+    }
+
+    private void BackgroundPreview_MouseUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (backgroundDragStart is null) return;
+        backgroundDragStart = null;
+        BackgroundPreviewFrame.ReleaseMouseCapture();
+        ApplyBackgroundOptionsPreview();
+    }
     private void BackgroundGrayscale_Changed(object sender, RoutedEventArgs e) => ApplyBackgroundOptionsPreview();
     private void ApplyBackgroundBlurPreview()
     {

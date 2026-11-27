@@ -1151,6 +1151,10 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
     public bool TitleShimmerEnabled => Settings.TitleShimmerEnabled;
     public double TitleShimmerIntensity => Math.Clamp(Settings.TitleShimmerIntensity, .1, 1);
     public bool TitleCometEnabled => Settings.TitleCometEnabled;
+    public IReadOnlyList<string> TitleFx => BandEffects.Normalize(Settings.TitleFx);
+    public double TitleFxIntensity => Math.Clamp(Settings.TitleFxIntensity, .1, 1);
+    public IReadOnlyList<string> HeaderFx => BandEffects.Normalize(Settings.HeaderFx);
+    public double HeaderFxIntensity => Math.Clamp(Settings.HeaderFxIntensity, .1, 1);
     public double TitleCometIntensity => Math.Clamp(Settings.TitleCometIntensity, .1, 1);
     public bool TitleEqualizerEnabled => Settings.TitleEqualizerEnabled;
     public double TitleEqualizerIntensity => Math.Clamp(Settings.TitleEqualizerIntensity, .1, 1);
@@ -1365,6 +1369,10 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
         Changed(nameof(TitleShimmerEnabled));
         Changed(nameof(TitleShimmerIntensity));
         Changed(nameof(TitleCometEnabled));
+        Changed(nameof(TitleFx));
+        Changed(nameof(TitleFxIntensity));
+        Changed(nameof(HeaderFx));
+        Changed(nameof(HeaderFxIntensity));
         Changed(nameof(TitleCometIntensity));
         Changed(nameof(TitleEqualizerEnabled));
         Changed(nameof(TitleEqualizerIntensity));

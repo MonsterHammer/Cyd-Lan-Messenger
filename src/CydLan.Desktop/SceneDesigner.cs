@@ -34,6 +34,7 @@ public sealed class SceneStageCanvas : AmbientEffect
     public event Action<string, string, double, double>? ItemDropped;
     public event Action<string?>? ItemSelected;
     public event Action<string, string, double, double>? ItemMoved;
+    public event Action<string>? ItemContextRequested;
 
     public SceneStageCanvas()
     {
@@ -48,6 +49,23 @@ public sealed class SceneStageCanvas : AmbientEffect
         MouseLeftButtonDown += OnStageMouseDown;
         MouseMove += OnStageMouseMove;
         MouseLeftButtonUp += OnStageMouseUp;
+        MouseRightButtonUp += OnStageRightButtonUp;
+    }
+
+    private void OnStageRightButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        string? hit = HitTestItem(e.GetPosition(this));
+        if (hit is null) return;
+        RequestItemContext(hit);
+        e.Handled = true;
+    }
+
+    public void RequestItemContext(string id)
+    {
+        selectedId = id;
+        ItemSelected?.Invoke(id);
+        ItemContextRequested?.Invoke(id);
+        InvalidateVisual();
     }
 
     protected override int FrameRate => 24;

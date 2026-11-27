@@ -2093,7 +2093,9 @@ internal static class Program
         preferences.AddSceneEffect(SceneEffectCatalog.Grass, SceneEffectCatalog.ZoneContent, .18, .99);
         preferences.AddSceneEffect(SceneEffectCatalog.Grass, SceneEffectCatalog.ZoneContent, .42, .99);
         preferences.AddSceneEffect(SceneEffectCatalog.Grass, SceneEffectCatalog.ZoneContent, .76, .99);
-        ClickNamed(preferences, "Duplicate scene effect");
+        sceneStage.RequestItemContext(model.SceneEffects[^1].Id);
+        ((System.Windows.Controls.Button)preferences.FindName("DuplicateSceneButton")).RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        ((System.Windows.Controls.Primitives.Popup)preferences.FindName("SceneInspectorPopup")).IsOpen = false;
         preferences.AddSceneEffect(SceneEffectCatalog.Vine, SceneEffectCatalog.ZoneHeader, .85, .06);
         preferences.AddSceneEffect(SceneEffectCatalog.Lantern, SceneEffectCatalog.ZoneSidebar, .18, .22);
         ((System.Windows.Controls.Slider)preferences.FindName("SceneScaleBox")).Value = 1.45;
@@ -2109,6 +2111,65 @@ internal static class Program
             ((System.Windows.Controls.TextBlock)preferences.FindName("SceneCountText")).Text == "6 items" &&
             contentSceneLayer.Items is not null,
             "Scene tab should allow placing multiple grass and prop instances across zones and live-preview them.");
+        var sceneInspector = (System.Windows.Controls.Primitives.Popup)preferences.FindName("SceneInspectorPopup");
+        Check(!sceneInspector.IsOpen && FindVisibleText(preferences, "Right-click an effect to change its settings") is not null,
+            "Scene settings should stay hidden until an effect is right-clicked, with the right-click hint shown.");
+        sceneStage.RequestItemContext(model.SceneEffects[^1].Id);
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        ((System.Windows.Controls.Slider)preferences.FindName("SceneScaleBox")).Value = 5.0;
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(sceneInspector.IsOpen && Math.Abs(model.SceneEffects[^1].Scale - 5.0) < .001 &&
+            Math.Abs(SceneEffectCatalog.NormalizeItem(new SceneEffectItem { Kind = SceneEffectCatalog.Lantern, Scale = 9 }).Scale - 5.0) < .001,
+            "Right-clicking a scene effect should open its settings, and scale should reach 500%.");
+        Capture(preferences, Path.Combine(artifacts, "scene-right-click-settings-tested.png"));
+        sceneInspector.IsOpen = false;
+        window.Show();
+        ((System.Windows.Controls.Button)preferences.FindName("EditSceneOnScreenButton")).RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        var screenEditor = preferences.ActiveSceneEditor!;
+        var zoneRects = screenEditor.ZoneRects();
+        Check(FindAutomationElements(screenEditor).Count(n => SceneEffectCatalog.Effects.Any(d => d.Name == n)) >= SceneEffectCatalog.Effects.Count,
+            "The on-screen editor should list every scene effect as a card.");
+        Capture(screenEditor, Path.Combine(artifacts, "scene-on-screen-palette-tested.png"));
+        int beforeOnScreen = model.SceneEffects.Count;
+        var onScreenItem = screenEditor.AddEffect(SceneEffectCatalog.Moon);
+        var contentRect = zoneRects[SceneEffectCatalog.ZoneContent];
+        var target = new Point(contentRect.Left + contentRect.Width * .3, contentRect.Top + contentRect.Height * .4);
+        screenEditor.MoveItemTo(onScreenItem.Id, target);
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        screenEditor.OpenSettingsFor(onScreenItem.Id);
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        var movedItem = model.SceneEffects.First(i => i.Id == onScreenItem.Id);
+        Check(!preferences.IsVisible && screenEditor.IsVisible && zoneRects.ContainsKey(SceneEffectCatalog.ZoneSidebar) &&
+            model.SceneEffects.Count == beforeOnScreen + 1 && movedItem.Zone == SceneEffectCatalog.ZoneContent &&
+            Math.Abs(movedItem.X - .3) < .01 && Math.Abs(movedItem.Y - .4) < .01 &&
+            screenEditor.HitTestItem(target) == onScreenItem.Id && sceneInspector.IsOpen,
+            "Edit on screen should hide Preferences, place and move effects on the real window, and open settings on an effect.");
+        ((System.Windows.Controls.Button)preferences.FindName("DeleteSceneButton")).RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        Check(model.SceneEffects.Count == beforeOnScreen && !sceneInspector.IsOpen, "Delete in on-screen settings should remove the effect.");
+        screenEditor.Close();
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(preferences.IsVisible && preferences.ActiveSceneEditor is null && !sceneInspector.IsOpen,
+            "Done should return to Preferences.");
+        // Real flow: Preferences is modal, so editing on screen must end the modal loop and Done must restore it.
+        var modalPrefs = window.CreateSettingsWindow("AppearancePage", rememberNavigation: false, appearanceTab: "Scene");
+        bool modalReturned = false, editorShown = false, preferencesRestored = false, flowDone = false;
+        _ = Dispatcher.CurrentDispatcher.InvokeAsync(async () =>
+        {
+            await Task.Delay(400);
+            ((System.Windows.Controls.Button)modalPrefs.FindName("EditSceneOnScreenButton")).RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+            await Task.Delay(400);
+            editorShown = modalReturned && modalPrefs.ActiveSceneEditor is { IsVisible: true } && !modalPrefs.IsVisible;
+            modalPrefs.ActiveSceneEditor?.Close();
+            await Task.Delay(500);
+            preferencesRestored = modalPrefs.IsVisible && System.Windows.Interop.ComponentDispatcher.IsThreadModal;
+            modalPrefs.Close();
+            flowDone = true;
+        });
+        PopupHost.ShowModal(window, modalPrefs);
+        modalReturned = true;
+        for (int i = 0; i < 100 && !flowDone; i++) await Task.Delay(50);
+        Check(editorShown && preferencesRestored, "Edit on screen should leave modal Preferences, and Done should reopen it modally.");
         Capture(preferences, Path.Combine(artifacts, "appearance-scene-prefs-tested.png"));
         ((System.Windows.Controls.ScrollViewer)preferences.FindName("PreferencesScroller")).ScrollToBottom();
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
@@ -2201,6 +2262,12 @@ internal static class Program
             BackgroundAnchor.CalculateRect(new Size(800, 600), new Size(200, 100), "center", BackgroundAnchor.TopRight, 1.5) == new Rect(500, 0, 300, 150) &&
             BackgroundAnchor.CalculateRect(new Size(800, 600), new Size(800, 600), "stretch", BackgroundAnchor.BottomRight, 1.25) == new Rect(-200, -150, 1000, 750),
             "BackgroundAnchor calculations must place overflow, fitted margins, original sizes, and zoomed backgrounds accurately.");
+        string focus = BackgroundAnchor.Normalize("POINT:0.25,1.4");
+        Check(focus == "point:0.25,1" && BackgroundAnchor.DisplayName(focus) == "Custom" &&
+            BackgroundAnchor.CalculateRect(new Size(800, 600), new Size(400, 800), "fill", focus, 1.0) == new Rect(0, -1000, 800, 1600) &&
+            BackgroundAnchor.CalculateRect(new Size(800, 600), new Size(800, 600), "stretch", "point:0.25,0.5", 1.25) == new Rect(-50, -75, 1000, 750) &&
+            BackgroundAnchor.Normalize("point:bad") == BackgroundAnchor.Center,
+            "A custom background focus point must normalize, clamp, and position the image.");
 
         var tallVisual = new DrawingVisual();
         using (var tdc = tallVisual.RenderOpen())
