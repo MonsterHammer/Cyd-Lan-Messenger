@@ -231,6 +231,8 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
     public bool FloatingLanRoam => Settings.FloatingLanRoam;
     private PetAppearance? previewPetAppearance;
     public PetAppearance PetAppearance => previewPetAppearance ?? PetAppearance.From(Settings);
+    private IReadOnlyList<SceneEffectItem>? previewSceneEffects;
+    public IReadOnlyList<SceneEffectItem> SceneEffects => previewSceneEffects ?? Settings.SceneEffects;
     public event Action? PetHopRequested;
     internal void RequestPetHop() => PetHopRequested?.Invoke();
     public string ProfileName => Settings.DisplayName;
@@ -1280,6 +1282,12 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
         Changed(nameof(PetAppearance));
     }
 
+    public void PreviewSceneEffects(IReadOnlyList<SceneEffectItem>? preview)
+    {
+        previewSceneEffects = preview?.Select(i => i.Clone()).ToList();
+        Changed(nameof(SceneEffects));
+    }
+
     public void ApplySettings()
     {
         if (System.Windows.Application.Current is { } app)
@@ -1438,7 +1446,9 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
         previewOnlineRing = null;
         previewAvatarShape = null;
         previewPetAppearance = null;
+        previewSceneEffects = null;
         Changed(nameof(PetAppearance));
+        Changed(nameof(SceneEffects));
         Changed(nameof(ChromeTexture));
         Changed(nameof(ChromeTextureEnabled));
         Changed(nameof(ChromeTextureIntensity));
@@ -1509,6 +1519,12 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
         Settings.CustomEffectColor = AppearanceOptions.NormalizeHex(Settings.CustomEffectColor);
         Settings.CustomOutgoingBubbleColor = AppearanceOptions.NormalizeHex(Settings.CustomOutgoingBubbleColor);
         Settings.CustomIncomingBubbleColor = AppearanceOptions.NormalizeHex(Settings.CustomIncomingBubbleColor);
+        Settings.CustomTitleColor = AppearanceOptions.NormalizeHex(Settings.CustomTitleColor);
+        Settings.CustomHeaderColor = AppearanceOptions.NormalizeHex(Settings.CustomHeaderColor);
+        Settings.CustomRailColor = AppearanceOptions.NormalizeHex(Settings.CustomRailColor);
+        Settings.CustomSidebarColor = AppearanceOptions.NormalizeHex(Settings.CustomSidebarColor);
+        Settings.CustomChatBackgroundColor = AppearanceOptions.NormalizeHex(Settings.CustomChatBackgroundColor);
+        Settings.SceneEffects = SceneEffectCatalog.NormalizeList(Settings.SceneEffects);
         Settings.BubbleStyle = AppearanceOptions.NormalizeBubbleStyle(Settings.BubbleStyle);
         Settings.BubbleShape = AppearanceOptions.NormalizeBubbleShape(Settings.BubbleShape);
         Settings.ChatDensity = AppearanceOptions.NormalizeChatDensity(Settings.ChatDensity);

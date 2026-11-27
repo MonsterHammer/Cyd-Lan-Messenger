@@ -27,7 +27,11 @@ public sealed record AppearanceOverrides(
     string ChatSurfaceMode = AppearanceOptions.ChatSurfaceSeparate,
     string CustomChatBackgroundColor = "",
     string ColorFinish = Desktop.ColorFinish.Off,
-    double ColorFinishIntensity = .65)
+    double ColorFinishIntensity = .65,
+    string CustomTitleColor = "",
+    string CustomHeaderColor = "",
+    string CustomRailColor = "",
+    string CustomSidebarColor = "")
 {
     public static AppearanceOverrides Default { get; } = new(
         "", "", "", "",
@@ -41,7 +45,8 @@ public sealed record AppearanceOverrides(
         AppearanceOptions.ChatSurfaceSeparate,
         "",
         Desktop.ColorFinish.Off,
-        .65);
+        .65,
+        "", "", "", "");
 
     public static AppearanceOverrides From(AppSettings s) => new(
         AppearanceOptions.NormalizeHex(s.CustomAccentColor),
@@ -58,7 +63,11 @@ public sealed record AppearanceOverrides(
         AppearanceOptions.NormalizeChatSurfaceMode(s.ChatSurfaceMode),
         AppearanceOptions.NormalizeHex(s.CustomChatBackgroundColor),
         Desktop.ColorFinish.Normalize(s.ColorFinish),
-        double.IsFinite(s.ColorFinishIntensity) ? Math.Clamp(s.ColorFinishIntensity, .1, 1.0) : .65);
+        double.IsFinite(s.ColorFinishIntensity) ? Math.Clamp(s.ColorFinishIntensity, .1, 1.0) : .65,
+        AppearanceOptions.NormalizeHex(s.CustomTitleColor),
+        AppearanceOptions.NormalizeHex(s.CustomHeaderColor),
+        AppearanceOptions.NormalizeHex(s.CustomRailColor),
+        AppearanceOptions.NormalizeHex(s.CustomSidebarColor));
 }
 
 /// <summary>Normalization, curated swatch catalogs, and Win32 layered window opacity support.</summary>
@@ -75,6 +84,7 @@ public static class AppearanceOptions
     public static IReadOnlyList<ColorOption> AccentSwatches { get; } = BuildColorSwatches("Theme");
     public static IReadOnlyList<ColorOption> EffectSwatches { get; } = BuildColorSwatches("Match accent");
     public static IReadOnlyList<ColorOption> BubbleSwatches { get; } = BuildColorSwatches("Theme");
+    public static IReadOnlyList<ColorOption> SurfaceSwatches { get; } = BuildChatBackgroundSwatches();
     public static IReadOnlyList<ColorOption> ChatBackgroundSwatches { get; } = BuildChatBackgroundSwatches();
 
     public static IReadOnlyList<StyleOption> BubbleStyles { get; } =
@@ -153,57 +163,43 @@ public static class AppearanceOptions
 
     public static double RelativeLuminance(Color c) => (0.2126 * c.R + 0.7152 * c.G + 0.0722 * c.B) / 255.0;
 
-    private static IReadOnlyList<ColorOption> BuildColorSwatches(string defaultLabel)
+    private static IReadOnlyList<ColorOption> BuildColorSwatches(string defaultLabel) => BuildPaletteSwatches(defaultLabel,
+    [
+        ("#3B82F6", "Cobalt"),
+        ("#06B6D4", "Cyan"),
+        ("#10B981", "Emerald"),
+        ("#84CC16", "Lime"),
+        ("#F59E0B", "Amber"),
+        ("#F97316", "Tangerine"),
+        ("#EF4444", "Crimson"),
+        ("#EC4899", "Rose"),
+        ("#D946EF", "Fuchsia"),
+        ("#8B5CF6", "Violet"),
+        ("#6366F1", "Indigo"),
+        ("#94A3B8", "Slate")
+    ]);
+
+    private static IReadOnlyList<ColorOption> BuildChatBackgroundSwatches() => BuildPaletteSwatches("Theme",
+    [
+        ("#0B0F17", "Midnight"),
+        ("#121218", "Obsidian"),
+        ("#16111B", "Plum Noir"),
+        ("#1A1014", "Crimson Dark"),
+        ("#0D1917", "Deep Pine"),
+        ("#0F172A", "Slate Navy"),
+        ("#1C1917", "Warm Charcoal"),
+        ("#F8FAFC", "Snow"),
+        ("#F5F3EF", "Parchment"),
+        ("#FDF2F8", "Blush"),
+        ("#EFF6FF", "Ice"),
+        ("#F0FDF4", "Mint Mist")
+    ]);
+
+    private static IReadOnlyList<ColorOption> BuildPaletteSwatches(string defaultLabel, (string Hex, string Name)[] palette)
     {
-        (string Hex, string Name)[] palette =
-        [
-            ("#3B82F6", "Cobalt"),
-            ("#06B6D4", "Cyan"),
-            ("#10B981", "Emerald"),
-            ("#84CC16", "Lime"),
-            ("#F59E0B", "Amber"),
-            ("#F97316", "Tangerine"),
-            ("#EF4444", "Crimson"),
-            ("#EC4899", "Rose"),
-            ("#D946EF", "Fuchsia"),
-            ("#8B5CF6", "Violet"),
-            ("#6366F1", "Indigo"),
-            ("#94A3B8", "Slate")
-        ];
         var list = new List<ColorOption>(palette.Length + 1)
         {
             new("", defaultLabel, System.Windows.Media.Brushes.Transparent, IsDefault: true)
-        };
-        foreach (var (hex, name) in palette)
-        {
-            TryParseHex(hex, out var color);
-            var brush = new SolidColorBrush(color);
-            brush.Freeze();
-            list.Add(new ColorOption(hex, name, brush));
-        }
-        return list;
-    }
-
-    private static IReadOnlyList<ColorOption> BuildChatBackgroundSwatches()
-    {
-        (string Hex, string Name)[] palette =
-        [
-            ("#0B0F17", "Midnight"),
-            ("#121218", "Obsidian"),
-            ("#16111B", "Plum Noir"),
-            ("#1A1014", "Crimson Dark"),
-            ("#0D1917", "Deep Pine"),
-            ("#0F172A", "Slate Navy"),
-            ("#1C1917", "Warm Charcoal"),
-            ("#F8FAFC", "Snow"),
-            ("#F5F3EF", "Parchment"),
-            ("#FDF2F8", "Blush"),
-            ("#EFF6FF", "Ice"),
-            ("#F0FDF4", "Mint Mist")
-        ];
-        var list = new List<ColorOption>(palette.Length + 1)
-        {
-            new("", "Theme", System.Windows.Media.Brushes.Transparent, IsDefault: true)
         };
         foreach (var (hex, name) in palette)
         {

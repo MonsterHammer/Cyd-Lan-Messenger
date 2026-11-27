@@ -12,13 +12,25 @@ namespace CydLan.Desktop;
 
 public partial class SettingsWindow : Window
 {
+    internal const string GitHubRepoUrl = "https://github.com/MonsterHammer/Cyd-Lan-Messenger";
+    internal const string GitHubReleasesUrl = "https://github.com/MonsterHammer/Cyd-Lan-Messenger/releases/latest";
+
+    private sealed record ColorChannel(
+        System.Windows.Controls.ListBox Swatches,
+        System.Windows.Controls.TextBox HexBox,
+        ColorPickerButton Picker,
+        Func<string> Get,
+        Action<string> Set);
+
     private const string UiFontThemeDefault = "Theme default";
     private readonly MainViewModel model;
     private readonly string originalTheme;
     private readonly AppearanceOverrides originalOverrides;
     private readonly List<AppearancePreset> savedPresets;
+    private readonly ColorChannel[] appearanceChannels;
     private string selectedTheme;
     private string currentThemeFilter = "all";
+    private string titleHex = "", headerHex = "", railHex = "", sidebarHex = "";
     private string accentHex = "", effectHex = "", outgoingBubbleHex = "", incomingBubbleHex = "", chatBackgroundHex = "";
     private double? customFontPx;
     private bool updatingThemeFilter;
@@ -35,7 +47,7 @@ public partial class SettingsWindow : Window
 
     public static string NormalizeAppearanceTab(string? name) => name switch
     {
-        "Colors" or "Bubbles" or "Textures" or "Ambient" or "Headers" or "Panels" or "Aura" or "Companion" or "Customize" => name,
+        "Colors" or "Bubbles" or "Textures" or "Ambient" or "Headers" or "Panels" or "Aura" or "Companion" or "Scene" or "Customize" => name,
         _ => "Themes"
     };
 
@@ -75,7 +87,23 @@ public partial class SettingsWindow : Window
         savedPresets = (s.SavedPresets ?? []).Select(p => new AppearancePreset { Id = p.Id, Name = p.Name, Code = p.Code }).ToList();
 
         applyingAppearance = true;
+        appearanceChannels =
+        [
+            new(TitleColorBox, TitleHexBox, TitleColorPicker, () => titleHex, v => titleHex = v),
+            new(HeaderColorBox, HeaderHexBox, HeaderColorPicker, () => headerHex, v => headerHex = v),
+            new(RailColorBox, RailHexBox, RailColorPicker, () => railHex, v => railHex = v),
+            new(SidebarColorBox, SidebarHexBox, SidebarColorPicker, () => sidebarHex, v => sidebarHex = v),
+            new(ChatBackgroundColorBox, ChatBackgroundHexBox, ChatBackgroundColorPicker, () => chatBackgroundHex, v => chatBackgroundHex = v),
+            new(AccentColorBox, AccentHexBox, AccentColorPicker, () => accentHex, v => accentHex = v),
+            new(EffectColorBox, EffectHexBox, EffectColorPicker, () => effectHex, v => effectHex = v),
+            new(OutgoingBubbleColorBox, OutgoingBubbleHexBox, OutgoingBubbleColorPicker, () => outgoingBubbleHex, v => outgoingBubbleHex = v),
+            new(IncomingBubbleColorBox, IncomingBubbleHexBox, IncomingBubbleColorPicker, () => incomingBubbleHex, v => incomingBubbleHex = v)
+        ];
         ColorFinishBox.ItemsSource = ColorFinish.Catalog;
+        TitleColorBox.ItemsSource = AppearanceOptions.SurfaceSwatches;
+        HeaderColorBox.ItemsSource = AppearanceOptions.SurfaceSwatches;
+        RailColorBox.ItemsSource = AppearanceOptions.SurfaceSwatches;
+        SidebarColorBox.ItemsSource = AppearanceOptions.SurfaceSwatches;
         AccentColorBox.ItemsSource = AppearanceOptions.AccentSwatches;
         EffectColorBox.ItemsSource = AppearanceOptions.EffectSwatches;
         OutgoingBubbleColorBox.ItemsSource = AppearanceOptions.BubbleSwatches;
@@ -90,6 +118,7 @@ public partial class SettingsWindow : Window
         ChatCanvasBox.ItemsSource = ChatCanvasOverlay.Catalog;
         BackgroundTransitionBox.ItemsSource = BackgroundSideTransition.Catalog;
         InitCompanionControls(s);
+        InitSceneControls();
 
         backgroundPath = s.ChatBackgroundPath;
         BackgroundOpacityBox.Value = model.ChatBackgroundOpacity;
@@ -135,6 +164,7 @@ public partial class SettingsWindow : Window
                 model.PreviewMessageTypography(null, null, null);
                 model.PreviewAvatarOptions(null, null);
                 model.PreviewPetAppearance(null);
+                model.PreviewSceneEffects(null);
                 ButtonEffects.Configure(
                     s.ButtonGlowEnabled, model.ButtonGlowIntensity,
                     s.ButtonSheenEnabled, model.ButtonSheenIntensity,
@@ -153,6 +183,10 @@ public partial class SettingsWindow : Window
             applyingAppearance = true;
             ThemeBox.ItemsSource = null;
             ColorFinishBox.ItemsSource = null;
+            TitleColorBox.ItemsSource = null;
+            HeaderColorBox.ItemsSource = null;
+            RailColorBox.ItemsSource = null;
+            SidebarColorBox.ItemsSource = null;
             AccentColorBox.ItemsSource = null;
             EffectColorBox.ItemsSource = null;
             OutgoingBubbleColorBox.ItemsSource = null;
@@ -175,6 +209,7 @@ public partial class SettingsWindow : Window
             AnimatedGifBehavior.SetSequence(BackgroundPreview, null);
             AnimatedGifBehavior.SetFallbackSource(BackgroundPreview, null);
             DisposeCompanionControls();
+            DisposeSceneControls();
             AvatarPreview.Source = null;
             chosenBackground = null;
             chosenBackgroundBytes = null;
@@ -196,15 +231,19 @@ public partial class SettingsWindow : Window
 
         ColorFinishBox.SelectedValue = ColorFinish.Normalize(s.ColorFinish);
         ColorFinishIntensityBox.Value = ClampUnit(s.ColorFinishIntensity, .65);
-        SetColorChannel(AccentColorBox, AccentHexBox, ref accentHex, s.CustomAccentColor);
-        SetColorChannel(EffectColorBox, EffectHexBox, ref effectHex, s.CustomEffectColor);
-        SetColorChannel(OutgoingBubbleColorBox, OutgoingBubbleHexBox, ref outgoingBubbleHex, s.CustomOutgoingBubbleColor);
-        SetColorChannel(IncomingBubbleColorBox, IncomingBubbleHexBox, ref incomingBubbleHex, s.CustomIncomingBubbleColor);
+        SetColorChannel(appearanceChannels[0], s.CustomTitleColor);
+        SetColorChannel(appearanceChannels[1], s.CustomHeaderColor);
+        SetColorChannel(appearanceChannels[2], s.CustomRailColor);
+        SetColorChannel(appearanceChannels[3], s.CustomSidebarColor);
+        SetColorChannel(appearanceChannels[4], s.CustomChatBackgroundColor);
+        SetColorChannel(appearanceChannels[5], s.CustomAccentColor);
+        SetColorChannel(appearanceChannels[6], s.CustomEffectColor);
+        SetColorChannel(appearanceChannels[7], s.CustomOutgoingBubbleColor);
+        SetColorChannel(appearanceChannels[8], s.CustomIncomingBubbleColor);
         bool matchThemeChat = AppearanceOptions.NormalizeChatSurfaceMode(s.ChatSurfaceMode) == AppearanceOptions.ChatSurfaceTheme;
         ChatSurfaceTheme.IsChecked = matchThemeChat;
         ChatSurfaceSeparate.IsChecked = !matchThemeChat;
         TextureOnChatBox.IsChecked = matchThemeChat;
-        SetColorChannel(ChatBackgroundColorBox, ChatBackgroundHexBox, ref chatBackgroundHex, s.CustomChatBackgroundColor);
 
         BubbleStyleBox.SelectedValue = AppearanceOptions.NormalizeBubbleStyle(s.BubbleStyle);
         BubbleShapeBox.SelectedValue = AppearanceOptions.NormalizeBubbleShape(s.BubbleShape);
@@ -408,6 +447,7 @@ public partial class SettingsWindow : Window
         }).IsChecked = true;
         BackgroundAnchorLabel.Text = BackgroundAnchor.DisplayName(anchor);
         BackgroundGrayscaleBox.IsChecked = s.ChatBackgroundGrayscale;
+        LoadSceneControls(s);
     }
 
     private static void SelectFontItem(System.Windows.Controls.ComboBox box, string? requested, string fallback)
@@ -430,6 +470,10 @@ public partial class SettingsWindow : Window
         s.CustomEffectColor = effectHex;
         s.CustomOutgoingBubbleColor = outgoingBubbleHex;
         s.CustomIncomingBubbleColor = incomingBubbleHex;
+        s.CustomTitleColor = titleHex;
+        s.CustomHeaderColor = headerHex;
+        s.CustomRailColor = railHex;
+        s.CustomSidebarColor = sidebarHex;
         s.ChatSurfaceMode = SelectedChatSurfaceMode;
         s.CustomChatBackgroundColor = chatBackgroundHex;
         s.BubbleStyle = AppearanceOptions.NormalizeBubbleStyle(BubbleStyleBox.SelectedValue as string);
@@ -595,6 +639,7 @@ public partial class SettingsWindow : Window
         s.AuraSelectedModuleEnabled = AuraModuleBox.IsChecked == true;
         s.AuraSelectedPersonEnabled = AuraPersonBox.IsChecked == true;
         s.AuraHighlightButtonsEnabled = AuraButtonsBox.IsChecked == true;
+        WriteSceneTo(s);
     }
 
     private string SelectedChatSurfaceMode =>
@@ -630,7 +675,11 @@ public partial class SettingsWindow : Window
         SelectedChatSurfaceMode,
         chatBackgroundHex,
         ColorFinish.Normalize(ColorFinishBox.SelectedValue as string),
-        ColorFinishIntensityBox.Value);
+        ColorFinishIntensityBox.Value,
+        titleHex,
+        headerHex,
+        railHex,
+        sidebarHex);
 
     private void ApplyLiveThemeOverrides()
     {
@@ -659,33 +708,74 @@ public partial class SettingsWindow : Window
         UpdateFontPreview();
         ApplyMessageTypographyPreview();
         ApplyCompanionPreview();
+        model.PreviewSceneEffects(sceneEffects);
         ShowBackground();
     }
 
-    private void SetColorChannel(System.Windows.Controls.ListBox box, System.Windows.Controls.TextBox hexBox, ref string backingField, string? value)
+    private void SetColorChannel(ColorChannel channel, string? value)
     {
         string normalized = AppearanceOptions.NormalizeHex(value);
-        backingField = normalized;
-        hexBox.Text = normalized;
+        bool wasApplying = applyingAppearance;
+        applyingAppearance = true;
+        channel.Set(normalized);
+        channel.HexBox.Text = normalized;
+        channel.Picker.ColorHex = normalized;
         if (normalized.Length == 0)
-            box.SelectedValue = "";
+            channel.Swatches.SelectedValue = "";
         else
         {
-            box.SelectedValue = normalized;
-            if (box.SelectedValue as string != normalized) box.SelectedItem = null;
+            channel.Swatches.SelectedValue = normalized;
+            if (channel.Swatches.SelectedValue as string != normalized) channel.Swatches.SelectedItem = null;
         }
+        applyingAppearance = wasApplying;
     }
 
     private void ColorOverride_Changed(object sender, SelectionChangedEventArgs e)
     {
         if (!IsInitialized || closing || applyingAppearance) return;
         if (sender is not System.Windows.Controls.ListBox box || box.SelectedValue is not string value) return;
+        var channel = appearanceChannels.FirstOrDefault(c => c.Swatches == box);
+        if (channel is null) return;
         applyingAppearance = true;
-        if (box == AccentColorBox) { accentHex = value; AccentHexBox.Text = value; }
-        else if (box == EffectColorBox) { effectHex = value; EffectHexBox.Text = value; }
-        else if (box == OutgoingBubbleColorBox) { outgoingBubbleHex = value; OutgoingBubbleHexBox.Text = value; }
-        else if (box == IncomingBubbleColorBox) { incomingBubbleHex = value; IncomingBubbleHexBox.Text = value; }
-        else if (box == ChatBackgroundColorBox) { chatBackgroundHex = value; ChatBackgroundHexBox.Text = value; }
+        channel.Set(value);
+        channel.HexBox.Text = value;
+        channel.Picker.ColorHex = value;
+        applyingAppearance = false;
+        ApplyLiveThemeOverrides();
+    }
+
+    private void ColorPicker_Changed(object? sender, string value)
+    {
+        if (!IsInitialized || closing || applyingAppearance) return;
+        if (sender is not ColorPickerButton picker) return;
+        var channel = appearanceChannels.FirstOrDefault(c => c.Picker == picker);
+        if (channel is null) return;
+        SetColorChannel(channel, value);
+        ApplyLiveThemeOverrides();
+    }
+
+    private void PureLight_Click(object sender, RoutedEventArgs e) => ApplyPureBase(ThemeManager.Light);
+    private void PureDark_Click(object sender, RoutedEventArgs e) => ApplyPureBase(ThemeManager.Dark);
+
+    private void ApplyPureBase(string themeTag)
+    {
+        selectedTheme = themeTag;
+        applyingAppearance = true;
+        ThemeDetailsBox.IsChecked = false;
+        FilterThemes("all");
+        ThemeFilterAll.IsChecked = true;
+        ThemeBox.SelectedValue = selectedTheme;
+        applyingAppearance = false;
+        ApplyLiveThemeOverrides();
+    }
+
+    private void ResetColors_Click(object sender, RoutedEventArgs e)
+    {
+        applyingAppearance = true;
+        foreach (var channel in appearanceChannels) SetColorChannel(channel, "");
+        ChatSurfaceSeparate.IsChecked = true;
+        ChatSurfaceTheme.IsChecked = false;
+        TextureOnChatBox.IsChecked = false;
         applyingAppearance = false;
         ApplyLiveThemeOverrides();
     }
@@ -722,6 +812,8 @@ public partial class SettingsWindow : Window
     private void CommitHexInput(object sender)
     {
         if (!IsInitialized || closing || applyingAppearance || sender is not System.Windows.Controls.TextBox box) return;
+        var channel = appearanceChannels.FirstOrDefault(c => c.HexBox == box);
+        if (channel is null) return;
         string raw = box.Text.Trim();
         string normalized;
         if (raw.Length == 0) normalized = "";
@@ -729,21 +821,11 @@ public partial class SettingsWindow : Window
         else
         {
             applyingAppearance = true;
-            box.Text = box == AccentHexBox ? accentHex
-                : box == EffectHexBox ? effectHex
-                : box == OutgoingBubbleHexBox ? outgoingBubbleHex
-                : box == IncomingBubbleHexBox ? incomingBubbleHex
-                : chatBackgroundHex;
+            box.Text = channel.Get();
             applyingAppearance = false;
             return;
         }
-        applyingAppearance = true;
-        if (box == AccentHexBox) SetColorChannel(AccentColorBox, AccentHexBox, ref accentHex, normalized);
-        else if (box == EffectHexBox) SetColorChannel(EffectColorBox, EffectHexBox, ref effectHex, normalized);
-        else if (box == OutgoingBubbleHexBox) SetColorChannel(OutgoingBubbleColorBox, OutgoingBubbleHexBox, ref outgoingBubbleHex, normalized);
-        else if (box == IncomingBubbleHexBox) SetColorChannel(IncomingBubbleColorBox, IncomingBubbleHexBox, ref incomingBubbleHex, normalized);
-        else if (box == ChatBackgroundHexBox) SetColorChannel(ChatBackgroundColorBox, ChatBackgroundHexBox, ref chatBackgroundHex, normalized);
-        applyingAppearance = false;
+        SetColorChannel(channel, normalized);
         ApplyLiveThemeOverrides();
     }
 
@@ -1128,6 +1210,7 @@ public partial class SettingsWindow : Window
         AppearancePanelsSection.Visibility = normalized == "Panels" ? Visibility.Visible : Visibility.Collapsed;
         AppearanceAuraSection.Visibility = normalized == "Aura" ? Visibility.Visible : Visibility.Collapsed;
         AppearanceCompanionSection.Visibility = normalized == "Companion" ? Visibility.Visible : Visibility.Collapsed;
+        AppearanceSceneSection.Visibility = normalized == "Scene" ? Visibility.Visible : Visibility.Collapsed;
         AppearanceCustomizeSection.Visibility = normalized == "Customize" ? Visibility.Visible : Visibility.Collapsed;
         if (!restoringNavigation && !closing) model.LastAppearanceTab = normalized;
         UpdateCompanionTimerState();
@@ -1202,6 +1285,15 @@ public partial class SettingsWindow : Window
         try { System.IO.Directory.CreateDirectory(FolderBox.Text); System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", $"\"{FolderBox.Text}\"") { UseShellExecute = true }); }
         catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception) { model.Toast = ex.Message; }
     }
+    private void OpenGitHub_Click(object sender, RoutedEventArgs e) => OpenExternalUrl(GitHubRepoUrl);
+    private void OpenReleases_Click(object sender, RoutedEventArgs e) => OpenExternalUrl(GitHubReleasesUrl);
+
+    private void OpenExternalUrl(string url)
+    {
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true }); }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { model.Toast = ex.Message; }
+    }
+
     private void Cancel_Click(object sender, RoutedEventArgs e) => Close();
     private void OpenLogs_Click(object sender, RoutedEventArgs e)
     {
@@ -1285,11 +1377,7 @@ public partial class SettingsWindow : Window
                 return;
             }
         }
-        CommitHexInput(AccentHexBox);
-        CommitHexInput(EffectHexBox);
-        CommitHexInput(OutgoingBubbleHexBox);
-        CommitHexInput(IncomingBubbleHexBox);
-        CommitHexInput(ChatBackgroundHexBox);
+        foreach (var channel in appearanceChannels) CommitHexInput(channel.HexBox);
         CommitCompanionHexInputs();
         bool networkChanged = port != model.Settings.Port || multicast != model.Settings.Multicast;
         string defaultFolder = AppSettings.DefaultReceivedFilesFolder;

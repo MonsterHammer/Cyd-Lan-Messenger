@@ -10,6 +10,7 @@ public partial class SettingsWindow
 {
     private readonly DispatcherTimer petStudioTimer = new(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(33) };
     private List<SavedCompanion> savedCompanions = [];
+    private ColorChannel[] companionChannels = [];
     private string petBodyHex = "", petAccentHex = "", petDetailHex = "";
     private double studioBreath, studioBlink, studioBlinkElapsed, studioNextBlink = 2.6, studioHop;
     private bool studioBlinkDown, studioHovered, studioExcited;
@@ -17,6 +18,12 @@ public partial class SettingsWindow
 
     private void InitCompanionControls(AppSettings s)
     {
+        companionChannels =
+        [
+            new(PetBodyColorBox, PetBodyHexBox, PetBodyColorPicker, () => petBodyHex, v => petBodyHex = v),
+            new(PetAccentColorBox, PetAccentHexBox, PetAccentColorPicker, () => petAccentHex, v => petAccentHex = v),
+            new(PetDetailColorBox, PetDetailHexBox, PetDetailColorPicker, () => petDetailHex, v => petDetailHex = v)
+        ];
         savedCompanions = (s.SavedCompanions ?? []).Select(p => new SavedCompanion { Id = p.Id, Name = p.Name, Code = p.Code }).ToList();
         PetPresetBox.ItemsSource = FloatingPetStyle.Presets;
         PetBodyBox.ItemsSource = FloatingPetStyle.Bodies;
@@ -91,9 +98,9 @@ public partial class SettingsWindow
         PetVibeBox.SelectedValue = p.Vibe;
         PetAuraBox.SelectedValue = p.Aura;
         PetSizeBox.Value = FloatingPetStyle.ClampSize(p.Size);
-        SetColorChannel(PetBodyColorBox, PetBodyHexBox, ref petBodyHex, p.BodyColor);
-        SetColorChannel(PetAccentColorBox, PetAccentHexBox, ref petAccentHex, p.AccentColor);
-        SetColorChannel(PetDetailColorBox, PetDetailHexBox, ref petDetailHex, p.DetailColor);
+        SetColorChannel(companionChannels[0], p.BodyColor);
+        SetColorChannel(companionChannels[1], p.AccentColor);
+        SetColorChannel(companionChannels[2], p.DetailColor);
         SyncMatchedPreset(p);
         UpdateCompanionSummary(p);
     }
@@ -310,11 +317,23 @@ public partial class SettingsWindow
     {
         if (!IsInitialized || closing || applyingAppearance) return;
         if (sender is not System.Windows.Controls.ListBox box || box.SelectedValue is not string value) return;
+        var channel = companionChannels.FirstOrDefault(c => c.Swatches == box);
+        if (channel is null) return;
         applyingAppearance = true;
-        if (box == PetBodyColorBox) { petBodyHex = value; PetBodyHexBox.Text = value; }
-        else if (box == PetAccentColorBox) { petAccentHex = value; PetAccentHexBox.Text = value; }
-        else if (box == PetDetailColorBox) { petDetailHex = value; PetDetailHexBox.Text = value; }
+        channel.Set(value);
+        channel.HexBox.Text = value;
+        channel.Picker.ColorHex = value;
         applyingAppearance = false;
+        ApplyCompanionPreview();
+    }
+
+    private void PetColorPicker_Changed(object? sender, string value)
+    {
+        if (!IsInitialized || closing || applyingAppearance) return;
+        if (sender is not ColorPickerButton picker) return;
+        var channel = companionChannels.FirstOrDefault(c => c.Picker == picker);
+        if (channel is null) return;
+        SetColorChannel(channel, value);
         ApplyCompanionPreview();
     }
 
@@ -329,14 +348,14 @@ public partial class SettingsWindow
 
     private void CommitCompanionHexInputs()
     {
-        CommitPetHex(PetBodyHexBox);
-        CommitPetHex(PetAccentHexBox);
-        CommitPetHex(PetDetailHexBox);
+        foreach (var channel in companionChannels) CommitPetHex(channel.HexBox);
     }
 
     private void CommitPetHex(object sender)
     {
         if (!IsInitialized || closing || applyingAppearance || sender is not System.Windows.Controls.TextBox box) return;
+        var channel = companionChannels.FirstOrDefault(c => c.HexBox == box);
+        if (channel is null) return;
         string raw = box.Text.Trim();
         string normalized;
         if (raw.Length == 0) normalized = "";
@@ -344,15 +363,11 @@ public partial class SettingsWindow
         else
         {
             applyingAppearance = true;
-            box.Text = box == PetBodyHexBox ? petBodyHex : box == PetAccentHexBox ? petAccentHex : petDetailHex;
+            box.Text = channel.Get();
             applyingAppearance = false;
             return;
         }
-        applyingAppearance = true;
-        if (box == PetBodyHexBox) SetColorChannel(PetBodyColorBox, PetBodyHexBox, ref petBodyHex, normalized);
-        else if (box == PetAccentHexBox) SetColorChannel(PetAccentColorBox, PetAccentHexBox, ref petAccentHex, normalized);
-        else if (box == PetDetailHexBox) SetColorChannel(PetDetailColorBox, PetDetailHexBox, ref petDetailHex, normalized);
-        applyingAppearance = false;
+        SetColorChannel(channel, normalized);
         ApplyCompanionPreview();
     }
 

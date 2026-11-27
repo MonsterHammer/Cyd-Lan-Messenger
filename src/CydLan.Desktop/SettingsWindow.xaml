@@ -342,6 +342,7 @@
                   <RadioButton x:Name="AppearancePanelsTab" Content="Panels" Tag="Panels" Style="{StaticResource Tab}" GroupName="AppearanceSection" Checked="AppearanceTab_Checked" Margin="0,0,10,0" AutomationProperties.Name="Panels tab"/>
                   <RadioButton x:Name="AppearanceAuraTab" Content="Aura" Tag="Aura" Style="{StaticResource Tab}" GroupName="AppearanceSection" Checked="AppearanceTab_Checked" Margin="0,0,10,0" AutomationProperties.Name="Aura tab"/>
                   <RadioButton x:Name="AppearanceCompanionTab" Content="Companion" Tag="Companion" Style="{StaticResource Tab}" GroupName="AppearanceSection" Checked="AppearanceTab_Checked" Margin="0,0,10,0" AutomationProperties.Name="Companion tab"/>
+                  <RadioButton x:Name="AppearanceSceneTab" Content="Scene" Tag="Scene" Style="{StaticResource Tab}" GroupName="AppearanceSection" Checked="AppearanceTab_Checked" Margin="0,0,10,0" AutomationProperties.Name="Scene tab"/>
                   <RadioButton x:Name="AppearanceCustomizeTab" Content="Fonts &amp; bg" Tag="Customize" Style="{StaticResource Tab}" GroupName="AppearanceSection" Checked="AppearanceTab_Checked" AutomationProperties.Name="Fonts and background tab"/>
                 </WrapPanel>
               </Border>
@@ -537,31 +538,52 @@
                 </StackPanel>
                 <Separator Margin="0,2,0,12" Background="{DynamicResource Line}"/>
 
-                <DockPanel Margin="0,0,0,6">
-                  <TextBox x:Name="AccentHexBox" DockPanel.Dock="Right" Width="92" MaxLength="9" Padding="8,4" FontSize="12" LostKeyboardFocus="ColorHex_Committed" KeyDown="ColorHex_KeyDown" AutomationProperties.Name="Accent hex"/>
-                  <TextBlock Text="Accent color" Style="{StaticResource Label}" VerticalAlignment="Center" Margin="0"/>
+                <DockPanel Margin="0,0,0,12">
+                  <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button x:Name="PureLightButton" Content="Pure light" Style="{StaticResource Secondary}" Padding="10,5" FontSize="11.5" Margin="0,0,6,0" Click="PureLight_Click" AutomationProperties.Name="Pure light"/>
+                    <Button x:Name="PureDarkButton" Content="Pure dark" Style="{StaticResource Secondary}" Padding="10,5" FontSize="11.5" Margin="0,0,6,0" Click="PureDark_Click" AutomationProperties.Name="Pure dark"/>
+                    <Button x:Name="ResetColorsButton" Content="Reset colors" Style="{StaticResource Secondary}" Padding="10,5" FontSize="11.5" Click="ResetColors_Click" AutomationProperties.Name="Reset colors"/>
+                  </StackPanel>
+                  <TextBlock Text="Pure setup" Style="{StaticResource Label}" VerticalAlignment="Center" Margin="0"/>
                 </DockPanel>
-                <ListBox x:Name="AccentColorBox" Style="{StaticResource ColorChipGrid}" SelectedValuePath="Value" SelectionChanged="ColorOverride_Changed" Margin="0,0,0,12" AutomationProperties.Name="Accent color"/>
 
                 <DockPanel Margin="0,0,0,6">
-                  <TextBox x:Name="EffectHexBox" DockPanel.Dock="Right" Width="92" MaxLength="9" Padding="8,4" FontSize="12" LostKeyboardFocus="ColorHex_Committed" KeyDown="ColorHex_KeyDown" AutomationProperties.Name="Effect color hex"/>
-                  <TextBlock Text="Effect tint" Style="{StaticResource Label}" VerticalAlignment="Center" Margin="0"/>
+                  <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <local:ColorPickerButton x:Name="TitleColorPicker" FallbackBrush="{DynamicResource Sidebar}" Margin="0,0,6,0" ColorChanged="ColorPicker_Changed" AutomationProperties.Name="Title bar color picker"/>
+                    <TextBox x:Name="TitleHexBox" Width="84" MaxLength="9" Padding="8,4" FontSize="12" LostKeyboardFocus="ColorHex_Committed" KeyDown="ColorHex_KeyDown" AutomationProperties.Name="Title bar hex"/>
+                  </StackPanel>
+                  <TextBlock Text="Title bar" Style="{StaticResource Label}" VerticalAlignment="Center" Margin="0"/>
                 </DockPanel>
-                <ListBox x:Name="EffectColorBox" Style="{StaticResource ColorChipGrid}" SelectedValuePath="Value" SelectionChanged="ColorOverride_Changed" Margin="0,0,0,12" AutomationProperties.Name="Effect tint"/>
+                <ListBox x:Name="TitleColorBox" Style="{StaticResource ColorChipGrid}" SelectedValuePath="Value" SelectionChanged="ColorOverride_Changed" Margin="0,0,0,12" AutomationProperties.Name="Title bar color"/>
 
                 <DockPanel Margin="0,0,0,6">
-                  <TextBox x:Name="OutgoingBubbleHexBox" DockPanel.Dock="Right" Width="92" MaxLength="9" Padding="8,4" FontSize="12" LostKeyboardFocus="ColorHex_Committed" KeyDown="ColorHex_KeyDown" AutomationProperties.Name="Outgoing bubble hex"/>
-                  <TextBlock Text="Outgoing bubble" Style="{StaticResource Label}" VerticalAlignment="Center" Margin="0"/>
+                  <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <local:ColorPickerButton x:Name="HeaderColorPicker" FallbackBrush="{DynamicResource Sidebar}" Margin="0,0,6,0" ColorChanged="ColorPicker_Changed" AutomationProperties.Name="Header color picker"/>
+                    <TextBox x:Name="HeaderHexBox" Width="84" MaxLength="9" Padding="8,4" FontSize="12" LostKeyboardFocus="ColorHex_Committed" KeyDown="ColorHex_KeyDown" AutomationProperties.Name="Header hex"/>
+                  </StackPanel>
+                  <TextBlock Text="Header" Style="{StaticResource Label}" VerticalAlignment="Center" Margin="0"/>
                 </DockPanel>
-                <ListBox x:Name="OutgoingBubbleColorBox" Style="{StaticResource ColorChipGrid}" SelectedValuePath="Value" SelectionChanged="ColorOverride_Changed" Margin="0,0,0,12" AutomationProperties.Name="Outgoing bubble color"/>
+                <ListBox x:Name="HeaderColorBox" Style="{StaticResource ColorChipGrid}" SelectedValuePath="Value" SelectionChanged="ColorOverride_Changed" Margin="0,0,0,12" AutomationProperties.Name="Header color"/>
 
                 <DockPanel Margin="0,0,0,6">
-                  <TextBox x:Name="IncomingBubbleHexBox" DockPanel.Dock="Right" Width="92" MaxLength="9" Padding="8,4" FontSize="12" LostKeyboardFocus="ColorHex_Committed" KeyDown="ColorHex_KeyDown" AutomationProperties.Name="Incoming bubble hex"/>
-                  <TextBlock Text="Incoming bubble" Style="{StaticResource Label}" VerticalAlignment="Center" Margin="0"/>
+                  <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <local:ColorPickerButton x:Name="RailColorPicker" FallbackBrush="{DynamicResource Rail}" Margin="0,0,6,0" ColorChanged="ColorPicker_Changed" AutomationProperties.Name="Side nav color picker"/>
+                    <TextBox x:Name="RailHexBox" Width="84" MaxLength="9" Padding="8,4" FontSize="12" LostKeyboardFocus="ColorHex_Committed" KeyDown="ColorHex_KeyDown" AutomationProperties.Name="Side nav hex"/>
+                  </StackPanel>
+                  <TextBlock Text="Side nav" Style="{StaticResource Label}" VerticalAlignment="Center" Margin="0"/>
                 </DockPanel>
-                <ListBox x:Name="IncomingBubbleColorBox" Style="{StaticResource ColorChipGrid}" SelectedValuePath="Value" SelectionChanged="ColorOverride_Changed" Margin="0,0,0,12" AutomationProperties.Name="Incoming bubble color"/>
+                <ListBox x:Name="RailColorBox" Style="{StaticResource ColorChipGrid}" SelectedValuePath="Value" SelectionChanged="ColorOverride_Changed" Margin="0,0,0,12" AutomationProperties.Name="Side nav color"/>
 
-                <TextBlock Text="Chat background" Style="{StaticResource Label}" Margin="0,0,0,6"/>
+                <DockPanel Margin="0,0,0,6">
+                  <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <local:ColorPickerButton x:Name="SidebarColorPicker" FallbackBrush="{DynamicResource Sidebar}" Margin="0,0,6,0" ColorChanged="ColorPicker_Changed" AutomationProperties.Name="Side content color picker"/>
+                    <TextBox x:Name="SidebarHexBox" Width="84" MaxLength="9" Padding="8,4" FontSize="12" LostKeyboardFocus="ColorHex_Committed" KeyDown="ColorHex_KeyDown" AutomationProperties.Name="Side content hex"/>
+                  </StackPanel>
+                  <TextBlock Text="Side content" Style="{StaticResource Label}" VerticalAlignment="Center" Margin="0"/>
+                </DockPanel>
+                <ListBox x:Name="SidebarColorBox" Style="{StaticResource ColorChipGrid}" SelectedValuePath="Value" SelectionChanged="ColorOverride_Changed" Margin="0,0,0,12" AutomationProperties.Name="Side content color"/>
+
+                <TextBlock Text="Content" Style="{StaticResource Label}" Margin="0,0,0,6"/>
                 <Border Background="{DynamicResource Surface}" CornerRadius="{DynamicResource ControlCorner}" Padding="3" Margin="0,0,0,10">
                   <UniformGrid Columns="2">
                     <RadioButton x:Name="ChatSurfaceSeparate" Content="Separate color" Tag="separate" Style="{StaticResource Segment}" GroupName="ChatSurfaceMode" Checked="ChatSurface_Checked"/>
@@ -570,29 +592,118 @@
                 </Border>
                 <StackPanel Visibility="{Binding IsChecked, ElementName=ChatSurfaceSeparate, Converter={StaticResource Bool}}">
                   <DockPanel Margin="0,0,0,6">
-                    <TextBox x:Name="ChatBackgroundHexBox" DockPanel.Dock="Right" Width="92" MaxLength="9" Padding="8,4" FontSize="12" LostKeyboardFocus="ColorHex_Committed" KeyDown="ColorHex_KeyDown" AutomationProperties.Name="Chat background hex"/>
-                    <TextBlock Text="Chat color" Style="{StaticResource Label}" VerticalAlignment="Center" Margin="0"/>
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                      <local:ColorPickerButton x:Name="ChatBackgroundColorPicker" FallbackBrush="{DynamicResource Canvas}" Margin="0,0,6,0" ColorChanged="ColorPicker_Changed" AutomationProperties.Name="Content color picker"/>
+                      <TextBox x:Name="ChatBackgroundHexBox" Width="84" MaxLength="9" Padding="8,4" FontSize="12" LostKeyboardFocus="ColorHex_Committed" KeyDown="ColorHex_KeyDown" AutomationProperties.Name="Chat background hex"/>
+                    </StackPanel>
+                    <TextBlock Text="Content color" Style="{StaticResource Label}" VerticalAlignment="Center" Margin="0"/>
                   </DockPanel>
                   <ListBox x:Name="ChatBackgroundColorBox" Style="{StaticResource ColorChipGrid}" SelectedValuePath="Value" SelectionChanged="ColorOverride_Changed" Margin="0,0,0,12" AutomationProperties.Name="Chat background color"/>
                 </StackPanel>
 
-                <Border Background="{DynamicResource ChatPreviewBackground}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="{DynamicResource PanelCorner}" ClipToBounds="True">
+                <Separator Margin="0,2,0,12" Background="{DynamicResource Line}"/>
+
+                <DockPanel Margin="0,0,0,6">
+                  <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <local:ColorPickerButton x:Name="AccentColorPicker" FallbackBrush="{DynamicResource Accent}" Margin="0,0,6,0" ColorChanged="ColorPicker_Changed" AutomationProperties.Name="Accent color picker"/>
+                    <TextBox x:Name="AccentHexBox" Width="84" MaxLength="9" Padding="8,4" FontSize="12" LostKeyboardFocus="ColorHex_Committed" KeyDown="ColorHex_KeyDown" AutomationProperties.Name="Accent hex"/>
+                  </StackPanel>
+                  <TextBlock Text="Accent color" Style="{StaticResource Label}" VerticalAlignment="Center" Margin="0"/>
+                </DockPanel>
+                <ListBox x:Name="AccentColorBox" Style="{StaticResource ColorChipGrid}" SelectedValuePath="Value" SelectionChanged="ColorOverride_Changed" Margin="0,0,0,12" AutomationProperties.Name="Accent color"/>
+
+                <DockPanel Margin="0,0,0,6">
+                  <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <local:ColorPickerButton x:Name="EffectColorPicker" FallbackBrush="{DynamicResource Accent}" Margin="0,0,6,0" ColorChanged="ColorPicker_Changed" AutomationProperties.Name="Effect tint picker"/>
+                    <TextBox x:Name="EffectHexBox" Width="84" MaxLength="9" Padding="8,4" FontSize="12" LostKeyboardFocus="ColorHex_Committed" KeyDown="ColorHex_KeyDown" AutomationProperties.Name="Effect color hex"/>
+                  </StackPanel>
+                  <TextBlock Text="Effect tint" Style="{StaticResource Label}" VerticalAlignment="Center" Margin="0"/>
+                </DockPanel>
+                <ListBox x:Name="EffectColorBox" Style="{StaticResource ColorChipGrid}" SelectedValuePath="Value" SelectionChanged="ColorOverride_Changed" Margin="0,0,0,12" AutomationProperties.Name="Effect tint"/>
+
+                <DockPanel Margin="0,0,0,6">
+                  <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <local:ColorPickerButton x:Name="OutgoingBubbleColorPicker" FallbackBrush="{DynamicResource AccentSoft}" Margin="0,0,6,0" ColorChanged="ColorPicker_Changed" AutomationProperties.Name="Outgoing bubble color picker"/>
+                    <TextBox x:Name="OutgoingBubbleHexBox" Width="84" MaxLength="9" Padding="8,4" FontSize="12" LostKeyboardFocus="ColorHex_Committed" KeyDown="ColorHex_KeyDown" AutomationProperties.Name="Outgoing bubble hex"/>
+                  </StackPanel>
+                  <TextBlock Text="Outgoing bubble" Style="{StaticResource Label}" VerticalAlignment="Center" Margin="0"/>
+                </DockPanel>
+                <ListBox x:Name="OutgoingBubbleColorBox" Style="{StaticResource ColorChipGrid}" SelectedValuePath="Value" SelectionChanged="ColorOverride_Changed" Margin="0,0,0,12" AutomationProperties.Name="Outgoing bubble color"/>
+
+                <DockPanel Margin="0,0,0,6">
+                  <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <local:ColorPickerButton x:Name="IncomingBubbleColorPicker" FallbackBrush="{DynamicResource Surface}" Margin="0,0,6,0" ColorChanged="ColorPicker_Changed" AutomationProperties.Name="Incoming bubble color picker"/>
+                    <TextBox x:Name="IncomingBubbleHexBox" Width="84" MaxLength="9" Padding="8,4" FontSize="12" LostKeyboardFocus="ColorHex_Committed" KeyDown="ColorHex_KeyDown" AutomationProperties.Name="Incoming bubble hex"/>
+                  </StackPanel>
+                  <TextBlock Text="Incoming bubble" Style="{StaticResource Label}" VerticalAlignment="Center" Margin="0"/>
+                </DockPanel>
+                <ListBox x:Name="IncomingBubbleColorBox" Style="{StaticResource ColorChipGrid}" SelectedValuePath="Value" SelectionChanged="ColorOverride_Changed" Margin="0,0,0,12" AutomationProperties.Name="Incoming bubble color"/>
+
+                <Border BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="{DynamicResource PanelCorner}" ClipToBounds="True" Height="154">
                   <Grid>
-                    <Border Background="{DynamicResource ChatColorFinishBrush}" IsHitTestVisible="False"/>
-                    <StackPanel Margin="14,12">
-                      <Border HorizontalAlignment="Left" Padding="0" Background="{DynamicResource IncomingBubbleBackground}" BorderBrush="{DynamicResource IncomingBubbleBorder}" BorderThickness="{DynamicResource IncomingBubbleBorderThickness}" CornerRadius="{DynamicResource IncomingBubbleCorner}" Margin="0,0,0,8">
-                        <Grid>
-                          <local:BubbleDecoration IsOutgoing="False"/>
-                          <TextBlock Text="Incoming message" Foreground="{DynamicResource IncomingBubbleForeground}" FontSize="13" Margin="{DynamicResource MessageBubblePadding}"/>
-                        </Grid>
+                    <Grid.RowDefinitions><RowDefinition Height="20"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                    <Border Background="{DynamicResource TitleBarPreviewBackground}" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Padding="8,0">
+                      <DockPanel>
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                          <Ellipse Width="5" Height="5" Fill="{DynamicResource TitleBarMuted}" Margin="0,0,4,0"/>
+                          <Ellipse Width="5" Height="5" Fill="{DynamicResource TitleBarMuted}" Margin="0,0,4,0"/>
+                          <Ellipse Width="5" Height="5" Fill="{DynamicResource TitleBarInk}"/>
+                        </StackPanel>
+                        <TextBlock Text="CydLan" FontSize="9.5" FontWeight="SemiBold" Foreground="{DynamicResource TitleBarMuted}" VerticalAlignment="Center"/>
+                      </DockPanel>
+                    </Border>
+                    <Grid Grid.Row="1">
+                      <Grid.ColumnDefinitions><ColumnDefinition Width="24"/><ColumnDefinition Width="92"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                      <Border Background="{DynamicResource RailPreviewBackground}" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,1,0">
+                        <StackPanel Margin="0,7,0,0" HorizontalAlignment="Center">
+                          <Border Width="14" Height="14" CornerRadius="4" Background="{DynamicResource RailNavSelected}" Margin="0,0,0,5">
+                            <Ellipse Width="6" Height="6" Fill="{DynamicResource Accent}"/>
+                          </Border>
+                          <Ellipse Width="6" Height="6" Fill="{DynamicResource RailMuted}"/>
+                        </StackPanel>
                       </Border>
-                      <Border HorizontalAlignment="Right" Padding="0" Background="{DynamicResource OutgoingBubbleBackground}" BorderBrush="{DynamicResource OutgoingBubbleBorder}" BorderThickness="{DynamicResource OutgoingBubbleBorderThickness}" CornerRadius="{DynamicResource OutgoingBubbleCorner}">
-                        <Grid>
-                          <local:BubbleDecoration IsOutgoing="True"/>
-                          <TextBlock Text="Outgoing message" Foreground="{DynamicResource OutgoingBubbleForeground}" FontSize="13" Margin="{DynamicResource MessageBubblePadding}"/>
-                        </Grid>
+                      <Border Grid.Column="1" Background="{DynamicResource SidebarPreviewBackground}" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,1,0" Padding="7,8">
+                        <StackPanel>
+                          <Border Height="16" CornerRadius="4" Background="{DynamicResource SidebarRowSelected}" Padding="5,0" Margin="0,0,0,5">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                              <Border Width="2" Height="8" Background="{DynamicResource Accent}" CornerRadius="1" Margin="0,0,5,0"/>
+                              <TextBlock Text="Chats" FontSize="9.5" FontWeight="SemiBold" Foreground="{DynamicResource SidebarInk}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                          </Border>
+                          <Border Height="14" CornerRadius="4" Background="{DynamicResource SidebarSurface}" Padding="5,0">
+                            <TextBlock Text="Online" FontSize="9" Foreground="{DynamicResource SidebarMuted}" VerticalAlignment="Center"/>
+                          </Border>
+                        </StackPanel>
                       </Border>
-                    </StackPanel>
+                      <Grid Grid.Column="2">
+                        <Grid.RowDefinitions><RowDefinition Height="26"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                        <Border Background="{DynamicResource HeaderPreviewBackground}" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Padding="10,0">
+                          <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Ellipse Width="10" Height="10" Fill="{DynamicResource Accent}" Margin="0,0,6,0"/>
+                            <TextBlock Text="Contact" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource HeaderInk}" VerticalAlignment="Center"/>
+                          </StackPanel>
+                        </Border>
+                        <Border Grid.Row="1" Background="{DynamicResource ChatPreviewBackground}">
+                          <Grid>
+                            <Border Background="{DynamicResource ChatColorFinishBrush}" IsHitTestVisible="False"/>
+                            <StackPanel Margin="12,10">
+                              <Border HorizontalAlignment="Left" Padding="0" Background="{DynamicResource IncomingBubbleBackground}" BorderBrush="{DynamicResource IncomingBubbleBorder}" BorderThickness="{DynamicResource IncomingBubbleBorderThickness}" CornerRadius="{DynamicResource IncomingBubbleCorner}" Margin="0,0,0,7">
+                                <Grid>
+                                  <local:BubbleDecoration IsOutgoing="False"/>
+                                  <TextBlock Text="Incoming message" Foreground="{DynamicResource IncomingBubbleForeground}" FontSize="12" Margin="10,6"/>
+                                </Grid>
+                              </Border>
+                              <Border HorizontalAlignment="Right" Padding="0" Background="{DynamicResource OutgoingBubbleBackground}" BorderBrush="{DynamicResource OutgoingBubbleBorder}" BorderThickness="{DynamicResource OutgoingBubbleBorderThickness}" CornerRadius="{DynamicResource OutgoingBubbleCorner}">
+                                <Grid>
+                                  <local:BubbleDecoration IsOutgoing="True"/>
+                                  <TextBlock Text="Outgoing message" Foreground="{DynamicResource OutgoingBubbleForeground}" FontSize="12" Margin="10,6"/>
+                                </Grid>
+                              </Border>
+                            </StackPanel>
+                          </Grid>
+                        </Border>
+                      </Grid>
+                    </Grid>
                   </Grid>
                 </Border>
               </StackPanel>
@@ -1910,17 +2021,26 @@
                 </StackPanel>
                 <StackPanel x:Name="PetColorsPanel" Visibility="Collapsed">
                   <DockPanel Margin="0,0,0,6">
-                    <TextBox x:Name="PetBodyHexBox" DockPanel.Dock="Right" Width="92" MaxLength="9" Padding="8,4" FontSize="12" LostKeyboardFocus="PetHex_Committed" KeyDown="PetHex_KeyDown" AutomationProperties.Name="Companion body color hex"/>
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                      <local:ColorPickerButton x:Name="PetBodyColorPicker" FallbackBrush="{DynamicResource Surface}" Margin="0,0,6,0" ColorChanged="PetColorPicker_Changed" AutomationProperties.Name="Companion body color picker"/>
+                      <TextBox x:Name="PetBodyHexBox" Width="84" MaxLength="9" Padding="8,4" FontSize="12" LostKeyboardFocus="PetHex_Committed" KeyDown="PetHex_KeyDown" AutomationProperties.Name="Companion body color hex"/>
+                    </StackPanel>
                     <TextBlock Text="Body color" Style="{StaticResource Label}" VerticalAlignment="Center" Margin="0"/>
                   </DockPanel>
                   <ListBox x:Name="PetBodyColorBox" Style="{StaticResource ColorChipGrid}" SelectedValuePath="Value" SelectionChanged="PetColor_Changed" Margin="0,0,0,12" AutomationProperties.Name="Companion body color"/>
                   <DockPanel Margin="0,0,0,6">
-                    <TextBox x:Name="PetAccentHexBox" DockPanel.Dock="Right" Width="92" MaxLength="9" Padding="8,4" FontSize="12" LostKeyboardFocus="PetHex_Committed" KeyDown="PetHex_KeyDown" AutomationProperties.Name="Companion accent color hex"/>
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                      <local:ColorPickerButton x:Name="PetAccentColorPicker" FallbackBrush="{DynamicResource Accent}" Margin="0,0,6,0" ColorChanged="PetColorPicker_Changed" AutomationProperties.Name="Companion accent color picker"/>
+                      <TextBox x:Name="PetAccentHexBox" Width="84" MaxLength="9" Padding="8,4" FontSize="12" LostKeyboardFocus="PetHex_Committed" KeyDown="PetHex_KeyDown" AutomationProperties.Name="Companion accent color hex"/>
+                    </StackPanel>
                     <TextBlock Text="Accent color" Style="{StaticResource Label}" VerticalAlignment="Center" Margin="0"/>
                   </DockPanel>
                   <ListBox x:Name="PetAccentColorBox" Style="{StaticResource ColorChipGrid}" SelectedValuePath="Value" SelectionChanged="PetColor_Changed" Margin="0,0,0,12" AutomationProperties.Name="Companion accent color"/>
                   <DockPanel Margin="0,0,0,6">
-                    <TextBox x:Name="PetDetailHexBox" DockPanel.Dock="Right" Width="92" MaxLength="9" Padding="8,4" FontSize="12" LostKeyboardFocus="PetHex_Committed" KeyDown="PetHex_KeyDown" AutomationProperties.Name="Companion detail color hex"/>
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                      <local:ColorPickerButton x:Name="PetDetailColorPicker" FallbackBrush="{DynamicResource AccentInk}" Margin="0,0,6,0" ColorChanged="PetColorPicker_Changed" AutomationProperties.Name="Companion detail color picker"/>
+                      <TextBox x:Name="PetDetailHexBox" Width="84" MaxLength="9" Padding="8,4" FontSize="12" LostKeyboardFocus="PetHex_Committed" KeyDown="PetHex_KeyDown" AutomationProperties.Name="Companion detail color hex"/>
+                    </StackPanel>
                     <TextBlock Text="Detail color" Style="{StaticResource Label}" VerticalAlignment="Center" Margin="0"/>
                   </DockPanel>
                   <ListBox x:Name="PetDetailColorBox" Style="{StaticResource ColorChipGrid}" SelectedValuePath="Value" SelectionChanged="PetColor_Changed" Margin="0,0,0,6" AutomationProperties.Name="Companion detail color"/>
@@ -1961,6 +2081,111 @@
                   <Button Grid.Column="1" Content="Copy code" Style="{StaticResource Secondary}" Margin="8,0,0,0" Click="CopyPetCode_Click"/>
                   <Button Grid.Column="2" Content="Import" Style="{StaticResource Secondary}" Margin="6,0,0,0" Click="ImportPetCode_Click"/>
                 </Grid>
+              </StackPanel>
+              <StackPanel x:Name="AppearanceSceneSection" Visibility="Collapsed">
+                <DockPanel Margin="0,0,0,6">
+                  <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock x:Name="SceneCountText" Foreground="{DynamicResource Muted}" FontSize="11.5" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <Button x:Name="ClearSceneButton" Content="Clear all" Style="{StaticResource Secondary}" Padding="9,4" FontSize="11.5" Click="ClearScene_Click" AutomationProperties.Name="Clear all scene effects"/>
+                  </StackPanel>
+                  <TextBlock Text="Effects" Style="{StaticResource Label}" VerticalAlignment="Center" Margin="0"/>
+                </DockPanel>
+                <ItemsControl x:Name="ScenePaletteBox" Margin="0,0,0,8" AutomationProperties.Name="Scene effects palette">
+                  <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="{x:Type local:SceneEffectDescriptor}">
+                      <Border Width="94" Height="50" Margin="0,0,5,5" CornerRadius="{DynamicResource ControlCorner}"
+                              BorderBrush="{DynamicResource Line}" BorderThickness="1.5" Background="{DynamicResource Sidebar}"
+                              Tag="{Binding Kind, Mode=OneTime}" Cursor="Hand"
+                              PreviewMouseLeftButtonDown="SceneCard_MouseDown"
+                              PreviewMouseMove="SceneCard_MouseMove"
+                              PreviewMouseLeftButtonUp="SceneCard_MouseUp"
+                              AutomationProperties.Name="{Binding Name, Mode=OneTime}"
+                              local:Rounded.Radius="8" ClipToBounds="True">
+                        <Grid>
+                          <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="19"/></Grid.RowDefinitions>
+                          <local:SceneEffectPreview Kind="{Binding Kind, Mode=OneTime}"/>
+                          <Border Grid.Row="1" Background="{DynamicResource Sidebar}" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Padding="6,0">
+                            <TextBlock Text="{Binding Name, Mode=OneTime}" Foreground="{DynamicResource Ink}" FontSize="10" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                          </Border>
+                        </Grid>
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <TextBlock Text="Page stage" Style="{StaticResource Label}" Margin="0,0,0,6"/>
+                <Border BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="{DynamicResource PanelCorner}" Height="174" Margin="0,0,0,10" ClipToBounds="True">
+                  <local:SceneStageCanvas x:Name="SceneStage" AutomationProperties.Name="Scene stage"/>
+                </Border>
+
+                <Border x:Name="SceneInspectorPanel" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Line}" BorderThickness="1"
+                        CornerRadius="{DynamicResource PanelCorner}" Padding="12" Visibility="Collapsed">
+                  <StackPanel>
+                    <DockPanel Margin="0,0,0,10">
+                      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                        <CheckBox x:Name="SceneFlipBox" Content="Flip" Margin="0,0,10,0" VerticalAlignment="Center" Checked="SceneFlip_Changed" Unchecked="SceneFlip_Changed" AutomationProperties.Name="Flip scene effect"/>
+                        <Button x:Name="DuplicateSceneButton" Content="Duplicate" Style="{StaticResource Secondary}" Background="{DynamicResource Hover}" Padding="9,4" FontSize="11.5" Margin="0,0,6,0" Click="DuplicateSceneItem_Click" AutomationProperties.Name="Duplicate scene effect"/>
+                        <Button x:Name="DeleteSceneButton" Content="Delete" Style="{StaticResource Secondary}" Background="{DynamicResource Hover}" Padding="9,4" FontSize="11.5" Click="DeleteSceneItem_Click" AutomationProperties.Name="Delete scene effect"/>
+                      </StackPanel>
+                      <TextBlock x:Name="SceneSelectedLabel" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" VerticalAlignment="Center"/>
+                    </DockPanel>
+
+                    <Grid Margin="0,0,0,10">
+                      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="12"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                      <StackPanel>
+                        <TextBlock Text="Zone" Style="{StaticResource Label}" Margin="0,0,0,4"/>
+                        <ComboBox x:Name="SceneZoneBox" DisplayMemberPath="Name" SelectedValuePath="Zone" SelectionChanged="SceneZone_Changed" AutomationProperties.Name="Scene effect zone"/>
+                      </StackPanel>
+                      <StackPanel Grid.Column="2">
+                        <TextBlock Text="Color" Style="{StaticResource Label}" Margin="0,0,0,4"/>
+                        <StackPanel Orientation="Horizontal">
+                          <local:ColorPickerButton x:Name="SceneColorPicker" FallbackBrush="{DynamicResource Accent}" Margin="0,0,6,0" ColorChanged="SceneColorPicker_Changed" AutomationProperties.Name="Scene effect color picker"/>
+                          <TextBox x:Name="SceneColorHexBox" Width="92" MaxLength="9" Padding="8,4" FontSize="12" LostKeyboardFocus="SceneColorHex_Committed" KeyDown="SceneColorHex_KeyDown" AutomationProperties.Name="Scene effect hex"/>
+                        </StackPanel>
+                      </StackPanel>
+                    </Grid>
+
+                    <Grid>
+                      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="14"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                      <StackPanel>
+                        <DockPanel Margin="0,0,0,2">
+                          <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=SceneScaleBox, StringFormat=P0}" Foreground="{DynamicResource Muted}" FontSize="11.5"/>
+                          <TextBlock Text="Scale" Style="{StaticResource Label}" Margin="0"/>
+                        </DockPanel>
+                        <Slider x:Name="SceneScaleBox" Style="{StaticResource BackgroundSlider}" Minimum=".4" Maximum="2.4" TickFrequency=".05"
+                                SmallChange=".05" LargeChange=".20" IsSnapToTickEnabled="True" ValueChanged="SceneProperty_SliderChanged"
+                                AutomationProperties.Name="Scene effect scale" Margin="0,0,0,6"/>
+
+                        <DockPanel Margin="0,0,0,2">
+                          <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=SceneSpeedBox, StringFormat={}{0:0.0}x}" Foreground="{DynamicResource Muted}" FontSize="11.5"/>
+                          <TextBlock Text="Speed" Style="{StaticResource Label}" Margin="0"/>
+                        </DockPanel>
+                        <Slider x:Name="SceneSpeedBox" Style="{StaticResource BackgroundSlider}" Minimum=".2" Maximum="2.5" TickFrequency=".1"
+                                SmallChange=".1" LargeChange=".2" IsSnapToTickEnabled="True" ValueChanged="SceneProperty_SliderChanged"
+                                AutomationProperties.Name="Scene effect speed"/>
+                      </StackPanel>
+
+                      <StackPanel Grid.Column="2">
+                        <DockPanel Margin="0,0,0,2">
+                          <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=SceneOpacityBox, StringFormat=P0}" Foreground="{DynamicResource Muted}" FontSize="11.5"/>
+                          <TextBlock Text="Opacity" Style="{StaticResource Label}" Margin="0"/>
+                        </DockPanel>
+                        <Slider x:Name="SceneOpacityBox" Style="{StaticResource BackgroundSlider}" Minimum=".15" Maximum="1.0" TickFrequency=".05"
+                                SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True" ValueChanged="SceneProperty_SliderChanged"
+                                AutomationProperties.Name="Scene effect opacity" Margin="0,0,0,6"/>
+
+                        <DockPanel Margin="0,0,0,2">
+                          <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=SceneRotationBox, StringFormat={}{0:0}°}" Foreground="{DynamicResource Muted}" FontSize="11.5"/>
+                          <TextBlock Text="Rotation" Style="{StaticResource Label}" Margin="0"/>
+                        </DockPanel>
+                        <Slider x:Name="SceneRotationBox" Style="{StaticResource BackgroundSlider}" Minimum="-180" Maximum="180" TickFrequency="5"
+                                SmallChange="5" LargeChange="15" IsSnapToTickEnabled="True" ValueChanged="SceneProperty_SliderChanged"
+                                AutomationProperties.Name="Scene effect rotation"/>
+                      </StackPanel>
+                    </Grid>
+                  </StackPanel>
+                </Border>
               </StackPanel>
               <StackPanel x:Name="AppearanceCustomizeSection" Visibility="Collapsed">
                 <TextBlock Text="Interface font" Style="{StaticResource Label}"/>
@@ -2276,7 +2501,22 @@
               <TextBlock x:Name="VersionText" Margin="0,6,0,16"/>
               <TextBlock Text="Developer" Style="{StaticResource Label}"/>
               <TextBlock Text="MonsterHammer" Margin="0,0,0,12"/>
-              <TextBlock Text="GPL-3.0-or-later" Foreground="{DynamicResource Muted}"/>
+              <TextBlock Text="GPL-3.0-or-later" Foreground="{DynamicResource Muted}" Margin="0,0,0,18"/>
+              <TextBlock Text="Updates" Style="{StaticResource Label}"/>
+              <StackPanel Orientation="Horizontal">
+                <Button x:Name="GitHubButton" Style="{StaticResource Secondary}" Click="OpenGitHub_Click" AutomationProperties.Name="GitHub repository">
+                  <StackPanel Orientation="Horizontal">
+                    <local:Glyph Data="{DynamicResource IconOpenWindow}" Size="14" Margin="0,0,7,0"/>
+                    <TextBlock Text="GitHub"/>
+                  </StackPanel>
+                </Button>
+                <Button x:Name="ReleasesButton" Style="{StaticResource Secondary}" Margin="8,0,0,0" Click="OpenReleases_Click" AutomationProperties.Name="Check for updates">
+                  <StackPanel Orientation="Horizontal">
+                    <local:Glyph Data="{DynamicResource IconDownload}" Size="14" Margin="0,0,7,0"/>
+                    <TextBlock Text="Check for updates"/>
+                  </StackPanel>
+                </Button>
+              </StackPanel>
             </StackPanel>
           </Grid>
         </ScrollViewer>

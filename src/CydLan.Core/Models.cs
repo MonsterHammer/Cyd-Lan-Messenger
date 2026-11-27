@@ -342,6 +342,10 @@ public sealed class AppSettings
     public string CustomEffectColor { get; set; } = "";
     public string CustomOutgoingBubbleColor { get; set; } = "";
     public string CustomIncomingBubbleColor { get; set; } = "";
+    public string CustomTitleColor { get; set; } = "";
+    public string CustomHeaderColor { get; set; } = "";
+    public string CustomRailColor { get; set; } = "";
+    public string CustomSidebarColor { get; set; } = "";
     public string ChatSurfaceMode { get; set; } = "separate";
     public string CustomChatBackgroundColor { get; set; } = "";
     public string BubbleStyle { get; set; } = "soft";
@@ -387,6 +391,7 @@ public sealed class AppSettings
     public double SidebarHudIntensity { get; set; } = .65;
     public List<AppearancePreset> SavedPresets { get; set; } = [];
     public List<SavedCompanion> SavedCompanions { get; set; } = [];
+    public List<SceneEffectItem> SceneEffects { get; set; } = [];
     public int Port { get; set; } = 50000;
     public string Multicast { get; set; } = "239.255.100.100";
 
@@ -444,6 +449,39 @@ public sealed class SavedCompanion
     public string Name { get; set; } = "";
     public string Code { get; set; } = "";
     public override string ToString() => Name;
+}
+
+/// <summary>A placed, customizable animated effect on a CydLan window zone.</summary>
+public sealed class SceneEffectItem
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N")[..8];
+    public string Kind { get; set; } = "grass";
+    public string Zone { get; set; } = "content";
+    public double X { get; set; } = .5;
+    public double Y { get; set; } = .88;
+    public double Scale { get; set; } = 1.0;
+    public double Opacity { get; set; } = .90;
+    public double Speed { get; set; } = 1.0;
+    public double Rotation { get; set; }
+    public bool FlipX { get; set; }
+    public string ColorHex { get; set; } = "";
+    public double Seed { get; set; }
+
+    public SceneEffectItem Clone(bool newId = false) => new()
+    {
+        Id = newId ? Guid.NewGuid().ToString("N")[..8] : Id,
+        Kind = Kind,
+        Zone = Zone,
+        X = X,
+        Y = Y,
+        Scale = Scale,
+        Opacity = Opacity,
+        Speed = Speed,
+        Rotation = Rotation,
+        FlipX = FlipX,
+        ColorHex = ColorHex,
+        Seed = Seed
+    };
 }
 
 /// <summary>A LAN Messenger group conversation ("chat room"), identified by its thread ID.</summary>

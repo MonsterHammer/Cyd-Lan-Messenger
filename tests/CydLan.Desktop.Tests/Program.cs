@@ -29,6 +29,7 @@ internal static class Program
             try
             {
                 if (args.Contains("--effects-benchmark")) await RunEffectsBenchmarkAsync();
+                else if (args.Contains("--customization-only")) await RunCustomizationVerificationAsync();
                 else await RunAsync(args.Contains("--offline"), args.Contains("--startup-loopback"));
             }
             catch (Exception e) { Console.WriteLine("FAIL  " + e); exitCode = 1; }
@@ -41,6 +42,29 @@ internal static class Program
     }
 
     private static void Check(bool ok, string reason) { if (!ok) throw new Exception(reason); }
+
+    private static async Task RunCustomizationVerificationAsync()
+    {
+        string artifacts = Path.GetFullPath("artifacts");
+        Directory.CreateDirectory(artifacts);
+
+        await using var preview = new MainViewModel(preview: true);
+        await preview.StartAsync();
+        var prefs = new SettingsWindow(preview);
+        prefs.Show();
+        prefs.ShowPage("AboutPage");
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        string version = typeof(MainWindow).Assembly.GetName().Version!.ToString(3);
+        Check(FindText(prefs, $"Version {version}") is { IsVisible: true } &&
+            FindText(prefs, "MonsterHammer") is { IsVisible: true } &&
+            ((FrameworkElement)prefs.FindName("GitHubButton")).IsVisible &&
+            ((FrameworkElement)prefs.FindName("ReleasesButton")).IsVisible,
+            "About page must render version, developer, GitHub, and updates controls.");
+        Capture(prefs, Path.Combine(artifacts, "about-page-tested.png"));
+        prefs.Close();
+
+        await TestCustomizationSuiteAsync(artifacts);
+    }
 
     private static async Task RunEffectsBenchmarkAsync()
     {
@@ -89,7 +113,12 @@ internal static class Program
             string version = typeof(MainWindow).Assembly.GetName().Version!.ToString(3);
             await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
             Check(FindText(prefs, $"Version {version}") is { IsVisible: true } &&
-                FindText(prefs, "MonsterHammer") is { IsVisible: true }, "About should show the installed version and developer.");
+                FindText(prefs, "MonsterHammer") is { IsVisible: true } &&
+                ((FrameworkElement)prefs.FindName("GitHubButton")).IsVisible &&
+                ((FrameworkElement)prefs.FindName("ReleasesButton")).IsVisible &&
+                SettingsWindow.GitHubRepoUrl == "https://github.com/MonsterHammer/Cyd-Lan-Messenger" &&
+                SettingsWindow.GitHubReleasesUrl == "https://github.com/MonsterHammer/Cyd-Lan-Messenger/releases/latest",
+                "About should show the installed version, developer, GitHub, and updates links.");
             prefs.ShowPage("AlertsPage");
             await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
             Check(FindText(prefs, "Show notifications during Do not disturb") is { IsVisible: true } &&
@@ -1846,6 +1875,55 @@ internal static class Program
             chromeFinishLayer.Background == Brushes.Transparent,
             "Restoring Original color finish must clear washes and restore raw colors.");
 
+        var titlePicker = (ColorPickerButton)preferences.FindName("TitleColorPicker");
+        var headerBox = (System.Windows.Controls.ListBox)preferences.FindName("HeaderColorBox");
+        var railPicker = (ColorPickerButton)preferences.FindName("RailColorPicker");
+        var sidebarBox = (System.Windows.Controls.ListBox)preferences.FindName("SidebarColorBox");
+        titlePicker.RaisePickedColor("#111827");
+        headerBox.SelectedValue = "#0F172A";
+        railPicker.RaisePickedColor("#1E1B4B");
+        sidebarBox.SelectedValue = "#1C1917";
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        var titleBarGrid = (System.Windows.Controls.Grid)window.FindName("TitleBarGrid");
+        var headerBorder = (System.Windows.Controls.Border)window.FindName("ConversationHeaderBorder");
+        var railGrid = (System.Windows.Controls.Grid)window.FindName("RailGrid");
+        var sidebarPanel = (System.Windows.Controls.Border)window.FindName("SidebarPanel");
+        Check(titleBarGrid.Background is SolidColorBrush tb && tb.Color == Color.FromRgb(0x11, 0x18, 0x27) &&
+            headerBorder.Background is SolidColorBrush hb && hb.Color == Color.FromRgb(0x0F, 0x17, 0x2A) &&
+            railGrid.Background is SolidColorBrush rb && rb.Color == Color.FromRgb(0x1E, 0x1B, 0x4B) &&
+            sidebarPanel.Background is SolidColorBrush sb && sb.Color == Color.FromRgb(0x1C, 0x19, 0x17) &&
+            AppearanceOptions.RelativeLuminance(((SolidColorBrush)Application.Current.Resources["TitleBarInk"]).Color) > .70 &&
+            AppearanceOptions.RelativeLuminance(((SolidColorBrush)Application.Current.Resources["HeaderInk"]).Color) > .70 &&
+            AppearanceOptions.RelativeLuminance(((SolidColorBrush)Application.Current.Resources["RailInk"]).Color) > .70 &&
+            AppearanceOptions.RelativeLuminance(((SolidColorBrush)Application.Current.Resources["SidebarInk"]).Color) > .70,
+            "Custom title, header, side nav, and side content colors should apply independently with readable contrast ink.");
+        Capture(window, Path.Combine(artifacts, "custom-regions-chat-tested.png"));
+
+        ClickNamed(preferences, "Pure dark");
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(ThemeManager.ActiveOverrides.CustomTitleColor == "#111827" &&
+            ((SolidColorBrush)Application.Current.Resources["Canvas"]).Color == Color.FromRgb(0x1E, 0x1F, 0x20),
+            "Pure dark should switch base theme to Dark while preserving custom region colors.");
+
+        ClickNamed(preferences, "Reset colors");
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(titleBarGrid.Background == Brushes.Transparent &&
+            headerBorder.Background == Brushes.Transparent &&
+            railGrid.Background == Brushes.Transparent &&
+            sidebarPanel.Background == Brushes.Transparent &&
+            ThemeManager.ActiveOverrides.CustomTitleColor == "" &&
+            ThemeManager.ActiveOverrides.CustomHeaderColor == "" &&
+            ThemeManager.ActiveOverrides.CustomRailColor == "" &&
+            ThemeManager.ActiveOverrides.CustomSidebarColor == "",
+            "Reset colors should clear all custom region and accent colors.");
+
+        ClickNamed(preferences, "Pure light");
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        titlePicker.RaisePickedColor("#111827");
+        headerBox.SelectedValue = "#0F172A";
+        railPicker.RaisePickedColor("#1E1B4B");
+        sidebarBox.SelectedValue = "#1C1917";
+
         var accentBox = (System.Windows.Controls.ListBox)preferences.FindName("AccentColorBox");
         var effectHexBox = (System.Windows.Controls.TextBox)preferences.FindName("EffectHexBox");
         var outBubbleBox = (System.Windows.Controls.ListBox)preferences.FindName("OutgoingBubbleColorBox");
@@ -1879,7 +1957,20 @@ internal static class Program
         Check((Color)Application.Current.Resources["EffectColor"] == Color.FromRgb(0x00, 0xFF, 0xAA) &&
             ((SolidColorBrush)Application.Current.Resources["Accent"]).Color == Color.FromRgb(0xEC, 0x48, 0x99),
             "Custom effect hex should override EffectColor independently of Accent.");
+        titlePicker.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(SharedColorPickerPopup.IsOpen && SharedColorPickerPopup.ActiveCard is { ActualWidth: > 180, ActualHeight: > 160 },
+            "Clicking a color picker button must open the interactive HSV color picker popup.");
+        CaptureElement(SharedColorPickerPopup.ActiveCard!, Path.Combine(artifacts, "color-picker-open-tested.png"));
+        titlePicker.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
         Capture(preferences, Path.Combine(artifacts, "appearance-colors-prefs-tested.png"));
+        ((FrameworkElement)preferences.FindName("PureLightButton")).BringIntoView();
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Capture(preferences, Path.Combine(artifacts, "appearance-colors-regions-tested.png"));
+        ((System.Windows.Controls.ScrollViewer)preferences.FindName("PreferencesScroller")).ScrollToBottom();
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Capture(preferences, Path.Combine(artifacts, "appearance-colors-preview-tested.png"));
 
         // 2. Bubbles & geometry tab.
         preferences.ShowAppearanceTab("Bubbles");
@@ -1987,6 +2078,36 @@ internal static class Program
         Check(model.ChatBackgroundBlur == 8 && model.ChatBackgroundBlurEffect is System.Windows.Media.Effects.BlurEffect,
             "Background blur slider should live-preview a BlurEffect.");
 
+        // 4b. Scene tab: place multiple animated grass tufts & props across zones, adjust inspector, and preview live.
+        preferences.ShowAppearanceTab("Scene");
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        var sceneStage = (SceneStageCanvas)preferences.FindName("SceneStage");
+        var contentSceneLayer = (SceneEffectsLayer)window.FindName("ContentSceneEffects");
+        preferences.AddSceneEffect(SceneEffectCatalog.Grass, SceneEffectCatalog.ZoneContent, .18, .99);
+        preferences.AddSceneEffect(SceneEffectCatalog.Grass, SceneEffectCatalog.ZoneContent, .42, .99);
+        preferences.AddSceneEffect(SceneEffectCatalog.Grass, SceneEffectCatalog.ZoneContent, .76, .99);
+        ClickNamed(preferences, "Duplicate scene effect");
+        preferences.AddSceneEffect(SceneEffectCatalog.Vine, SceneEffectCatalog.ZoneHeader, .85, .06);
+        preferences.AddSceneEffect(SceneEffectCatalog.Lantern, SceneEffectCatalog.ZoneSidebar, .18, .22);
+        ((System.Windows.Controls.Slider)preferences.FindName("SceneScaleBox")).Value = 1.45;
+        ((System.Windows.Controls.Slider)preferences.FindName("SceneSpeedBox")).Value = 1.4;
+        ((System.Windows.Controls.CheckBox)preferences.FindName("SceneFlipBox")).IsChecked = true;
+        ((ColorPickerButton)preferences.FindName("SceneColorPicker")).RaisePickedColor("#F59E0B");
+        var stageDrop = sceneStage.HitTestZone(new Point(sceneStage.ActualWidth * .75, sceneStage.ActualHeight * .70));
+        Check(stageDrop.Zone == SceneEffectCatalog.ZoneContent, "Scene stage hit-test should resolve the Content zone.");
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Check(model.SceneEffects.Count == 6 &&
+            model.SceneEffects.Count(i => i.Kind == SceneEffectCatalog.Grass) == 4 &&
+            model.SceneEffects[^1] is { Kind: SceneEffectCatalog.Lantern, Zone: SceneEffectCatalog.ZoneSidebar, FlipX: true, ColorHex: "#F59E0B" } &&
+            ((System.Windows.Controls.TextBlock)preferences.FindName("SceneCountText")).Text == "6 items" &&
+            contentSceneLayer.Items is not null,
+            "Scene tab should allow placing multiple grass and prop instances across zones and live-preview them.");
+        Capture(preferences, Path.Combine(artifacts, "appearance-scene-prefs-tested.png"));
+        ((System.Windows.Controls.ScrollViewer)preferences.FindName("PreferencesScroller")).ScrollToBottom();
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        Capture(preferences, Path.Combine(artifacts, "appearance-scene-inspector-tested.png"));
+        Capture(window, Path.Combine(artifacts, "scene-effects-chat-tested.png"));
+
         // 5. Themes tab: Saved presets, Look code encode/decode (including fonts & background image), Reset, Load, Randomize.
         preferences.ShowAppearanceTab("Colors");
         ((System.Windows.Controls.ListBox)preferences.FindName("ColorFinishBox")).SelectedValue = ColorFinish.Velvet;
@@ -2008,6 +2129,10 @@ internal static class Program
             Math.Abs((decoded.ColorFinishIntensity ?? 0) - .80) < .01 &&
             decoded.Accent == "#EC4899" &&
             decoded.EffectColor == "#00FFAA" &&
+            decoded.TitleColor == "#111827" &&
+            decoded.HeaderColor == "#0F172A" &&
+            decoded.RailColor == "#1E1B4B" &&
+            decoded.SidebarColor == "#1C1917" &&
             decoded.BubbleStyle == AppearanceOptions.BubbleGradient &&
             decoded.BubbleShape == AppearanceOptions.ShapePill &&
             decoded.CanvasGradient == ChatCanvasOverlay.Mesh &&
@@ -2015,8 +2140,11 @@ internal static class Program
             decoded.UiFont == "Consolas" &&
             decoded.MsgFont == "Verdana" &&
             decoded.MsgSizePx == 19 &&
-            decoded.Matrix == true && decoded.Constellation == true && decoded.Bokeh == true,
-            "Look code should round-trip all appearance overrides including fonts cleanly.");
+            decoded.Matrix == true && decoded.Constellation == true && decoded.Bokeh == true &&
+            decoded.SceneEffects is { Count: 6 } &&
+            decoded.SceneEffects.Count(e => e.Kind == SceneEffectCatalog.Grass) == 4 &&
+            decoded.SceneEffects[^1].Color == "#F59E0B",
+            "Look code should round-trip all appearance overrides including fonts and scene effects cleanly.");
         Check(!AppearanceCodec.TryDecode("CYDLAN1:invalid!!!", out _), "Malformed look codes must be rejected safely.");
 
         // Verify encoding + extracting a Look code carrying a 1280x720 background image + opacity + fonts within the chat message limit.
@@ -2084,10 +2212,12 @@ internal static class Program
         var anchorPreviewImage = (System.Windows.Controls.Image)preferences.FindName("BackgroundPreview");
         var anchorPreviewViewport = (BackgroundImageViewport)VisualTreeHelper.GetParent(anchorPreviewImage);
 
+        preferences.ShowAppearanceTab("Customize");
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        ((System.Windows.Controls.Slider)preferences.FindName("BackgroundOpacityBox")).Value = .85;
         model.PreviewChatBackground(true, tallBmp, .85);
         model.PreviewBackgroundOptions(0, 1.0, "fill", false, BackgroundAnchor.TopLeft);
         AnimatedGifBehavior.SetFallbackSource(anchorPreviewImage, tallBmp);
-        ((System.Windows.Controls.Slider)preferences.FindName("BackgroundOpacityBox")).Value = .85;
         ((FrameworkElement)preferences.FindName("BackgroundAdjustments")).Visibility = Visibility.Visible;
         ((System.Windows.Controls.Primitives.ToggleButton)preferences.FindName("BgFitFill")).IsChecked = true;
         ((System.Windows.Controls.Primitives.ToggleButton)preferences.FindName("BgAnchorTopLeft")).IsChecked = true;
@@ -2130,10 +2260,13 @@ internal static class Program
         finally { try { Directory.Delete(anchorTempDir, true); } catch { } }
         model.PreviewChatBackground(false, null, null);
         model.PreviewBackgroundOptions(null, null, null, null, null);
+        preferences.ShowAppearanceTab("Themes");
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
 
         ClickContentButton(preferences, "Reset");
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
         Check(ThemeManager.ActiveOverrides == AppearanceOverrides.Default && !canvasLayer.IsVisible &&
+            model.SceneEffects.Count == 0 &&
             Math.Abs(AmbientEffect.SpeedMultiplier - 1.0) < .01 && MessageMotion.ActiveStyle == MessageMotion.Off,
             "Reset must restore bundled theme defaults without leaving overrides behind.");
 
@@ -2155,6 +2288,7 @@ internal static class Program
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
         Check(ThemeManager.ActiveOverrides == AppearanceOverrides.Default &&
             !canvasLayer.IsVisible && !model.UseCustomAvatarShape && !model.OnlineRingEnabled &&
+            model.SceneEffects.Count == 0 &&
             model.ChatBackgroundBlur == 0 && Math.Abs(AmbientEffect.SpeedMultiplier - 1.0) < .01 &&
             MessageMotion.ActiveStyle == MessageMotion.Off,
             "Canceling Preferences must restore bundled defaults across every new setting.");
@@ -2175,6 +2309,10 @@ internal static class Program
             Math.Abs(model.Settings.ColorFinishIntensity - .80) < .01 &&
             model.Settings.CustomAccentColor == "#EC4899" &&
             model.Settings.CustomEffectColor == "#00FFAA" &&
+            model.Settings.CustomTitleColor == "#111827" &&
+            model.Settings.CustomHeaderColor == "#0F172A" &&
+            model.Settings.CustomRailColor == "#1E1B4B" &&
+            model.Settings.CustomSidebarColor == "#1C1917" &&
             model.Settings.BubbleStyle == AppearanceOptions.BubbleGradient &&
             model.Settings.BubbleShape == AppearanceOptions.ShapePill &&
             model.Settings.ChatDensity == AppearanceOptions.DensitySpacious &&
@@ -2189,8 +2327,25 @@ internal static class Program
             model.Settings.ChatCanvasGradient == ChatCanvasOverlay.Mesh &&
             model.Settings.ChatBackgroundBlur == 8 &&
             model.Settings.MatrixEnabled && model.Settings.ConstellationEnabled && model.Settings.BokehEnabled &&
+            model.Settings.SceneEffects.Count == 6 &&
+            model.Settings.SceneEffects.Count(i => i.Kind == SceneEffectCatalog.Grass) == 4 &&
             model.Settings.SavedPresets.Count == 1 && model.Settings.SavedPresets[0].Name == "Neon Lab",
-            "Importing a look code and saving must persist all customization settings and presets.");
+            "Importing a look code and saving must persist all customization settings, scene effects, and presets.");
+
+        // 7b. Sending the Look code in chat & clicking Apply applies scene effects on a fresh receiver model.
+        string sharedSceneCode = AppearanceCodec.Encode(model.Settings);
+        await using (var receiver = new MainViewModel(preview: true))
+        {
+            Check(receiver.SceneEffects.Count == 0, "Fresh receiver should start with no scene effects.");
+            Check(AppearanceCodec.TryExtractLookCode(sharedSceneCode, out var extractedSceneCode, out _, out _),
+                "Shared Look code containing scene effects should extract cleanly.");
+            Check(await receiver.ApplyLookCodeAsync(extractedSceneCode),
+                "Applying a received Look code in chat must succeed.");
+            Check(receiver.SceneEffects.Count == 6 &&
+                receiver.SceneEffects.Count(i => i.Kind == SceneEffectCatalog.Grass) == 4 &&
+                receiver.SceneEffects[^1].ColorHex == "#F59E0B",
+                "Applying a received Look code in chat must apply all placed scene effects.");
+        }
         Check(canvasLayer.IsVisible && matrixLayer.IsVisible && constellationLayer.IsVisible && bokehLayer.IsVisible,
             "Saved canvas gradient and Matrix/Constellation/Bokeh ambient layers should be active on MainWindow.");
         Capture(window, Path.Combine(artifacts, "custom-remix-chat-tested.png"));
@@ -2963,11 +3118,13 @@ internal static class Program
         return null;
     }
 
-    private static void Capture(Window window, string path)
+    private static void Capture(Window window, string path) => CaptureElement(window, path);
+
+    private static void CaptureElement(FrameworkElement element, string path)
     {
-        window.UpdateLayout();
-        var bitmap = new RenderTargetBitmap((int)Math.Ceiling(window.ActualWidth), (int)Math.Ceiling(window.ActualHeight), 96, 96, PixelFormats.Pbgra32);
-        bitmap.Render(window);
+        element.UpdateLayout();
+        var bitmap = new RenderTargetBitmap((int)Math.Ceiling(element.ActualWidth), (int)Math.Ceiling(element.ActualHeight), 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(element);
         var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap));
         using var file = File.Create(path); encoder.Save(file);
     }

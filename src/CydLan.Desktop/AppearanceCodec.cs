@@ -39,6 +39,10 @@ public static partial class AppearanceCodec
         public string? EffectColor { get; set; }
         public string? OutBubble { get; set; }
         public string? InBubble { get; set; }
+        public string? TitleColor { get; set; }
+        public string? HeaderColor { get; set; }
+        public string? RailColor { get; set; }
+        public string? SidebarColor { get; set; }
         public string? ChatSurface { get; set; }
         public string? ChatBg { get; set; }
         public string? BubbleStyle { get; set; }
@@ -225,6 +229,22 @@ public static partial class AppearanceCodec
         public string? PetAccentColor { get; set; }
         public string? PetDetailColor { get; set; }
         public double? PetSize { get; set; }
+        public List<LookSceneEffect>? SceneEffects { get; set; }
+    }
+
+    public sealed class LookSceneEffect
+    {
+        public string Kind { get; set; } = SceneEffectCatalog.Grass;
+        public string Zone { get; set; } = SceneEffectCatalog.ZoneContent;
+        public double X { get; set; }
+        public double Y { get; set; }
+        public double? Scale { get; set; }
+        public double? Opacity { get; set; }
+        public double? Speed { get; set; }
+        public double? Rot { get; set; }
+        public bool? Flip { get; set; }
+        public string? Color { get; set; }
+        public double? Seed { get; set; }
     }
 
     public static LookData Capture(AppSettings s) => new()
@@ -237,8 +257,28 @@ public static partial class AppearanceCodec
         EffectColor = NormalizeHexOrNull(s.CustomEffectColor),
         OutBubble = NormalizeHexOrNull(s.CustomOutgoingBubbleColor),
         InBubble = NormalizeHexOrNull(s.CustomIncomingBubbleColor),
+        TitleColor = NormalizeHexOrNull(s.CustomTitleColor),
+        HeaderColor = NormalizeHexOrNull(s.CustomHeaderColor),
+        RailColor = NormalizeHexOrNull(s.CustomRailColor),
+        SidebarColor = NormalizeHexOrNull(s.CustomSidebarColor),
         ChatSurface = NonDefault(AppearanceOptions.NormalizeChatSurfaceMode(s.ChatSurfaceMode), AppearanceOptions.ChatSurfaceSeparate),
         ChatBg = NormalizeHexOrNull(s.CustomChatBackgroundColor),
+        SceneEffects = s.SceneEffects is { Count: > 0 }
+            ? SceneEffectCatalog.NormalizeList(s.SceneEffects).Select(e => new LookSceneEffect
+            {
+                Kind = e.Kind,
+                Zone = e.Zone,
+                X = Math.Round(e.X, 4),
+                Y = Math.Round(e.Y, 4),
+                Scale = Math.Abs(e.Scale - 1.0) > .01 ? Math.Round(e.Scale, 2) : null,
+                Opacity = Math.Abs(e.Opacity - .90) > .01 ? Math.Round(e.Opacity, 2) : null,
+                Speed = Math.Abs(e.Speed - 1.0) > .01 ? Math.Round(e.Speed, 2) : null,
+                Rot = Math.Abs(e.Rotation) > .1 ? Math.Round(e.Rotation, 1) : null,
+                Flip = e.FlipX ? true : null,
+                Color = NormalizeHexOrNull(e.ColorHex),
+                Seed = Math.Abs(e.Seed) > .001 ? Math.Round(e.Seed, 3) : null
+            }).ToList()
+            : null,
         BubbleStyle = NonDefault(AppearanceOptions.NormalizeBubbleStyle(s.BubbleStyle), AppearanceOptions.BubbleSoft),
         BubbleShape = NonDefault(AppearanceOptions.NormalizeBubbleShape(s.BubbleShape), AppearanceOptions.Default),
         ChatDensity = NonDefault(AppearanceOptions.NormalizeChatDensity(s.ChatDensity), AppearanceOptions.DensityCozy),
@@ -731,8 +771,28 @@ public static partial class AppearanceCodec
         s.CustomEffectColor = AppearanceOptions.NormalizeHex(d.EffectColor);
         s.CustomOutgoingBubbleColor = AppearanceOptions.NormalizeHex(d.OutBubble);
         s.CustomIncomingBubbleColor = AppearanceOptions.NormalizeHex(d.InBubble);
+        s.CustomTitleColor = AppearanceOptions.NormalizeHex(d.TitleColor);
+        s.CustomHeaderColor = AppearanceOptions.NormalizeHex(d.HeaderColor);
+        s.CustomRailColor = AppearanceOptions.NormalizeHex(d.RailColor);
+        s.CustomSidebarColor = AppearanceOptions.NormalizeHex(d.SidebarColor);
         s.ChatSurfaceMode = AppearanceOptions.NormalizeChatSurfaceMode(d.ChatSurface);
         s.CustomChatBackgroundColor = AppearanceOptions.NormalizeHex(d.ChatBg);
+        s.SceneEffects = d.SceneEffects is { Count: > 0 }
+            ? SceneEffectCatalog.NormalizeList(d.SceneEffects.Select(e => new SceneEffectItem
+            {
+                Kind = e.Kind,
+                Zone = e.Zone,
+                X = e.X,
+                Y = e.Y,
+                Scale = e.Scale ?? 1.0,
+                Opacity = e.Opacity ?? .90,
+                Speed = e.Speed ?? 1.0,
+                Rotation = e.Rot ?? 0,
+                FlipX = e.Flip == true,
+                ColorHex = e.Color ?? "",
+                Seed = e.Seed ?? 0
+            }))
+            : [];
         s.BubbleStyle = AppearanceOptions.NormalizeBubbleStyle(d.BubbleStyle);
         s.BubbleShape = AppearanceOptions.NormalizeBubbleShape(d.BubbleShape);
         s.ChatDensity = AppearanceOptions.NormalizeChatDensity(d.ChatDensity);
@@ -907,8 +967,13 @@ public static partial class AppearanceCodec
         s.CustomEffectColor = "";
         s.CustomOutgoingBubbleColor = "";
         s.CustomIncomingBubbleColor = "";
+        s.CustomTitleColor = "";
+        s.CustomHeaderColor = "";
+        s.CustomRailColor = "";
+        s.CustomSidebarColor = "";
         s.ChatSurfaceMode = AppearanceOptions.ChatSurfaceSeparate;
         s.CustomChatBackgroundColor = "";
+        s.SceneEffects = [];
         s.BubbleStyle = AppearanceOptions.BubbleSoft;
         s.BubbleShape = AppearanceOptions.Default;
         s.ChatDensity = AppearanceOptions.DensityCozy;

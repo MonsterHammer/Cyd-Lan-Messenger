@@ -101,6 +101,7 @@ public abstract class AmbientEffect : FrameworkElement
 
     protected virtual void OnTintChanged() { }
     protected virtual int FrameRate => 24;
+    protected virtual bool HasActiveContent => true;
     protected bool IsLargeSurface
     {
         get
@@ -118,9 +119,10 @@ public abstract class AmbientEffect : FrameworkElement
             Dispatcher.BeginInvoke(UpdateAnimation);
     }
 
-    private void UpdateAnimation()
+    protected void UpdateAnimation()
     {
-        int requestedFrameRate = host is { WindowState: not WindowState.Minimized } &&
+        int requestedFrameRate = HasActiveContent &&
+            host is { WindowState: not WindowState.Minimized } &&
             (host.IsActive || AnimateWhenUnfocused) &&
             IsVisible &&
             SystemParameters.ClientAreaAnimation ? (IsLargeSurface ? Math.Min(18, FrameRate) : FrameRate) : 0;

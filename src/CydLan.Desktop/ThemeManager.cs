@@ -258,6 +258,9 @@ public static class ThemeManager
         string surfaceMode = AppearanceOptions.NormalizeChatSurfaceMode(activeOverrides.ChatSurfaceMode);
         System.Windows.Media.Color chatBaseForWash = canvasColor;
         bool chatIsDark = isDark;
+        var contentInk = inkColor;
+        var contentMuted = graded.Muted;
+        var contentFaint = graded.Faint;
         if (surfaceMode == AppearanceOptions.ChatSurfaceTheme)
         {
             app.Resources["ChatSurfaceBackground"] = System.Windows.Media.Brushes.Transparent;
@@ -274,6 +277,7 @@ public static class ThemeManager
             chatBaseForWash = gradedChatBg;
             chatIsDark = customChatDark;
             app.Resources["ChatColorFinishBrush"] = ColorFinish.BuildWashBrush(chatBaseForWash, accentColor, surfaceColor, finishKind, finishIntensity, isChat: true, chatIsDark);
+            (contentInk, contentMuted, contentFaint) = ContrastTextFor(gradedChatBg, inkColor, graded.Muted, graded.Faint);
         }
         else
         {
@@ -281,6 +285,11 @@ public static class ThemeManager
             app.Resources["ChatPreviewBackground"] = app.Resources["Canvas"];
             app.Resources["ChatColorFinishBrush"] = ColorFinish.BuildWashBrush(chatBaseForWash, accentColor, surfaceColor, finishKind, finishIntensity, isChat: true, chatIsDark);
         }
+        app.Resources["ContentInk"] = FrozenBrush(contentInk);
+        app.Resources["ContentMuted"] = FrozenBrush(contentMuted);
+        app.Resources["ContentFaint"] = FrozenBrush(contentFaint);
+
+        ApplyRegionOverrides(app, activeOverrides, finishKind, finishIntensity, rawPalette, graded);
         DecorationDesign decoration = mode switch
         {
             Sakura => DecorationDesign.Sakura,
@@ -338,6 +347,9 @@ public static class ThemeManager
             app.Resources["DetailedRowSelected"] = glow;
         }
         else app.Resources["DetailedRowSelected"] = selection;
+        app.Resources["SidebarDetailedRowSelected"] = AppearanceOptions.TryParseHex(activeOverrides.CustomSidebarColor, out _)
+            ? app.Resources["SidebarRowSelected"]
+            : app.Resources["DetailedRowSelected"];
         // Set the geometry and corner keys directly so WPF refreshes instantiated templates and glyphs.
         string? controlSkin = mode is Light or Dark or FollowSystem ? null : appearance;
         if (controlSkin != currentControlSkin)
@@ -377,6 +389,140 @@ public static class ThemeManager
         }
         ButtonEffects.RefreshTheme();
         TargetAura.RefreshTheme();
+    }
+
+    private static void ApplyRegionOverrides(
+        Application app,
+        AppearanceOverrides overrides,
+        ColorFinishKind finishKind,
+        double finishIntensity,
+        in ColorPaletteSet rawPalette,
+        in ColorPaletteSet graded)
+    {
+        var ink = graded.Ink;
+        var muted = graded.Muted;
+        var faint = graded.Faint;
+        var accent = graded.Accent;
+        var rawAccent = rawPalette.Accent;
+        var rawCanvas = rawPalette.Canvas;
+
+        System.Windows.Media.Color GradeSurface(System.Windows.Media.Color raw, ColorPaletteRole role)
+        {
+            bool dark = AppearanceOptions.RelativeLuminance(raw) < .50;
+            return ColorFinish.TransformColor(raw, role, finishKind, finishIntensity, rawAccent, rawCanvas, raw, dark);
+        }
+
+        // Title bar
+        if (AppearanceOptions.TryParseHex(overrides.CustomTitleColor, out var customTitle))
+        {
+            var bg = GradeSurface(customTitle, ColorPaletteRole.Sidebar);
+            var (tInk, tMuted, _) = ContrastTextFor(bg, ink, muted, faint);
+            var bgBrush = FrozenBrush(bg);
+            app.Resources["TitleBarBackground"] = bgBrush;
+            app.Resources["TitleBarInk"] = FrozenBrush(tInk);
+            app.Resources["TitleBarMuted"] = FrozenBrush(tMuted);
+            app.Resources["TitleBarPreviewBackground"] = bgBrush;
+        }
+        else
+        {
+            app.Resources["TitleBarBackground"] = System.Windows.Media.Brushes.Transparent;
+            app.Resources["TitleBarInk"] = app.Resources["Ink"];
+            app.Resources["TitleBarMuted"] = app.Resources["Muted"];
+            app.Resources["TitleBarPreviewBackground"] = app.Resources["Sidebar"];
+        }
+
+        // Header
+        if (AppearanceOptions.TryParseHex(overrides.CustomHeaderColor, out var customHeader))
+        {
+            var bg = GradeSurface(customHeader, ColorPaletteRole.Sidebar);
+            var (hInk, hMuted, _) = ContrastTextFor(bg, ink, muted, faint);
+            var bgBrush = FrozenBrush(bg);
+            app.Resources["HeaderBackground"] = bgBrush;
+            app.Resources["HeaderInk"] = FrozenBrush(hInk);
+            app.Resources["HeaderMuted"] = FrozenBrush(hMuted);
+            app.Resources["HeaderPreviewBackground"] = bgBrush;
+        }
+        else
+        {
+            app.Resources["HeaderBackground"] = System.Windows.Media.Brushes.Transparent;
+            app.Resources["HeaderInk"] = app.Resources["Ink"];
+            app.Resources["HeaderMuted"] = app.Resources["Muted"];
+            app.Resources["HeaderPreviewBackground"] = app.Resources["Sidebar"];
+        }
+
+        // Side nav (rail)
+        if (AppearanceOptions.TryParseHex(overrides.CustomRailColor, out var customRail))
+        {
+            var bg = GradeSurface(customRail, ColorPaletteRole.Rail);
+            bool railDark = AppearanceOptions.RelativeLuminance(bg) < .50;
+            var (rInk, rMuted, _) = ContrastTextFor(bg, ink, muted, faint);
+            var navSel = EffectPalette.Blend(bg, accent, railDark ? .28 : .18);
+            var bgBrush = FrozenBrush(bg);
+            app.Resources["RailBackground"] = bgBrush;
+            app.Resources["RailInk"] = FrozenBrush(rInk);
+            app.Resources["RailMuted"] = FrozenBrush(rMuted);
+            app.Resources["RailNavSelected"] = FrozenBrush(navSel);
+            app.Resources["RailPreviewBackground"] = bgBrush;
+        }
+        else
+        {
+            app.Resources["RailBackground"] = System.Windows.Media.Brushes.Transparent;
+            app.Resources["RailInk"] = app.Resources["Ink"];
+            app.Resources["RailMuted"] = app.Resources["Muted"];
+            app.Resources["RailNavSelected"] = app.Resources["NavSelected"];
+            app.Resources["RailPreviewBackground"] = app.Resources["Sidebar"];
+        }
+
+        // Side content (sidebar)
+        if (AppearanceOptions.TryParseHex(overrides.CustomSidebarColor, out var customSidebar))
+        {
+            var bg = GradeSurface(customSidebar, ColorPaletteRole.Sidebar);
+            bool sideDark = AppearanceOptions.RelativeLuminance(bg) < .50;
+            var (sInk, sMuted, sFaint) = ContrastTextFor(bg, ink, muted, faint);
+            var sSurface = EffectPalette.Blend(bg, sInk, sideDark ? .09 : .06);
+            var sHover = EffectPalette.Blend(bg, sInk, .07);
+            var sSelected = EffectPalette.Blend(bg, accent, sideDark ? .24 : .15);
+            var bgBrush = FrozenBrush(bg);
+            app.Resources["SidebarBackground"] = bgBrush;
+            app.Resources["SidebarPanelBackground"] = bgBrush;
+            app.Resources["SidebarInk"] = FrozenBrush(sInk);
+            app.Resources["SidebarMuted"] = FrozenBrush(sMuted);
+            app.Resources["SidebarFaint"] = FrozenBrush(sFaint);
+            app.Resources["SidebarSurface"] = FrozenBrush(sSurface);
+            app.Resources["SidebarRowHover"] = FrozenBrush(sHover);
+            app.Resources["SidebarRowSelected"] = FrozenBrush(sSelected);
+            app.Resources["SidebarPreviewBackground"] = bgBrush;
+        }
+        else
+        {
+            app.Resources["SidebarBackground"] = System.Windows.Media.Brushes.Transparent;
+            app.Resources["SidebarPanelBackground"] = app.Resources["Sidebar"];
+            app.Resources["SidebarInk"] = app.Resources["Ink"];
+            app.Resources["SidebarMuted"] = app.Resources["Muted"];
+            app.Resources["SidebarFaint"] = app.Resources["Faint"];
+            app.Resources["SidebarSurface"] = app.Resources["Surface"];
+            app.Resources["SidebarRowHover"] = app.Resources["RowHover"];
+            app.Resources["SidebarRowSelected"] = app.Resources["RowSelected"];
+            app.Resources["SidebarPreviewBackground"] = app.Resources["Sidebar"];
+        }
+    }
+
+    private static (System.Windows.Media.Color Ink, System.Windows.Media.Color Muted, System.Windows.Media.Color Faint) ContrastTextFor(
+        System.Windows.Media.Color bg,
+        System.Windows.Media.Color themeInk,
+        System.Windows.Media.Color themeMuted,
+        System.Windows.Media.Color themeFaint)
+    {
+        double bgLuma = AppearanceOptions.RelativeLuminance(bg);
+        double inkLuma = AppearanceOptions.RelativeLuminance(themeInk);
+        double ratio = (Math.Max(bgLuma, inkLuma) + .05) / (Math.Min(bgLuma, inkLuma) + .05);
+        if (ratio >= 4.5) return (themeInk, themeMuted, themeFaint);
+
+        bool bgDark = bgLuma < .50;
+        var ink = bgDark ? System.Windows.Media.Color.FromRgb(0xF3, 0xF5, 0xF8) : System.Windows.Media.Color.FromRgb(0x16, 0x1B, 0x20);
+        var muted = EffectPalette.Blend(bg, ink, .72);
+        var faint = EffectPalette.Blend(bg, ink, .52);
+        return (ink, muted, faint);
     }
 
     private static void ApplyCornerOverrides(Application app, string cornerStyle)

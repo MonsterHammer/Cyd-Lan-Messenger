@@ -43,6 +43,64 @@
       <Setter Property="VirtualizingPanel.VirtualizationMode" Value="Recycling"/>
       <Setter Property="VirtualizingPanel.ScrollUnit" Value="Pixel"/>
     </Style>
+    <Style x:Key="SidebarList" TargetType="ListBox" BasedOn="{StaticResource ConversationList}">
+      <Setter Property="ItemContainerStyle">
+        <Setter.Value>
+          <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+            <Setter Property="Foreground" Value="{DynamicResource SidebarInk}"/>
+            <Setter Property="Template">
+              <Setter.Value>
+                <ControlTemplate TargetType="ListBoxItem">
+                  <Grid>
+                    <Border x:Name="Row" Background="Transparent" CornerRadius="{DynamicResource ControlCorner}" ClipToBounds="True">
+                      <Grid>
+                        <local:TargetAura x:Name="RowAura" Visibility="Collapsed"/>
+                        <ContentPresenter/>
+                      </Grid>
+                    </Border>
+                    <Border x:Name="Marker" Width="3" Height="18" CornerRadius="{DynamicResource MarkerCorner}" Background="{DynamicResource Accent}" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="-1,0,0,0" Visibility="Collapsed"/>
+                  </Grid>
+                  <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Row" Property="Background" Value="{DynamicResource SidebarRowHover}"/></Trigger>
+                    <Trigger Property="IsSelected" Value="True"><Setter TargetName="Row" Property="Background" Value="{DynamicResource SidebarRowSelected}"/><Setter TargetName="Marker" Property="Visibility" Value="Visible"/></Trigger>
+                    <MultiDataTrigger>
+                      <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsSelected, RelativeSource={RelativeSource TemplatedParent}}" Value="True"/>
+                        <Condition Binding="{Binding DataContext.ThemeDetailsEnabled, RelativeSource={RelativeSource AncestorType=local:MainWindow}}" Value="True"/>
+                      </MultiDataTrigger.Conditions>
+                      <Setter TargetName="Row" Property="Background" Value="{DynamicResource SidebarDetailedRowSelected}"/>
+                    </MultiDataTrigger>
+                  </ControlTemplate.Triggers>
+                </ControlTemplate>
+              </Setter.Value>
+            </Setter>
+          </Style>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="TitleIcon" TargetType="Button" BasedOn="{StaticResource Icon}">
+      <Setter Property="Foreground" Value="{DynamicResource TitleBarMuted}"/>
+      <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="{DynamicResource TitleBarInk}"/></Trigger></Style.Triggers>
+    </Style>
+    <Style x:Key="HeaderIcon" TargetType="Button" BasedOn="{StaticResource Icon}">
+      <Setter Property="Foreground" Value="{DynamicResource HeaderMuted}"/>
+      <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="{DynamicResource HeaderInk}"/></Trigger></Style.Triggers>
+    </Style>
+    <Style x:Key="SidebarIcon" TargetType="Button" BasedOn="{StaticResource Icon}">
+      <Setter Property="Foreground" Value="{DynamicResource SidebarMuted}"/>
+      <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="{DynamicResource SidebarInk}"/></Trigger></Style.Triggers>
+    </Style>
+    <Style x:Key="RailNavIcon" TargetType="Button" BasedOn="{StaticResource NavIcon}">
+      <Setter Property="Foreground" Value="{DynamicResource RailMuted}"/>
+      <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="{DynamicResource RailInk}"/></Trigger></Style.Triggers>
+    </Style>
+    <Style x:Key="SidebarTab" TargetType="RadioButton" BasedOn="{StaticResource Tab}">
+      <Setter Property="Foreground" Value="{DynamicResource SidebarMuted}"/>
+      <Style.Triggers>
+        <Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="{DynamicResource SidebarInk}"/></Trigger>
+        <Trigger Property="IsChecked" Value="True"><Setter Property="Foreground" Value="{DynamicResource SidebarInk}"/><Setter Property="FontWeight" Value="SemiBold"/></Trigger>
+      </Style.Triggers>
+    </Style>
     <Style x:Key="Caption" TargetType="TextBlock"><Setter Property="Foreground" Value="{DynamicResource Faint}"/><Setter Property="FontSize" Value="11"/><Setter Property="FontWeight" Value="SemiBold"/></Style>
     <Style x:Key="TransferProgress" TargetType="ProgressBar">
       <Setter Property="Height" Value="4"/>
@@ -58,7 +116,7 @@
       <Grid Margin="{DynamicResource MessageRowMargin}" local:MessageMotion.Enable="True">
         <Grid.Style><Style TargetType="Grid"><Setter Property="HorizontalAlignment" Value="Left"/><Style.Triggers><DataTrigger Binding="{Binding Outgoing}" Value="True"><Setter Property="HorizontalAlignment" Value="Right"/></DataTrigger></Style.Triggers></Style></Grid.Style>
         <StackPanel MaxWidth="{DynamicResource MessageMaxWidth}">
-          <TextBlock Text="{Binding SenderName}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource Muted}" Margin="4,0,0,5" Visibility="{Binding ShowSender, Converter={StaticResource Bool}}"/>
+          <TextBlock Text="{Binding SenderName}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource ContentMuted}" Margin="4,0,0,5" Visibility="{Binding ShowSender, Converter={StaticResource Bool}}"/>
           <Image Source="{Binding ImagePath, Converter={StaticResource ImageFile}}" MaxWidth="320" MaxHeight="320" Stretch="Uniform" local:Rounded.Radius="14" Cursor="Hand"
                  Visibility="{Binding HasImage, Converter={StaticResource Bool}}" MouseLeftButtonUp="MessageImage_Click" ToolTip="Open image" HorizontalAlignment="{Binding HorizontalAlignment, RelativeSource={RelativeSource AncestorType=Grid}}">
             <Image.ContextMenu>
@@ -175,10 +233,10 @@
           </Border>
           <StackPanel x:Name="MessageMetadata" Orientation="Horizontal" Margin="4,4,4,0"
                       HorizontalAlignment="{Binding HorizontalAlignment, RelativeSource={RelativeSource AncestorType=Grid}}">
-            <TextBlock Text="{Binding TimeLabel}" FontSize="11" Foreground="{DynamicResource Faint}"/>
-            <TextBlock Text=" · " FontSize="11" Foreground="{DynamicResource Faint}"/>
+            <TextBlock Text="{Binding TimeLabel}" FontSize="11" Foreground="{DynamicResource ContentFaint}"/>
+            <TextBlock Text=" · " FontSize="11" Foreground="{DynamicResource ContentFaint}"/>
             <TextBlock Text="{Binding Delivery}" FontSize="11" MaxWidth="360" TextTrimming="CharacterEllipsis" ToolTip="{Binding Delivery}">
-              <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Foreground" Value="{DynamicResource Faint}"/><Style.Triggers><DataTrigger Binding="{Binding DeliveryProblem}" Value="True"><Setter Property="Foreground" Value="{DynamicResource Danger}"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+              <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Foreground" Value="{DynamicResource ContentFaint}"/><Style.Triggers><DataTrigger Binding="{Binding DeliveryProblem}" Value="True"><Setter Property="Foreground" Value="{DynamicResource Danger}"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
             </TextBlock>
             <Button Content="Retry" Padding="8,0" FontSize="11" Foreground="{DynamicResource Accent}" Click="Retry_Click" Visibility="{Binding CanRetry, Converter={StaticResource Bool}}" ToolTip="Retry"/>
             <Button Content="Cancel" Padding="8,0" FontSize="11" Foreground="{DynamicResource Danger}" Click="MessageCancelFile_Click" Visibility="{Binding CanCancelInline, Converter={StaticResource Bool}}" AutomationProperties.Name="Cancel image transfer"/>
@@ -194,7 +252,7 @@
       <local:ChromeTexture x:Name="ChromeTextureLayer" Grid.RowSpan="2"
                            Texture="{Binding ChromeTexture}" Intensity="{Binding ChromeTextureIntensity}"
                            Visibility="{Binding ChromeTextureEnabled, Converter={StaticResource Bool}}"/>
-      <Grid Background="Transparent" ClipToBounds="True" MouseLeftButtonDown="TitleBar_MouseDown">
+      <Grid x:Name="TitleBarGrid" Background="{DynamicResource TitleBarBackground}" TextElement.Foreground="{DynamicResource TitleBarInk}" ClipToBounds="True" MouseLeftButtonDown="TitleBar_MouseDown">
         <local:HeaderEffect x:Name="TitleBarSparkles" Kind="Sparkles" Intensity="{Binding TitleSparklesIntensity}"
                             Visibility="{Binding TitleSparklesEnabled, Converter={StaticResource Bool}}"/>
         <local:HeaderEffect x:Name="TitleBarShimmer" Kind="Shimmer" Intensity="{Binding TitleShimmerIntensity}"
@@ -215,29 +273,31 @@
                             Visibility="{Binding TitleReactorEnabled, Converter={StaticResource Bool}}"/>
         <local:ThemeDecoration x:Name="TitleDecoration" Zone="Title" Width="116" HorizontalAlignment="Right" Margin="0,0,145,0"
                                Visibility="{Binding ThemeDetailsEnabled, Converter={StaticResource Bool}}"/>
+        <local:SceneEffectsLayer Zone="title" Items="{Binding SceneEffects}"/>
         <StackPanel Orientation="Horizontal" Margin="15,0,0,0" VerticalAlignment="Center">
           <Image Source="{DynamicResource BrandMark}" Width="20" Height="20" Margin="0,0,9,0"/>
-          <TextBlock Text="CydLan" FontSize="13" Foreground="{DynamicResource Muted}" VerticalAlignment="Center"/>
-          <Button Style="{StaticResource Icon}" Width="32" Height="30" Margin="14,0,0,0" Click="ToggleSidebar_Click" ToolTip="Conversations" AutomationProperties.Name="Toggle conversations sidebar"><local:Glyph Data="{DynamicResource IconSidebar}" Size="17"/></Button>
+          <TextBlock Text="CydLan" FontSize="13" Foreground="{DynamicResource TitleBarMuted}" VerticalAlignment="Center"/>
+          <Button Style="{StaticResource TitleIcon}" Width="32" Height="30" Margin="14,0,0,0" Click="ToggleSidebar_Click" ToolTip="Conversations" AutomationProperties.Name="Toggle conversations sidebar"><local:Glyph Data="{DynamicResource IconSidebar}" Size="17"/></Button>
         </StackPanel>
         <local:SteampunkEngine x:Name="TitleEngine" Width="294" Height="36" HorizontalAlignment="Center" VerticalAlignment="Center"
                               IsHitTestVisible="False" Opacity="{Binding EngineIntensity}"
                               Visibility="{Binding SteampunkEngineEnabled, Converter={StaticResource Bool}}"/>
         <!-- Window controls drawn like Windows' own caption buttons: square, full height, red Close. -->
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Stretch">
-          <Button Style="{StaticResource CaptionButton}" Content="&#xE921;" ToolTip="Minimize" Click="Minimize_Click" AutomationProperties.Name="Minimize"/>
-          <Button x:Name="MaximizeButton" Style="{StaticResource CaptionButton}" Content="&#xE922;" ToolTip="Maximize" Click="Maximize_Click" AutomationProperties.Name="Maximize"/>
-          <Button Style="{StaticResource CaptionCloseButton}" Content="&#xE8BB;" ToolTip="Close" Click="Close_Click" AutomationProperties.Name="Close"/>
+          <Button Style="{StaticResource CaptionButton}" Foreground="{DynamicResource TitleBarInk}" Content="&#xE921;" ToolTip="Minimize" Click="Minimize_Click" AutomationProperties.Name="Minimize"/>
+          <Button x:Name="MaximizeButton" Style="{StaticResource CaptionButton}" Foreground="{DynamicResource TitleBarInk}" Content="&#xE922;" ToolTip="Maximize" Click="Maximize_Click" AutomationProperties.Name="Maximize"/>
+          <Button Style="{StaticResource CaptionCloseButton}" Foreground="{DynamicResource TitleBarInk}" Content="&#xE8BB;" ToolTip="Close" Click="Close_Click" AutomationProperties.Name="Close"/>
         </StackPanel>
         <Border Height="1" Background="{DynamicResource Line}" VerticalAlignment="Bottom" IsHitTestVisible="False" SnapsToDevicePixels="True"/>
       </Grid>
       <Grid Grid.Row="1">
         <Grid.ColumnDefinitions><ColumnDefinition Width="52"/><ColumnDefinition x:Name="PeopleColumn" Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-        <Grid>
+        <Grid x:Name="RailGrid" Background="{DynamicResource RailBackground}" TextElement.Foreground="{DynamicResource RailInk}">
           <Grid.RowDefinitions><RowDefinition Height="10"/><RowDefinition Height="*"/><RowDefinition Height="106"/></Grid.RowDefinitions>
           <Border Grid.RowSpan="3" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,1,0" IsHitTestVisible="False" SnapsToDevicePixels="True"/>
           <local:ThemeDecoration x:Name="RailDecoration" Zone="Rail" Grid.RowSpan="3"
                                  Visibility="{Binding ThemeDetailsEnabled, Converter={StaticResource Bool}}"/>
+          <local:SceneEffectsLayer Zone="rail" Grid.RowSpan="3" Items="{Binding SceneEffects}"/>
           <local:RailEffect x:Name="RailBeaconEffect" Kind="Beacon" Grid.RowSpan="3" Intensity="{Binding RailBeaconIntensity}"
                             Visibility="{Binding RailBeaconEnabled, Converter={StaticResource Bool}}"/>
           <local:RailEffect x:Name="RailStreamEffect" Kind="Stream" Grid.RowSpan="3" Intensity="{Binding RailStreamIntensity}"
@@ -262,39 +322,40 @@
             <Button x:Name="ChatNav" ToolTip="Chats" Click="Chat_Click" AutomationProperties.Name="Conversations"
                     local:ButtonEffects.IsHighlight="{Binding IsConversationSection}" local:TargetAura.Role="Module">
               <local:Glyph Data="{DynamicResource IconChat}" Size="19"/>
-              <Button.Style><Style TargetType="Button" BasedOn="{StaticResource NavIcon}"><Style.Triggers><DataTrigger Binding="{Binding IsConversationSection}" Value="True"><Setter Property="Background" Value="{DynamicResource NavSelected}"/><Setter Property="Foreground" Value="{DynamicResource Accent}"/></DataTrigger></Style.Triggers></Style></Button.Style>
+              <Button.Style><Style TargetType="Button" BasedOn="{StaticResource RailNavIcon}"><Style.Triggers><DataTrigger Binding="{Binding IsConversationSection}" Value="True"><Setter Property="Background" Value="{DynamicResource RailNavSelected}"/><Setter Property="Foreground" Value="{DynamicResource Accent}"/></DataTrigger></Style.Triggers></Style></Button.Style>
             </Button>
             <Button ToolTip="Groups" Click="Groups_Click" AutomationProperties.Name="Group chats"
                     local:ButtonEffects.IsHighlight="{Binding IsGroupsSection}" local:TargetAura.Role="Module">
               <local:Glyph Data="{DynamicResource IconUsers}" Size="19"/>
-              <Button.Style><Style TargetType="Button" BasedOn="{StaticResource NavIcon}"><Style.Triggers><DataTrigger Binding="{Binding IsGroupsSection}" Value="True"><Setter Property="Background" Value="{DynamicResource NavSelected}"/><Setter Property="Foreground" Value="{DynamicResource Accent}"/></DataTrigger></Style.Triggers></Style></Button.Style>
+              <Button.Style><Style TargetType="Button" BasedOn="{StaticResource RailNavIcon}"><Style.Triggers><DataTrigger Binding="{Binding IsGroupsSection}" Value="True"><Setter Property="Background" Value="{DynamicResource RailNavSelected}"/><Setter Property="Foreground" Value="{DynamicResource Accent}"/></DataTrigger></Style.Triggers></Style></Button.Style>
             </Button>
             <Button ToolTip="Files" Click="Transfers_Click" AutomationProperties.Name="Files"
                     local:ButtonEffects.IsHighlight="{Binding IsFilesSection}" local:TargetAura.Role="Module">
               <local:Glyph Data="{DynamicResource IconFolder}" Size="19"/>
-              <Button.Style><Style TargetType="Button" BasedOn="{StaticResource NavIcon}"><Style.Triggers><DataTrigger Binding="{Binding IsFilesSection}" Value="True"><Setter Property="Background" Value="{DynamicResource NavSelected}"/><Setter Property="Foreground" Value="{DynamicResource Accent}"/></DataTrigger></Style.Triggers></Style></Button.Style>
+              <Button.Style><Style TargetType="Button" BasedOn="{StaticResource RailNavIcon}"><Style.Triggers><DataTrigger Binding="{Binding IsFilesSection}" Value="True"><Setter Property="Background" Value="{DynamicResource RailNavSelected}"/><Setter Property="Foreground" Value="{DynamicResource Accent}"/></DataTrigger></Style.Triggers></Style></Button.Style>
             </Button>
             <Button ToolTip="Broadcast" Click="Broadcast_Click" AutomationProperties.Name="Broadcast announcement"
                     local:ButtonEffects.IsHighlight="{Binding IsBroadcastSection}" local:TargetAura.Role="Module">
               <local:Glyph Data="{DynamicResource IconMegaphone}" Size="19"/>
-              <Button.Style><Style TargetType="Button" BasedOn="{StaticResource NavIcon}"><Style.Triggers><DataTrigger Binding="{Binding IsBroadcastSection}" Value="True"><Setter Property="Background" Value="{DynamicResource NavSelected}"/><Setter Property="Foreground" Value="{DynamicResource Accent}"/></DataTrigger></Style.Triggers></Style></Button.Style>
+              <Button.Style><Style TargetType="Button" BasedOn="{StaticResource RailNavIcon}"><Style.Triggers><DataTrigger Binding="{Binding IsBroadcastSection}" Value="True"><Setter Property="Background" Value="{DynamicResource RailNavSelected}"/><Setter Property="Foreground" Value="{DynamicResource Accent}"/></DataTrigger></Style.Triggers></Style></Button.Style>
             </Button>
             <Button x:Name="MediaNav" ToolTip="Media" Click="Media_Click" AutomationProperties.Name="Media"
                     local:ButtonEffects.IsHighlight="{Binding IsMediaSection}" local:TargetAura.Role="Module">
               <local:Glyph Data="{DynamicResource IconMedia}" Size="19"/>
-              <Button.Style><Style TargetType="Button" BasedOn="{StaticResource NavIcon}"><Style.Triggers><DataTrigger Binding="{Binding IsMediaSection}" Value="True"><Setter Property="Background" Value="{DynamicResource NavSelected}"/><Setter Property="Foreground" Value="{DynamicResource Accent}"/></DataTrigger></Style.Triggers></Style></Button.Style>
+              <Button.Style><Style TargetType="Button" BasedOn="{StaticResource RailNavIcon}"><Style.Triggers><DataTrigger Binding="{Binding IsMediaSection}" Value="True"><Setter Property="Background" Value="{DynamicResource RailNavSelected}"/><Setter Property="Foreground" Value="{DynamicResource Accent}"/></DataTrigger></Style.Triggers></Style></Button.Style>
             </Button>
           </StackPanel>
           <StackPanel Grid.Row="2" VerticalAlignment="Bottom" Margin="0,0,0,18">
-            <Button Style="{StaticResource NavIcon}" ToolTip="Preferences" Click="Settings_Click" AutomationProperties.Name="Preferences"><local:Glyph Data="{DynamicResource IconSettings}" Size="19"/></Button>
+            <Button Style="{StaticResource RailNavIcon}" ToolTip="Preferences" Click="Settings_Click" AutomationProperties.Name="Preferences"><local:Glyph Data="{DynamicResource IconSettings}" Size="19"/></Button>
             <Button Width="32" Height="32" Padding="0" Background="{DynamicResource Avatar}" Click="Profile_Click" ToolTip="Your profile" AutomationProperties.Name="Your profile"><Grid Width="32" Height="32"><TextBlock Text="{Binding ProfileInitial}" Foreground="{DynamicResource Accent}" FontSize="13" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/><Image Source="{Binding ProfileAvatar, Converter={StaticResource AvatarFile}}" Stretch="UniformToFill" local:Rounded.Radius="8"/></Grid></Button>
           </StackPanel>
         </Grid>
-        <Border x:Name="SidebarPanel" Grid.Column="1" Width="274" ClipToBounds="True" HorizontalAlignment="Left" Background="Transparent">
-          <Grid x:Name="SidebarContent" Width="274" HorizontalAlignment="Left">
+        <Border x:Name="SidebarPanel" Grid.Column="1" Width="274" ClipToBounds="True" HorizontalAlignment="Left" Background="{DynamicResource SidebarBackground}">
+          <Grid x:Name="SidebarContent" Width="274" HorizontalAlignment="Left" TextElement.Foreground="{DynamicResource SidebarInk}">
             <Grid.RowDefinitions><RowDefinition Height="74"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="52"/></Grid.RowDefinitions>
             <local:ThemeDecoration x:Name="SidebarDecoration" Zone="Sidebar" Grid.RowSpan="5"
                                    Visibility="{Binding ThemeDetailsEnabled, Converter={StaticResource Bool}}"/>
+            <local:SceneEffectsLayer Zone="sidebar" Grid.RowSpan="5" Items="{Binding SceneEffects}"/>
             <Grid Grid.RowSpan="5" Opacity="0.6" IsHitTestVisible="False" ClipToBounds="True">
               <local:SakuraPetals x:Name="SidebarPetals" Intensity="{Binding PetalIntensity}"
                                   Visibility="{Binding SidebarPetalsVisible, Converter={StaticResource Bool}}"/>
@@ -344,33 +405,33 @@
             <local:SidebarEffect x:Name="SidebarHudEffect" Kind="HudMatrix" Grid.RowSpan="5" Intensity="{Binding SidebarHudIntensity}"
                                  Visibility="{Binding SidebarHudEnabled, Converter={StaticResource Bool}}"/>
             <Grid Margin="17,0,16,0" VerticalAlignment="Center">
-              <StackPanel Orientation="Horizontal"><TextBlock Text="{Binding SectionTitle}" FontSize="20" FontWeight="SemiBold"/><TextBlock Text="{Binding ModeBadge}" FontSize="11" Foreground="{DynamicResource Faint}" Margin="9,7,0,0"/></StackPanel>
+              <StackPanel Orientation="Horizontal"><TextBlock Text="{Binding SectionTitle}" FontSize="20" FontWeight="SemiBold"/><TextBlock Text="{Binding ModeBadge}" FontSize="11" Foreground="{DynamicResource SidebarFaint}" Margin="9,7,0,0"/></StackPanel>
               <Button HorizontalAlignment="Right" Click="SidebarPlus_Click" AutomationProperties.Name="New">
                 <local:Glyph Data="{DynamicResource IconPlus}" Size="18"/>
-                <Button.Style><Style TargetType="Button" BasedOn="{StaticResource Icon}"><Setter Property="ToolTip" Value="Connect"/><Style.Triggers>
+                <Button.Style><Style TargetType="Button" BasedOn="{StaticResource SidebarIcon}"><Setter Property="ToolTip" Value="Connect"/><Style.Triggers>
                   <DataTrigger Binding="{Binding IsGroupsSection}" Value="True"><Setter Property="ToolTip" Value="New group"/></DataTrigger>
                   <DataTrigger Binding="{Binding IsMediaSection}" Value="True"><Setter Property="ToolTip" Value="Add files"/></DataTrigger>
                   <DataTrigger Binding="{Binding IsFilesSection}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
                 </Style.Triggers></Style></Button.Style>
               </Button>
             </Grid>
-            <Border Grid.Row="1" Height="38" Background="{DynamicResource Surface}" CornerRadius="{DynamicResource ControlCorner}" Margin="13,0,13,12" Visibility="{Binding ChatOpen, Converter={StaticResource Bool}}">
+            <Border Grid.Row="1" Height="38" Background="{DynamicResource SidebarSurface}" CornerRadius="{DynamicResource ControlCorner}" Margin="13,0,13,12" Visibility="{Binding ChatOpen, Converter={StaticResource Bool}}">
               <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="31"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                <local:Glyph Data="{DynamicResource IconSearch}" Size="15" Foreground="{DynamicResource Faint}"/>
-                <TextBox x:Name="PeopleSearch" Grid.Column="1" Text="{Binding Search, UpdateSourceTrigger=PropertyChanged}" Background="Transparent" BorderThickness="0" FontSize="13" Padding="0,9,8,9" ToolTip="Search" AutomationProperties.Name="Search conversations"/>
-                <TextBlock Grid.Column="1" Text="Search conversations" FontSize="13" Foreground="{DynamicResource Faint}" VerticalAlignment="Center" IsHitTestVisible="False"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Search}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+                <local:Glyph Data="{DynamicResource IconSearch}" Size="15" Foreground="{DynamicResource SidebarFaint}"/>
+                <TextBox x:Name="PeopleSearch" Grid.Column="1" Text="{Binding Search, UpdateSourceTrigger=PropertyChanged}" Foreground="{DynamicResource SidebarInk}" Background="Transparent" BorderThickness="0" FontSize="13" Padding="0,9,8,9" ToolTip="Search" AutomationProperties.Name="Search conversations"/>
+                <TextBlock Grid.Column="1" Text="Search conversations" FontSize="13" Foreground="{DynamicResource SidebarFaint}" VerticalAlignment="Center" IsHitTestVisible="False"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Search}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
               </Grid>
             </Border>
             <Grid Grid.Row="2" Height="40" Margin="18,0,13,3" Visibility="{Binding ChatOpen, Converter={StaticResource Bool}}">
               <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Visibility="{Binding ShowPeopleList, Converter={StaticResource Bool}}">
-                <RadioButton x:Name="PeopleTab" Style="{StaticResource Tab}" GroupName="ChatList" IsChecked="{Binding ShowPeopleDirectory, Mode=OneWay}" Click="PeopleTab_Click" AutomationProperties.Name="People">
-                  <TextBlock><Run Text="People"/><Run Text=" "/><Run Text="{Binding OnlineCount, Mode=OneWay}" Foreground="{DynamicResource Faint}"/></TextBlock>
+                <RadioButton x:Name="PeopleTab" Style="{StaticResource SidebarTab}" GroupName="ChatList" IsChecked="{Binding ShowPeopleDirectory, Mode=OneWay}" Click="PeopleTab_Click" AutomationProperties.Name="People">
+                  <TextBlock><Run Text="People"/><Run Text=" "/><Run Text="{Binding OnlineCount, Mode=OneWay}" Foreground="{DynamicResource SidebarFaint}"/></TextBlock>
                 </RadioButton>
-                <RadioButton x:Name="RecentTab" Content="Recent" Style="{StaticResource Tab}" GroupName="ChatList" Margin="16,0,0,0"
+                <RadioButton x:Name="RecentTab" Content="Recent" Style="{StaticResource SidebarTab}" GroupName="ChatList" Margin="16,0,0,0"
                              IsChecked="{Binding ShowRecentChats, Mode=OneWay}" Click="RecentTab_Click" AutomationProperties.Name="Recent chats"/>
               </StackPanel>
-              <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Visibility="{Binding ShowGroupList, Converter={StaticResource Bool}}"><TextBlock Text="Groups" Style="{StaticResource Caption}"/><TextBlock Text="{Binding Groups.Count}" FontSize="12" Foreground="{DynamicResource Faint}" Margin="8,0,0,0"/></StackPanel>
-              <Button Style="{StaticResource Icon}" Width="28" Height="28" HorizontalAlignment="Right" Visibility="{Binding ShowPeopleList, Converter={StaticResource Bool}}" ToolTip="Refresh LAN discovery" Click="Refresh_Click" AutomationProperties.Name="Refresh LAN discovery"><local:Glyph Data="{DynamicResource IconRefresh}" Size="15"/></Button>
+              <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Visibility="{Binding ShowGroupList, Converter={StaticResource Bool}}"><TextBlock Text="Groups" Style="{StaticResource Caption}" Foreground="{DynamicResource SidebarFaint}"/><TextBlock Text="{Binding Groups.Count}" FontSize="12" Foreground="{DynamicResource SidebarFaint}" Margin="8,0,0,0"/></StackPanel>
+              <Button Style="{StaticResource SidebarIcon}" Width="28" Height="28" HorizontalAlignment="Right" Visibility="{Binding ShowPeopleList, Converter={StaticResource Bool}}" ToolTip="Refresh LAN discovery" Click="Refresh_Click" AutomationProperties.Name="Refresh LAN discovery"><local:Glyph Data="{DynamicResource IconRefresh}" Size="15"/></Button>
             </Grid>
             <Grid Grid.Row="3">
               <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
@@ -445,15 +506,15 @@
                   </Grid>
                 </DataTemplate>
               </Grid.Resources>
-              <ListBox x:Name="PeopleList" Style="{StaticResource ConversationList}" ItemsSource="{Binding People}" SelectedItem="{Binding SelectedPeer}" ScrollViewer.VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Conversations" Visibility="{Binding ShowPeopleDirectory, Converter={StaticResource Bool}}"/>
-              <ListBox Style="{StaticResource ConversationList}" ItemsSource="{Binding Groups}" SelectedItem="{Binding SelectedGroup}" ScrollViewer.VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Group chats" Visibility="{Binding ShowGroupList, Converter={StaticResource Bool}}"/>
+              <ListBox x:Name="PeopleList" Style="{StaticResource SidebarList}" ItemsSource="{Binding People}" SelectedItem="{Binding SelectedPeer}" ScrollViewer.VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Conversations" Visibility="{Binding ShowPeopleDirectory, Converter={StaticResource Bool}}"/>
+              <ListBox Style="{StaticResource SidebarList}" ItemsSource="{Binding Groups}" SelectedItem="{Binding SelectedGroup}" ScrollViewer.VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Group chats" Visibility="{Binding ShowGroupList, Converter={StaticResource Bool}}"/>
               <Grid Visibility="{Binding ShowRecentList, Converter={StaticResource Bool}}">
-                <ListBox x:Name="RecentList" Style="{StaticResource ConversationList}" ItemsSource="{Binding RecentChats}" SelectedItem="{Binding SelectedRecentChat}" IsSynchronizedWithCurrentItem="False" ScrollViewer.VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Recent conversations"/>
-                <TextBlock Text="No recent chats" FontSize="13" Foreground="{DynamicResource Faint}" Margin="22,14,22,0" IsHitTestVisible="False">
+                <ListBox x:Name="RecentList" Style="{StaticResource SidebarList}" ItemsSource="{Binding RecentChats}" SelectedItem="{Binding SelectedRecentChat}" IsSynchronizedWithCurrentItem="False" ScrollViewer.VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Recent conversations"/>
+                <TextBlock Text="No recent chats" FontSize="13" Foreground="{DynamicResource SidebarFaint}" Margin="22,14,22,0" IsHitTestVisible="False">
                   <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding RecentChats.Count}" Value="0"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
                 </TextBlock>
               </Grid>
-              <TextBlock Text="No groups yet" FontSize="13" Foreground="{DynamicResource Faint}" Margin="22,14,22,0"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding ShowGroupList}" Value="True"/><Condition Binding="{Binding Groups.Count}" Value="0"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+              <TextBlock Text="No groups yet" FontSize="13" Foreground="{DynamicResource SidebarFaint}" Margin="22,14,22,0"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding ShowGroupList}" Value="True"/><Condition Binding="{Binding Groups.Count}" Value="0"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
               <StackPanel Margin="8,0" Visibility="{Binding IsFilesSection, Converter={StaticResource Bool}}">
                 <RadioButton Style="{StaticResource FilterRow}" Tag="all" Checked="TransferFilter_Checked" IsChecked="True"><Grid><TextBlock Text="All files"/><TextBlock Text="{Binding Transfers.Count}" Foreground="{DynamicResource Faint}" HorizontalAlignment="Right"/></Grid></RadioButton>
                 <RadioButton Style="{StaticResource FilterRow}" Tag="received" Checked="TransferFilter_Checked"><Grid><TextBlock Text="Received"/><TextBlock Text="{Binding ReceivedCount}" Foreground="{DynamicResource Faint}" HorizontalAlignment="Right"/></Grid></RadioButton>
@@ -502,7 +563,7 @@
               </Border>
             </Grid>
             <Border Grid.Row="4" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Margin="16,0" Padding="0,15">
-              <StackPanel><StackPanel Orientation="Horizontal"><Ellipse Width="6" Height="6" Fill="{DynamicResource Accent}" Margin="0,0,8,0"/><TextBlock Text="{Binding ConnectionSummary}" FontSize="12" Foreground="{DynamicResource Muted}"/></StackPanel></StackPanel>
+              <StackPanel><StackPanel Orientation="Horizontal"><Ellipse Width="6" Height="6" Fill="{DynamicResource Accent}" Margin="0,0,8,0"/><TextBlock Text="{Binding ConnectionSummary}" FontSize="12" Foreground="{DynamicResource SidebarMuted}"/></StackPanel></StackPanel>
             </Border>
           </Grid>
         </Border>
@@ -511,10 +572,12 @@
             <Grid.RowDefinitions><RowDefinition Height="74"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
             <Border x:Name="ChatSurfaceLayer" Grid.Row="1" Grid.RowSpan="2" Background="{DynamicResource ChatSurfaceBackground}" IsHitTestVisible="False"/>
             <Border x:Name="ChatColorFinishLayer" Grid.Row="1" Grid.RowSpan="2" Background="{DynamicResource ChatColorFinishBrush}" IsHitTestVisible="False"/>
-            <Border Grid.Row="0" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" ClipToBounds="True">
+            <local:SceneEffectsLayer x:Name="ContentSceneEffects" Zone="content" Grid.Row="1" Grid.RowSpan="2" Items="{Binding SceneEffects}"/>
+            <Border x:Name="ConversationHeaderBorder" Grid.Row="0" Background="{DynamicResource HeaderBackground}" TextElement.Foreground="{DynamicResource HeaderInk}" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" ClipToBounds="True">
               <Grid>
                 <local:ThemeDecoration x:Name="HeaderDecoration" Zone="Header"
                                        Visibility="{Binding ThemeDetailsEnabled, Converter={StaticResource Bool}}"/>
+                <local:SceneEffectsLayer Zone="header" Items="{Binding SceneEffects}"/>
                 <local:HeaderEffect x:Name="ConversationHeaderEffect" Kind="Aurora" Intensity="{Binding HeaderAuroraIntensity}"
                                     Visibility="{Binding HeaderAuroraEnabled, Converter={StaticResource Bool}}"/>
                 <local:HeaderEffect x:Name="ConversationHeaderPulse" Kind="PulseWave" Intensity="{Binding HeaderPulseIntensity}"
@@ -572,8 +635,8 @@
                       </Grid>
                     </Button>
                     <StackPanel VerticalAlignment="Center">
-                      <TextBlock x:Name="ConversationTitle" Text="{Binding ChatTitle}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                      <TextBlock Text="{Binding ChatSubtitle}" FontSize="12" Foreground="{DynamicResource Muted}" Margin="0,4,0,0" TextTrimming="CharacterEllipsis">
+                      <TextBlock x:Name="ConversationTitle" Text="{Binding ChatTitle}" Foreground="{DynamicResource HeaderInk}" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                      <TextBlock Text="{Binding ChatSubtitle}" FontSize="12" Foreground="{DynamicResource HeaderMuted}" Margin="0,4,0,0" TextTrimming="CharacterEllipsis">
                         <TextBlock.Style>
                           <Style TargetType="TextBlock">
                             <Style.Triggers><DataTrigger Binding="{Binding ChatSubtitle}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers>
@@ -584,12 +647,12 @@
                   </DockPanel>
                   <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0" Visibility="{Binding ChatOpen, Converter={StaticResource Bool}}"><Border x:Name="SearchPill" Width="32" Height="32" CornerRadius="{DynamicResource ControlCorner}" Background="Transparent" Margin="0,0,2,0" ClipToBounds="True">
                       <Grid>
-                        <Button Style="{StaticResource Icon}" Focusable="False" HorizontalAlignment="Left" ToolTip="Search messages" Click="SearchMessages_Click" AutomationProperties.Name="Search this conversation"><local:Glyph Data="{DynamicResource IconSearch}" Size="17"/></Button>
+                        <Button Style="{StaticResource HeaderIcon}" Focusable="False" HorizontalAlignment="Left" ToolTip="Search messages" Click="SearchMessages_Click" AutomationProperties.Name="Search this conversation"><local:Glyph Data="{DynamicResource IconSearch}" Size="17"/></Button>
                         <TextBox x:Name="MessageSearchBox" Text="{Binding MessageSearch, UpdateSourceTrigger=PropertyChanged}" Visibility="Collapsed" Opacity="0" Margin="30,0,6,0" Padding="0,7" Background="Transparent" BorderThickness="0" VerticalAlignment="Center" LostKeyboardFocus="MessageSearch_LostFocus" AutomationProperties.Name="Search message text"/>
                         <TextBlock x:Name="SearchHint" Text="Search messages" Margin="32,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Faint}" IsHitTestVisible="False" Opacity="{Binding Opacity, ElementName=MessageSearchBox}"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding MessageSearch}" Value=""/><Condition Binding="{Binding Visibility, ElementName=MessageSearchBox}" Value="Visible"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
                       </Grid>
-                    </Border><Button Style="{StaticResource Icon}" ToolTip="Files" Click="ConversationFiles_Click" IsEnabled="{Binding HasPeer}" AutomationProperties.Name="Files in this conversation"><local:Glyph Data="{DynamicResource IconFile}" Size="17"/></Button><Button Style="{StaticResource Icon}" ToolTip="Contact details" Click="Details_Click" IsEnabled="{Binding HasDetails}" AutomationProperties.Name="Contact details"><local:Glyph Data="{DynamicResource IconInfo}" Size="18"/></Button>
-                    <Button x:Name="MoreButton" Style="{StaticResource Icon}" ToolTip="More" Click="More_Click" AutomationProperties.Name="More options"><local:Glyph Data="{DynamicResource IconMore}" Size="18" StrokeThickness="2.6"/>
+                    </Border><Button Style="{StaticResource HeaderIcon}" ToolTip="Files" Click="ConversationFiles_Click" IsEnabled="{Binding HasPeer}" AutomationProperties.Name="Files in this conversation"><local:Glyph Data="{DynamicResource IconFile}" Size="17"/></Button><Button Style="{StaticResource HeaderIcon}" ToolTip="Contact details" Click="Details_Click" IsEnabled="{Binding HasDetails}" AutomationProperties.Name="Contact details"><local:Glyph Data="{DynamicResource IconInfo}" Size="18"/></Button>
+                    <Button x:Name="MoreButton" Style="{StaticResource HeaderIcon}" ToolTip="More" Click="More_Click" AutomationProperties.Name="More options"><local:Glyph Data="{DynamicResource IconMore}" Size="18" StrokeThickness="2.6"/>
                       <Button.ContextMenu><ContextMenu Placement="Bottom">
                         <MenuItem Header="Delete chat" Click="DeleteChat_Click" IsEnabled="{Binding HasDetails}"/>
                         <MenuItem Header="Delete all chats" Click="DeleteAllChats_Click"/>
@@ -679,7 +742,7 @@
                   <local:Glyph Grid.Row="1" Data="{DynamicResource IconMegaphone}" Size="40" StrokeThickness="2.2" Foreground="{DynamicResource Accent}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding Broadcasting, Converter={StaticResource Bool}}"/>
                 </Grid>
                 <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="32,0,32,6">
-                  <TextBlock Text="{Binding SelectedPeer.Typing}" FontSize="12" Foreground="{DynamicResource Muted}"/>
+                  <TextBlock Text="{Binding SelectedPeer.Typing}" FontSize="12" Foreground="{DynamicResource ContentMuted}"/>
                 </StackPanel>
                 <ScrollViewer Grid.Row="3" MaxHeight="124" VerticalScrollBarVisibility="Auto" Margin="26,0,26,0">
                   <ScrollViewer.Style><Style TargetType="ScrollViewer"><Style.Triggers><DataTrigger Binding="{Binding ActiveConversationTransfers.IsEmpty}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></ScrollViewer.Style>
@@ -775,7 +838,7 @@
                   </Grid>
                 </Border>
               </Grid>
-              <Border x:Name="DetailsPanel" Width="242" Visibility="Collapsed" HorizontalAlignment="Right" Background="{DynamicResource Sidebar}" BorderBrush="{DynamicResource Line}" BorderThickness="1,0,0,0" ClipToBounds="True">
+              <Border x:Name="DetailsPanel" Width="242" Visibility="Collapsed" HorizontalAlignment="Right" Background="{DynamicResource SidebarPanelBackground}" TextElement.Foreground="{DynamicResource SidebarInk}" BorderBrush="{DynamicResource Line}" BorderThickness="1,0,0,0" ClipToBounds="True">
                 <Grid>
                   <Border Background="{DynamicResource ChromeColorFinishBrush}" IsHitTestVisible="False"/>
                   <local:ChromeTexture Texture="{Binding ChromeTexture}" Intensity="{Binding ChromeTextureIntensity}" Visibility="{Binding ChromeTextureEnabled, Converter={StaticResource Bool}}"/>
@@ -798,7 +861,7 @@
                   </StackPanel></ScrollViewer>
                 </Grid>
               </Border>
-              <Border x:Name="FilesPanel" Width="242" Visibility="Collapsed" IsVisibleChanged="FilesPanel_VisibilityChanged" HorizontalAlignment="Right" Background="{DynamicResource Sidebar}" BorderBrush="{DynamicResource Line}" BorderThickness="1,0,0,0" ClipToBounds="True">
+              <Border x:Name="FilesPanel" Width="242" Visibility="Collapsed" IsVisibleChanged="FilesPanel_VisibilityChanged" HorizontalAlignment="Right" Background="{DynamicResource SidebarPanelBackground}" TextElement.Foreground="{DynamicResource SidebarInk}" BorderBrush="{DynamicResource Line}" BorderThickness="1,0,0,0" ClipToBounds="True">
                 <Grid>
                   <Border Background="{DynamicResource ChromeColorFinishBrush}" IsHitTestVisible="False"/>
                   <local:ChromeTexture Texture="{Binding ChromeTexture}" Intensity="{Binding ChromeTextureIntensity}" Visibility="{Binding ChromeTextureEnabled, Converter={StaticResource Bool}}"/>
@@ -845,7 +908,7 @@
                   </Grid>
                 </Grid>
               </Border>
-              <Border x:Name="GroupPanel" Width="242" Visibility="Collapsed" HorizontalAlignment="Right" Background="{DynamicResource Sidebar}" BorderBrush="{DynamicResource Line}" BorderThickness="1,0,0,0" ClipToBounds="True">
+              <Border x:Name="GroupPanel" Width="242" Visibility="Collapsed" HorizontalAlignment="Right" Background="{DynamicResource SidebarPanelBackground}" TextElement.Foreground="{DynamicResource SidebarInk}" BorderBrush="{DynamicResource Line}" BorderThickness="1,0,0,0" ClipToBounds="True">
                 <Grid>
                   <Border Background="{DynamicResource ChromeColorFinishBrush}" IsHitTestVisible="False"/>
                   <local:ChromeTexture Texture="{Binding ChromeTexture}" Intensity="{Binding ChromeTextureIntensity}" Visibility="{Binding ChromeTextureEnabled, Converter={StaticResource Bool}}"/>
@@ -890,7 +953,7 @@
                   </StackPanel>
                 </Grid></Border>
               </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
-              <TextBlock Text="No files" Foreground="{DynamicResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding NoTransfersShown}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+              <TextBlock Text="No files" Foreground="{DynamicResource ContentMuted}" HorizontalAlignment="Center" VerticalAlignment="Center"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding NoTransfersShown}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
             </Grid>
             <Grid x:Name="MediaSectionGrid" Grid.Row="1" Visibility="{Binding MediaOpen, Converter={StaticResource Bool}}" Margin="26,12,26,16">
               <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
@@ -1071,7 +1134,7 @@
                     </DataTemplate>
                   </ListBox.ItemTemplate>
                 </ListBox>
-                <TextBlock Text="No media" Foreground="{DynamicResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
+                <TextBlock Text="No media" Foreground="{DynamicResource ContentMuted}" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
                   <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding NoMediaShown}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
                 </TextBlock>
               </Grid>

@@ -11,6 +11,34 @@
     <sys:Double x:Key="MessageFontSize">15</sys:Double>
     <SolidColorBrush x:Key="ChromeColorFinishBrush" Color="Transparent"/>
     <SolidColorBrush x:Key="ChatColorFinishBrush" Color="Transparent"/>
+    <SolidColorBrush x:Key="TitleBarBackground" Color="Transparent"/>
+    <SolidColorBrush x:Key="TitleBarInk" Color="#1D2326"/>
+    <SolidColorBrush x:Key="TitleBarMuted" Color="#56616A"/>
+    <SolidColorBrush x:Key="TitleBarPreviewBackground" Color="#F7F8F8"/>
+    <SolidColorBrush x:Key="HeaderBackground" Color="Transparent"/>
+    <SolidColorBrush x:Key="HeaderInk" Color="#1D2326"/>
+    <SolidColorBrush x:Key="HeaderMuted" Color="#56616A"/>
+    <SolidColorBrush x:Key="HeaderPreviewBackground" Color="#F7F8F8"/>
+    <SolidColorBrush x:Key="RailBackground" Color="Transparent"/>
+    <SolidColorBrush x:Key="RailInk" Color="#1D2326"/>
+    <SolidColorBrush x:Key="RailMuted" Color="#56616A"/>
+    <SolidColorBrush x:Key="RailNavSelected" Color="#D5E7ED"/>
+    <SolidColorBrush x:Key="RailPreviewBackground" Color="#F7F8F8"/>
+    <SolidColorBrush x:Key="SidebarBackground" Color="Transparent"/>
+    <SolidColorBrush x:Key="SidebarPanelBackground" Color="#F7F8F8"/>
+    <SolidColorBrush x:Key="SidebarInk" Color="#1D2326"/>
+    <SolidColorBrush x:Key="SidebarMuted" Color="#56616A"/>
+    <SolidColorBrush x:Key="SidebarFaint" Color="#7A858C"/>
+    <SolidColorBrush x:Key="SidebarSurface" Color="#F0F2F3"/>
+    <SolidColorBrush x:Key="SidebarRowHover" Color="#EFF1F2"/>
+    <SolidColorBrush x:Key="SidebarRowSelected" Color="#E4EEF1"/>
+    <SolidColorBrush x:Key="SidebarDetailedRowSelected" Color="#E4EEF1"/>
+    <SolidColorBrush x:Key="SidebarPreviewBackground" Color="#F7F8F8"/>
+    <SolidColorBrush x:Key="ChatSurfaceBackground" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="ChatPreviewBackground" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="ContentInk" Color="#1D2326"/>
+    <SolidColorBrush x:Key="ContentMuted" Color="#56616A"/>
+    <SolidColorBrush x:Key="ContentFaint" Color="#7A858C"/>
     <SolidColorBrush x:Key="IncomingBubbleBackground" Color="#F1F3F5"/>
     <SolidColorBrush x:Key="OutgoingBubbleBackground" Color="#E6F1F4"/>
     <SolidColorBrush x:Key="IncomingBubbleBorder" Color="Transparent"/>
@@ -88,10 +116,13 @@
           <Border x:Name="Underline" Height="2" CornerRadius="1" Background="{DynamicResource Accent}" VerticalAlignment="Bottom" Visibility="Hidden"/>
         </Grid>
         <ControlTemplate.Triggers>
-          <Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="{DynamicResource Ink}"/></Trigger>
-          <Trigger Property="IsChecked" Value="True"><Setter Property="Foreground" Value="{DynamicResource Ink}"/><Setter Property="FontWeight" Value="SemiBold"/><Setter TargetName="Underline" Property="Visibility" Value="Visible"/></Trigger>
+          <Trigger Property="IsChecked" Value="True"><Setter Property="FontWeight" Value="SemiBold"/><Setter TargetName="Underline" Property="Visibility" Value="Visible"/></Trigger>
         </ControlTemplate.Triggers>
       </ControlTemplate></Setter.Value></Setter>
+      <Style.Triggers>
+        <Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="{DynamicResource Ink}"/></Trigger>
+        <Trigger Property="IsChecked" Value="True"><Setter Property="Foreground" Value="{DynamicResource Ink}"/></Trigger>
+      </Style.Triggers>
     </Style>
     <!-- A selectable sidebar row (Files › All / Received / Sent). -->
     <Style x:Key="FilterRow" TargetType="RadioButton">
