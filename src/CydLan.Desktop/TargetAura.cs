@@ -11,14 +11,19 @@ using Point = System.Windows.Point;
 
 namespace CydLan.Desktop;
 
-public enum TargetAuraKind { Off, Fire, Smoke, Aura, Embers, Arcane, Frost, Electric, Neon, Sakura, Prism, Pulse, WingFlare, ArcReactor }
+public enum TargetAuraKind
+{
+    Off, Fire, Smoke, Aura, Embers, Arcane, Frost, Electric, Neon, Sakura, Prism, Pulse, WingFlare, ArcReactor,
+    PowerSurge, SpiritFlame, SpeedLines, Shoujo, KiCharge, Halo, Hearts, Stardust, Shadow, Butterflies,
+    Notes, Glitch, Ripple, LeafWhirl, Comet, Rays, Bubbles, Snow, Rainbow, Pixel
+}
 
 public enum TargetAuraRole { None, Preview, Module, Person, Button }
 
 public sealed record TargetAuraSwatch(string Value, string Name, TargetAuraKind Kind);
 
 /// <summary>Renders animated selection and button highlight auras around the selected module, selected conversation row, and highlight buttons.</summary>
-public sealed class TargetAura : AmbientEffect
+public sealed partial class TargetAura : AmbientEffect
 {
     public const string Off = "off";
     public const string Fire = "fire";
@@ -50,7 +55,27 @@ public sealed class TargetAura : AmbientEffect
         new TargetAuraSwatch(Prism, "Prism", TargetAuraKind.Prism),
         new TargetAuraSwatch(Pulse, "Pulse", TargetAuraKind.Pulse),
         new TargetAuraSwatch(WingFlare, "Wing flare", TargetAuraKind.WingFlare),
-        new TargetAuraSwatch(ArcReactor, "Arc reactor", TargetAuraKind.ArcReactor)
+        new TargetAuraSwatch(ArcReactor, "Arc reactor", TargetAuraKind.ArcReactor),
+        new TargetAuraSwatch("powersurge", "Power surge", TargetAuraKind.PowerSurge),
+        new TargetAuraSwatch("spiritflame", "Spirit flame", TargetAuraKind.SpiritFlame),
+        new TargetAuraSwatch("speedlines", "Speed lines", TargetAuraKind.SpeedLines),
+        new TargetAuraSwatch("shoujo", "Shoujo sparkle", TargetAuraKind.Shoujo),
+        new TargetAuraSwatch("kicharge", "Ki charge", TargetAuraKind.KiCharge),
+        new TargetAuraSwatch("halo", "Halo", TargetAuraKind.Halo),
+        new TargetAuraSwatch("hearts", "Hearts", TargetAuraKind.Hearts),
+        new TargetAuraSwatch("stardust", "Stardust", TargetAuraKind.Stardust),
+        new TargetAuraSwatch("shadow", "Shadow", TargetAuraKind.Shadow),
+        new TargetAuraSwatch("butterflies", "Butterflies", TargetAuraKind.Butterflies),
+        new TargetAuraSwatch("notes", "Music notes", TargetAuraKind.Notes),
+        new TargetAuraSwatch("glitch", "Glitch", TargetAuraKind.Glitch),
+        new TargetAuraSwatch("ripple", "Ripple", TargetAuraKind.Ripple),
+        new TargetAuraSwatch("leafwhirl", "Leaf whirl", TargetAuraKind.LeafWhirl),
+        new TargetAuraSwatch("comet", "Comet", TargetAuraKind.Comet),
+        new TargetAuraSwatch("rays", "Light rays", TargetAuraKind.Rays),
+        new TargetAuraSwatch("bubbles", "Bubbles", TargetAuraKind.Bubbles),
+        new TargetAuraSwatch("snow", "Snow", TargetAuraKind.Snow),
+        new TargetAuraSwatch("rainbow", "Rainbow", TargetAuraKind.Rainbow),
+        new TargetAuraSwatch("pixel", "Pixel", TargetAuraKind.Pixel)
     ];
 
     public static readonly DependencyProperty KindProperty = DependencyProperty.Register(
@@ -108,29 +133,15 @@ public sealed class TargetAura : AmbientEffect
     public static bool GetTrackSelection(DependencyObject obj) => (bool)obj.GetValue(TrackSelectionProperty);
     public static void SetTrackSelection(DependencyObject obj, bool value) => obj.SetValue(TrackSelectionProperty, value);
 
-    public static string Normalize(string? value) => value is Fire or Smoke or Aura or Embers or Arcane
-        or Frost or Electric or Neon or Sakura or Prism or Pulse or WingFlare or ArcReactor ? value : Off;
+    public static string Normalize(string? value) =>
+        value is not null && value != Off && Catalog.Any(c => c.Value == value) ? value : Off;
 
-    public static TargetAuraKind KindFor(string? value) => Normalize(value) switch
-    {
-        Fire => TargetAuraKind.Fire,
-        Smoke => TargetAuraKind.Smoke,
-        Aura => TargetAuraKind.Aura,
-        Embers => TargetAuraKind.Embers,
-        Arcane => TargetAuraKind.Arcane,
-        Frost => TargetAuraKind.Frost,
-        Electric => TargetAuraKind.Electric,
-        Neon => TargetAuraKind.Neon,
-        Sakura => TargetAuraKind.Sakura,
-        Prism => TargetAuraKind.Prism,
-        Pulse => TargetAuraKind.Pulse,
-        WingFlare => TargetAuraKind.WingFlare,
-        ArcReactor => TargetAuraKind.ArcReactor,
-        _ => TargetAuraKind.Off
-    };
+    public static TargetAuraKind KindFor(string? value) =>
+        Catalog.FirstOrDefault(c => c.Value == Normalize(value))?.Kind ?? TargetAuraKind.Off;
 
-    public static void Configure(string? style, double intensity, bool onModule, bool onPerson, bool onButtons)
+    public static void Configure(string? style, double intensity, bool onModule, bool onPerson, bool onButtons, bool overflow = false)
     {
+        Overflow = overflow;
         ActiveKind = KindFor(style);
         ActiveIntensity = Math.Clamp(intensity, .1, 1);
         OnModule = onModule;
@@ -147,6 +158,7 @@ public sealed class TargetAura : AmbientEffect
         bool active = ActiveKind != TargetAuraKind.Off && OnPerson && item.IsSelected;
         rowAura.Kind = ActiveKind;
         rowAura.Intensity = ActiveIntensity;
+        ApplyBleed(rowAura, row: true);
         rowAura.Visibility = active ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -185,16 +197,17 @@ public sealed class TargetAura : AmbientEffect
             case TargetAuraKind.Pulse: DrawPulse(dc, width, height, intensity); break;
             case TargetAuraKind.WingFlare: DrawWingFlare(dc, width, height, intensity); break;
             case TargetAuraKind.ArcReactor: DrawArcReactor(dc, width, height, intensity); break;
+            default: DrawMore(dc, kind, width, height, intensity); break;
         }
     }
 
     private Rect TargetBounds(double width, double height)
     {
         var pad = EdgeInset;
-        double x = Math.Clamp(pad.Left, 0, width * .3);
-        double y = Math.Clamp(pad.Top, 0, height * .3);
-        double right = Math.Clamp(pad.Right, 0, width * .3);
-        double bottom = Math.Clamp(pad.Bottom, 0, height * .3);
+        double x = Math.Clamp(pad.Left, 0, width * .45);
+        double y = Math.Clamp(pad.Top, 0, height * .45);
+        double right = Math.Clamp(pad.Right, 0, width * .45);
+        double bottom = Math.Clamp(pad.Bottom, 0, height * .45);
         return new Rect(x, y, Math.Max(10, width - x - right), Math.Max(10, height - y - bottom));
     }
 
@@ -207,7 +220,7 @@ public sealed class TargetAura : AmbientEffect
         coreFills ??= BuildSolidBrushes(fireCore);
 
         var target = TargetBounds(width, height);
-        bool rowMode = EdgeInset.Top < 1 && target.Width > 140;
+        bool rowMode = (IsRow || EdgeInset.Top < 1) && target.Width > 140;
         double time = Time * Math.Tau;
 
         // Warm glowing ember bed along the base and edges
@@ -274,7 +287,7 @@ public sealed class TargetAura : AmbientEffect
         accentPens ??= BuildPens(vaporBase, 1.3);
 
         var target = TargetBounds(width, height);
-        bool rowMode = EdgeInset.Top < 1 && target.Width > 140;
+        bool rowMode = (IsRow || EdgeInset.Top < 1) && target.Width > 140;
         int puffs = rowMode ? 16 : 12;
 
         for (int i = 0; i < puffs; i++)
@@ -401,7 +414,7 @@ public sealed class TargetAura : AmbientEffect
         coreFills ??= BuildSolidBrushes(Colors.White);
 
         var target = TargetBounds(width, height);
-        bool rowMode = EdgeInset.Top < 1 && target.Width > 140;
+        bool rowMode = (IsRow || EdgeInset.Top < 1) && target.Width > 140;
         double corner = Math.Min(target.Height * .32, 10);
         double shimmer = .55 + .45 * Math.Sin(Time * Math.Tau * 5);
 

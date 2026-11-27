@@ -186,6 +186,7 @@ public static class ButtonEffects
             (role == TargetAuraRole.Module ? TargetAura.OnModule : TargetAura.OnButtons);
         aura.Kind = TargetAura.ActiveKind;
         aura.Intensity = TargetAura.ActiveIntensity;
+        TargetAura.ApplyBleed(aura, row: false);
         aura.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
     }
 

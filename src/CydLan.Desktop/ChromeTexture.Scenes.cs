@@ -854,7 +854,7 @@ public sealed partial class ChromeTexture
         return anchors;
     }
 
-    private static void DrawOrganicLeaf(DrawingContext dc, Brush fill, Pen? outlinePen, Pen? veinPen, Point origin, double scale, double angleDeg, LeafSpecies species)
+    private static void DrawOrganicLeafCore(DrawingContext dc, Brush fill, Pen? outlinePen, Pen? veinPen, Point origin, double scale, double angleDeg, LeafSpecies species)
     {
         var m = Matrix.Identity;
         m.Scale(scale, scale);
@@ -941,7 +941,7 @@ public sealed partial class ChromeTexture
         dc.Pop();
     }
 
-    private static void DrawSplitMonstera(DrawingContext dc, Brush fill, Pen? outlinePen, Pen? veinPen, Point center, double scale, double angleDeg)
+    private static void DrawSplitMonsteraCore(DrawingContext dc, Brush fill, Pen? outlinePen, Pen? veinPen, Point center, double scale, double angleDeg)
     {
         var m = Matrix.Identity;
         m.Scale(scale, scale);
@@ -963,7 +963,7 @@ public sealed partial class ChromeTexture
         dc.Pop();
     }
 
-    private static void DrawFernFrond(DrawingContext dc, Pen stemPen, Brush pinnaFill, Pen? pinnaPen, Point origin, double length, double angle, double bend, int pinnaPairs, double baseScale)
+    private static void DrawFernFrondCore(DrawingContext dc, Pen stemPen, Brush pinnaFill, Pen? pinnaPen, Point origin, double length, double angle, double bend, int pinnaPairs, double baseScale)
     {
         var anchors = DrawCurvedStem(dc, stemPen, origin, length, angle, bend, pinnaPairs + 2);
         for (int i = 1; i < anchors.Count; i++)
@@ -977,7 +977,7 @@ public sealed partial class ChromeTexture
         }
     }
 
-    private static void DrawVineTrail(DrawingContext dc, Pen stemPen, Brush fill, Pen? veinPen, Point origin, double length, double angle, double bend, int pairs, double baseScale)
+    private static void DrawVineTrailCore(DrawingContext dc, Pen stemPen, Brush fill, Pen? veinPen, Point origin, double length, double angle, double bend, int pairs, double baseScale)
     {
         var anchors = DrawCurvedStem(dc, stemPen, origin, length, angle, bend, pairs + 1);
         for (int i = 0; i < anchors.Count; i++)
@@ -990,7 +990,7 @@ public sealed partial class ChromeTexture
         }
     }
 
-    private static void DrawFlowerBud(DrawingContext dc, Brush fill, Pen? pen, Point origin, double angleRad, double scale)
+    private static void DrawFlowerBudCore(DrawingContext dc, Brush fill, Pen? pen, Point origin, double angleRad, double scale)
     {
         var m = Matrix.Identity;
         m.Scale(scale, scale);
@@ -1003,7 +1003,7 @@ public sealed partial class ChromeTexture
         dc.Pop();
     }
 
-    private static void DrawTaperedBlade(DrawingContext dc, Brush? fill, Pen? edgePen, Point origin, double length, double angleRad, double curveRad, double baseHalfW)
+    private static void DrawTaperedBladeCore(DrawingContext dc, Brush? fill, Pen? edgePen, Point origin, double length, double angleRad, double curveRad, double baseHalfW)
     {
         double nx = -Math.Sin(angleRad), ny = Math.Cos(angleRad);
         double tipAngle = angleRad + curveRad;

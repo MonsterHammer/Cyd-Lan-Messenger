@@ -15,7 +15,8 @@ public enum ChromeTextureKind
     Brushed, Marble, Carbon, Circuit, Waves, ArtDeco, Terrazzo, Mesh,
     Bubbles, Gothic, Lightning, Web, Starburst, Botanical, Cipher, Watercolor,
     FreedomWings, ArcReactor,
-    Leaves, LonelyGrass, GrassyFields, Galaxy, StarryNight, Sun, Moon
+    Leaves, LonelyGrass, GrassyFields, Galaxy, StarryNight, Sun, Moon,
+    Aurora, Clouds, Mountains, Ocean, Dunes, Sakura, Bamboo, Pines, Skyline, Snowfall, Lanterns, Rain, Plaid, Chevron
 }
 
 public sealed record ChromeTextureSwatch(string Value, string Name, ChromeTextureKind Kind);
@@ -55,6 +56,20 @@ public sealed partial class ChromeTexture : FrameworkElement
     public const string Watercolor = "watercolor";
     public const string FreedomWings = "freedomwings";
     public const string ArcReactor = "arcreactor";
+    public const string Aurora = "aurora";
+    public const string Clouds = "clouds";
+    public const string Mountains = "mountains";
+    public const string Ocean = "ocean";
+    public const string Dunes = "dunes";
+    public const string Sakura = "sakura";
+    public const string Bamboo = "bamboo";
+    public const string Pines = "pines";
+    public const string Skyline = "skyline";
+    public const string Snowfall = "snowfall";
+    public const string Lanterns = "lanterns";
+    public const string Rain = "rain";
+    public const string Plaid = "plaid";
+    public const string Chevron = "chevron";
 
     public static IReadOnlyList<ChromeTextureSwatch> Catalog { get; } =
     [
@@ -80,6 +95,18 @@ public sealed partial class ChromeTexture : FrameworkElement
         new(Leaves, "Leaves", ChromeTextureKind.Leaves),
         new(LonelyGrass, "Lonely grass", ChromeTextureKind.LonelyGrass),
         new(GrassyFields, "Grassy fields", ChromeTextureKind.GrassyFields),
+        new(Sakura, "Sakura branch", ChromeTextureKind.Sakura),
+        new(Bamboo, "Bamboo grove", ChromeTextureKind.Bamboo),
+        new(Pines, "Pine ridge", ChromeTextureKind.Pines),
+        new(Mountains, "Mountains", ChromeTextureKind.Mountains),
+        new(Dunes, "Desert dunes", ChromeTextureKind.Dunes),
+        new(Ocean, "Ocean swell", ChromeTextureKind.Ocean),
+        new(Clouds, "Drifting clouds", ChromeTextureKind.Clouds),
+        new(Aurora, "Aurora curtains", ChromeTextureKind.Aurora),
+        new(Snowfall, "Snowfall", ChromeTextureKind.Snowfall),
+        new(Rain, "Rain streaks", ChromeTextureKind.Rain),
+        new(Lanterns, "Lanterns", ChromeTextureKind.Lanterns),
+        new(Skyline, "City night", ChromeTextureKind.Skyline),
         new(Cipher, "Cipher streams", ChromeTextureKind.Cipher),
         new(FreedomWings, "Freedom wings", ChromeTextureKind.FreedomWings),
         new(ArcReactor, "Arc reactor", ChromeTextureKind.ArcReactor),
@@ -89,8 +116,20 @@ public sealed partial class ChromeTexture : FrameworkElement
         new(Carbon, "Carbon fiber", ChromeTextureKind.Carbon),
         new(Waves, "Seigaiha waves", ChromeTextureKind.Waves),
         new(ArtDeco, "Art Deco", ChromeTextureKind.ArtDeco),
-        new(Mesh, "Starlight mesh", ChromeTextureKind.Mesh)
+        new(Mesh, "Starlight mesh", ChromeTextureKind.Mesh),
+        new(Plaid, "Tartan plaid", ChromeTextureKind.Plaid),
+        new(Chevron, "Chevron", ChromeTextureKind.Chevron)
     ];
+
+    private static readonly Dictionary<string, ChromeTextureKind> ByValue =
+        Catalog.Where(t => t.Kind != ChromeTextureKind.Off).ToDictionary(t => t.Value, t => t.Kind);
+
+    public static readonly DependencyProperty MotionProperty = DependencyProperty.Register(
+        nameof(Motion), typeof(bool), typeof(ChromeTexture),
+        new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender, InvalidateTexture));
+
+    /// <summary>Animates the texture (swaying grass, drifting or scrolling layers, twinkles).</summary>
+    public bool Motion { get => (bool)GetValue(MotionProperty); set => SetValue(MotionProperty, value); }
 
     public static readonly DependencyProperty TextureProperty = DependencyProperty.Register(
         nameof(Texture), typeof(string), typeof(ChromeTexture),
@@ -116,6 +155,8 @@ public sealed partial class ChromeTexture : FrameworkElement
         nameof(LineColor), typeof(Color), typeof(ChromeTexture),
         new FrameworkPropertyMetadata(Color.FromRgb(225, 228, 231), FrameworkPropertyMetadataOptions.AffectsRender, InvalidateTexture));
 
+    private IReadOnlyList<ChromeTextureKind> stack = [];
+    private readonly Dictionary<ChromeTextureKind, TextureLayer> layers = [];
     private DrawingGroup? cachedVector;
     private Brush? cachedTile;
     private Brush? cachedWash;
@@ -142,62 +183,42 @@ public sealed partial class ChromeTexture : FrameworkElement
         SetResourceReference(LineColorProperty, "ChromeLineColor");
     }
 
-    public static string Normalize(string? value) => value?.Trim().ToLowerInvariant() switch
+    /// <summary>Normalizes one texture or a comma-separated stack of textures; returns "off" when none are valid.</summary>
+    public static string Normalize(string? value)
     {
-        "starry night" or "starry-night" or StarryNight => StarryNight,
-        "lonely grass" or "lonely-grass" or LonelyGrass => LonelyGrass,
-        "grassy fields" or "grassy-fields" or GrassyFields => GrassyFields,
-        Grain or Woven or Topo or Grid or Silk or Hex
-            or Brushed or Marble or Carbon or Circuit or Waves or ArtDeco or Terrazzo or Mesh
-            or Bubbles or Gothic or Lightning or Web or Starburst or Botanical or Cipher or Watercolor
-            or FreedomWings or ArcReactor or Galaxy or Sun or Moon or Leaves => value.Trim().ToLowerInvariant(),
-        _ => Off
-    };
+        var list = NormalizeList(value);
+        return list.Count == 0 ? Off : string.Join(",", list);
+    }
 
-    public static ChromeTextureKind KindFor(string? value) => Normalize(value) switch
+    public static List<string> NormalizeList(string? value)
     {
-        Grain => ChromeTextureKind.Grain,
-        Woven => ChromeTextureKind.Woven,
-        Topo => ChromeTextureKind.Topo,
-        Grid => ChromeTextureKind.Grid,
-        Silk => ChromeTextureKind.Silk,
-        Hex => ChromeTextureKind.Hex,
-        Brushed => ChromeTextureKind.Brushed,
-        Marble => ChromeTextureKind.Marble,
-        Carbon => ChromeTextureKind.Carbon,
-        Circuit => ChromeTextureKind.Circuit,
-        Waves => ChromeTextureKind.Waves,
-        ArtDeco => ChromeTextureKind.ArtDeco,
-        Terrazzo => ChromeTextureKind.Terrazzo,
-        Mesh => ChromeTextureKind.Mesh,
-        Bubbles => ChromeTextureKind.Bubbles,
-        Gothic => ChromeTextureKind.Gothic,
-        Lightning => ChromeTextureKind.Lightning,
-        Web => ChromeTextureKind.Web,
-        Starburst => ChromeTextureKind.Starburst,
-        Botanical => ChromeTextureKind.Botanical,
-        Leaves => ChromeTextureKind.Leaves,
-        LonelyGrass => ChromeTextureKind.LonelyGrass,
-        GrassyFields => ChromeTextureKind.GrassyFields,
-        Galaxy => ChromeTextureKind.Galaxy,
-        StarryNight => ChromeTextureKind.StarryNight,
-        Sun => ChromeTextureKind.Sun,
-        Moon => ChromeTextureKind.Moon,
-        Cipher => ChromeTextureKind.Cipher,
-        Watercolor => ChromeTextureKind.Watercolor,
-        FreedomWings => ChromeTextureKind.FreedomWings,
-        ArcReactor => ChromeTextureKind.ArcReactor,
-        _ => ChromeTextureKind.Off
-    };
+        var result = new List<string>();
+        foreach (var raw in (value ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            string key = raw.ToLowerInvariant().Replace(" ", "").Replace("-", "");
+            if (ByValue.ContainsKey(key) && !result.Contains(key)) result.Add(key);
+        }
+        return result;
+    }
+
+    public static ChromeTextureKind KindFor(string? value) =>
+        NormalizeList(value) is { Count: > 0 } list ? ByValue[list[0]] : ChromeTextureKind.Off;
+
+    public static IReadOnlyList<ChromeTextureKind> KindsFor(string? value) =>
+        NormalizeList(value).Select(v => ByValue[v]).ToList();
 
     /// <summary>Only intentionally geometric weaves/grids repeat as tiles; organic and thematic textures render as full-canvas non-repeating compositions.</summary>
     private static bool IsRepeatingPattern(ChromeTextureKind kind) => kind is
         ChromeTextureKind.Woven or ChromeTextureKind.Grid or ChromeTextureKind.Hex or
-        ChromeTextureKind.Carbon or ChromeTextureKind.Waves or ChromeTextureKind.ArtDeco or ChromeTextureKind.Mesh;
+        ChromeTextureKind.Carbon or ChromeTextureKind.Waves or ChromeTextureKind.ArtDeco or ChromeTextureKind.Mesh or
+        ChromeTextureKind.Plaid or ChromeTextureKind.Chevron;
 
     private static void OnTextureStringChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
-        ((ChromeTexture)d).Kind = KindFor(e.NewValue as string);
+        var texture = (ChromeTexture)d;
+        texture.stack = KindsFor(e.NewValue as string);
+        texture.Kind = texture.stack.Count > 0 ? texture.stack[0] : ChromeTextureKind.Off;
+        texture.InvalidateCache();
     }
 
     private static void InvalidateTexture(DependencyObject d, DependencyPropertyChangedEventArgs e)
@@ -206,6 +227,12 @@ public sealed partial class ChromeTexture : FrameworkElement
     }
 
     private void InvalidateCache()
+    {
+        layers.Clear();
+        ResetScratch();
+    }
+
+    private void ResetScratch()
     {
         cachedVector = null;
         cachedTile = null;
@@ -217,16 +244,24 @@ public sealed partial class ChromeTexture : FrameworkElement
     {
         base.OnRender(dc);
         double width = ActualWidth, height = ActualHeight;
-        var kind = Kind;
-        if (kind == ChromeTextureKind.Off || width < 8 || height < 8) return;
+        if (width < 8 || height < 8) return;
+        IReadOnlyList<ChromeTextureKind> kinds = stack.Count > 0 ? stack : Kind != ChromeTextureKind.Off ? [Kind] : [];
+        if (kinds.Count == 0) return;
 
         double intensity = Math.Clamp(Intensity, .1, 1);
-        EnsureCache(kind, width, height, intensity);
+        // Stacked layers share the surface, so each one is drawn a little quieter.
+        if (kinds.Count > 1) intensity = Math.Max(.1, intensity * (kinds.Count == 2 ? .85 : .72));
+        bool motion = Motion && SystemParameters.ClientAreaAnimation;
 
         var rect = new Rect(0, 0, width, height);
-        if (cachedTile is not null) dc.DrawRectangle(cachedTile, null, rect);
-        if (cachedVector is not null) dc.DrawDrawing(cachedVector);
-        if (cachedWash is not null) dc.DrawRectangle(cachedWash, null, rect);
+        Brush? wash = null;
+        foreach (var kind in kinds)
+        {
+            var layer = GetLayer(kind, width, height, intensity, motion);
+            wash ??= layer.Wash;
+            DrawLayer(dc, layer, rect);
+        }
+        if (wash is not null) dc.DrawRectangle(wash, null, rect);
     }
 
     private void EnsureCache(ChromeTextureKind kind, double width, double height, double intensity)
@@ -237,7 +272,7 @@ public sealed partial class ChromeTexture : FrameworkElement
             cachedTint == Tint && cachedSurface == SurfaceColor && (cachedTile is not null || cachedVector is not null);
         if (sameKey) return;
 
-        InvalidateCache();
+        ResetScratch();
         cachedKind = kind;
         cachedWidth = width;
         cachedHeight = height;
@@ -330,6 +365,42 @@ public sealed partial class ChromeTexture : FrameworkElement
             case ChromeTextureKind.ArcReactor:
                 cachedVector = BuildArcReactorDrawing(width, height, hi, lo, accent, isLight, intensity, compact);
                 break;
+            case ChromeTextureKind.Aurora:
+                cachedVector = BuildAuroraDrawing(width, height, hi, lo, accent, isLight, intensity, compact);
+                break;
+            case ChromeTextureKind.Clouds:
+                cachedVector = BuildCloudsDrawing(width, height, hi, lo, accent, isLight, intensity, compact);
+                break;
+            case ChromeTextureKind.Mountains:
+                cachedVector = BuildMountainsDrawing(width, height, hi, lo, accent, isLight, intensity, compact);
+                break;
+            case ChromeTextureKind.Ocean:
+                cachedVector = BuildOceanDrawing(width, height, hi, lo, accent, isLight, intensity, compact);
+                break;
+            case ChromeTextureKind.Dunes:
+                cachedVector = BuildDunesDrawing(width, height, hi, lo, accent, isLight, intensity, compact);
+                break;
+            case ChromeTextureKind.Sakura:
+                cachedVector = BuildSakuraDrawing(width, height, hi, lo, accent, isLight, intensity, compact);
+                break;
+            case ChromeTextureKind.Bamboo:
+                cachedVector = BuildBambooDrawing(width, height, hi, lo, accent, isLight, intensity, compact);
+                break;
+            case ChromeTextureKind.Pines:
+                cachedVector = BuildPinesDrawing(width, height, hi, lo, accent, isLight, intensity, compact);
+                break;
+            case ChromeTextureKind.Skyline:
+                cachedVector = BuildSkylineDrawing(width, height, hi, lo, accent, isLight, intensity, compact);
+                break;
+            case ChromeTextureKind.Snowfall:
+                cachedVector = BuildSnowfallDrawing(width, height, hi, lo, accent, isLight, intensity, compact);
+                break;
+            case ChromeTextureKind.Lanterns:
+                cachedVector = BuildLanternsDrawing(width, height, hi, lo, accent, isLight, intensity, compact);
+                break;
+            case ChromeTextureKind.Rain:
+                cachedVector = BuildRainDrawing(width, height, hi, lo, accent, isLight, intensity, compact);
+                break;
 
             // Intentionally geometric repeating textures
             case ChromeTextureKind.Woven:
@@ -353,8 +424,14 @@ public sealed partial class ChromeTexture : FrameworkElement
             case ChromeTextureKind.Mesh:
                 cachedTile = BuildMeshBrush(hi, lo, accent, isLight, intensity, compact);
                 break;
+            case ChromeTextureKind.Plaid:
+                cachedTile = BuildPlaidBrush(hi, lo, accent, isLight, intensity, compact);
+                break;
+            case ChromeTextureKind.Chevron:
+                cachedTile = BuildChevronBrush(hi, lo, accent, isLight, intensity, compact);
+                break;
         }
-        cachedVector?.Freeze();
+        if (cachedVector is { CanFreeze: true }) cachedVector.Freeze();
     }
 
     private static Brush BuildAmbientWash(Color hi, Color lo, Color accent, bool isLight, double intensity, ChromeTextureKind kind)

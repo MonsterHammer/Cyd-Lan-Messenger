@@ -1248,6 +1248,17 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
     public bool ChromeTextureEnabled => ChromeTexture != CydLan.Desktop.ChromeTexture.Off;
     public double ChromeTextureIntensity => Math.Clamp(previewChromeTextureIntensity ?? Settings.ChromeTextureIntensity, .1, 1);
     public bool AmbientOnSidebarEnabled => Settings.AmbientOnSidebarEnabled;
+    private bool? previewTextureMotion;
+    private bool? previewSolidComposer;
+    public bool TextureMotion => previewTextureMotion ?? Settings.TextureMotionEnabled;
+    public IReadOnlyList<string> AmbientFx => AmbientFxCatalog.Normalize(Settings.AmbientFx);
+    public IReadOnlyList<string> SidebarAmbientFx => Settings.AmbientOnSidebarEnabled ? AmbientFx : [];
+    public double AmbientFxIntensity => Math.Clamp(Settings.AmbientFxIntensity, .1, 1);
+    public IReadOnlyList<string> RailFx => PanelFxCatalog.Normalize(Settings.RailFx);
+    public double RailFxIntensity => Math.Clamp(Settings.RailFxIntensity, .1, 1);
+    public IReadOnlyList<string> SidebarFx => PanelFxCatalog.Normalize(Settings.SidebarFx);
+    public double SidebarFxIntensity => Math.Clamp(Settings.SidebarFxIntensity, .1, 1);
+    public bool SolidComposerEnabled => SeamlessComposerEnabled && (previewSolidComposer ?? Settings.SolidComposerEnabled);
     public bool SidebarPetalsVisible => SakuraPetalsEnabled && Settings.AmbientOnSidebarEnabled;
     public bool SidebarFirefliesVisible => Settings.FirefliesEnabled && Settings.AmbientOnSidebarEnabled;
     public bool SidebarRainVisible => Settings.RainEnabled && Settings.AmbientOnSidebarEnabled;
@@ -1261,10 +1272,12 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
     public bool SidebarWingPlumesVisible => Settings.WingPlumesEnabled && Settings.AmbientOnSidebarEnabled;
     public bool SidebarRepulsorVisible => Settings.RepulsorEnabled && Settings.AmbientOnSidebarEnabled;
 
-    public void PreviewChromeTexture(string? texture, double? intensity)
+    public void PreviewChromeTexture(string? texture, double? intensity, bool? motion = null)
     {
         previewChromeTexture = texture;
         previewChromeTextureIntensity = intensity;
+        previewTextureMotion = motion;
+        Changed(nameof(TextureMotion));
         Changed(nameof(ChromeTexture));
         Changed(nameof(ChromeTextureEnabled));
         Changed(nameof(ChromeTextureIntensity));
@@ -1279,10 +1292,12 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
         Changed(nameof(ChatCanvasGradientIntensity));
     }
 
-    public void PreviewSeamlessComposer(bool? seamless)
+    public void PreviewSeamlessComposer(bool? seamless, bool? solid = null)
     {
         previewSeamlessComposer = seamless;
+        previewSolidComposer = solid;
         Changed(nameof(SeamlessComposerEnabled));
+        Changed(nameof(SolidComposerEnabled));
         Changed(nameof(ChatBackdropRowSpan));
     }
 
@@ -1466,6 +1481,8 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
         Changed(nameof(ButtonSparkIntensity));
         previewChromeTexture = null;
         previewChromeTextureIntensity = null;
+        previewTextureMotion = null;
+        previewSolidComposer = null;
         previewChatCanvasGradient = null;
         previewChatCanvasIntensity = null;
         previewSeamlessComposer = null;
@@ -1490,6 +1507,15 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
         Changed(nameof(ChatCanvasGradientEnabled));
         Changed(nameof(ChatCanvasGradientIntensity));
         Changed(nameof(SeamlessComposerEnabled));
+        Changed(nameof(SolidComposerEnabled));
+        Changed(nameof(TextureMotion));
+        Changed(nameof(AmbientFx));
+        Changed(nameof(SidebarAmbientFx));
+        Changed(nameof(AmbientFxIntensity));
+        Changed(nameof(RailFx));
+        Changed(nameof(RailFxIntensity));
+        Changed(nameof(SidebarFx));
+        Changed(nameof(SidebarFxIntensity));
         Changed(nameof(ChatBackdropRowSpan));
         Changed(nameof(ChatBackgroundBlur));
         Changed(nameof(ChatBackgroundBlurEffect));
@@ -1532,7 +1558,8 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
             Settings.ButtonSparkEnabled, ButtonSparkIntensity);
         TargetAura.Configure(
             Settings.TargetAura, Settings.TargetAuraIntensity,
-            Settings.AuraSelectedModuleEnabled, Settings.AuraSelectedPersonEnabled, Settings.AuraHighlightButtonsEnabled);
+            Settings.AuraSelectedModuleEnabled, Settings.AuraSelectedPersonEnabled, Settings.AuraHighlightButtonsEnabled, Settings.AuraOverflowEnabled);
+        InteractionEffects.Configure(Settings.HoverEffect, Settings.HoverIntensity, Settings.CursorEffect, Settings.CursorIntensity, Settings.WordPopColor);
         if (lan is not null) lan.AutoAcceptDirectory = Settings.AutoAcceptFiles ? ReceivedFilesFolder : null;
     }
     /// <summary>Applies a batch of preference changes, saves them and tells contacts about profile changes.</summary>

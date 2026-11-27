@@ -127,6 +127,20 @@ public static partial class AppearanceCodec
         public double? TitleFxIntensity { get; set; }
         public List<string>? HeaderFx { get; set; }
         public double? HeaderFxIntensity { get; set; }
+        public bool? TextureMotion { get; set; }
+        public List<string>? AmbientFx { get; set; }
+        public double? AmbientFxIntensity { get; set; }
+        public List<string>? RailFx { get; set; }
+        public double? RailFxIntensity { get; set; }
+        public List<string>? SidebarFx { get; set; }
+        public double? SidebarFxIntensity { get; set; }
+        public bool? AuraOverflow { get; set; }
+        public string? WordPopColor { get; set; }
+        public string? HoverEffect { get; set; }
+        public double? HoverIntensity { get; set; }
+        public string? CursorEffect { get; set; }
+        public double? CursorIntensity { get; set; }
+        public bool? SolidComposer { get; set; }
         public double? TitleCometIntensity { get; set; }
         public bool? TitleEqualizer { get; set; }
         public double? TitleEqualizerIntensity { get; set; }
@@ -362,6 +376,20 @@ public static partial class AppearanceCodec
         TitleFxIntensity = BandEffects.Normalize(s.TitleFx).Count > 0 ? Round2(s.TitleFxIntensity) : null,
         HeaderFx = BandEffects.Normalize(s.HeaderFx) is { Count: > 0 } hfx ? hfx : null,
         HeaderFxIntensity = BandEffects.Normalize(s.HeaderFx).Count > 0 ? Round2(s.HeaderFxIntensity) : null,
+        TextureMotion = s.TextureMotionEnabled ? true : null,
+        AmbientFx = AmbientFxCatalog.Normalize(s.AmbientFx) is { Count: > 0 } afx ? afx : null,
+        AmbientFxIntensity = AmbientFxCatalog.Normalize(s.AmbientFx).Count > 0 ? Round2(s.AmbientFxIntensity) : null,
+        RailFx = PanelFxCatalog.Normalize(s.RailFx) is { Count: > 0 } rfx ? rfx : null,
+        RailFxIntensity = PanelFxCatalog.Normalize(s.RailFx).Count > 0 ? Round2(s.RailFxIntensity) : null,
+        SidebarFx = PanelFxCatalog.Normalize(s.SidebarFx) is { Count: > 0 } sfx ? sfx : null,
+        SidebarFxIntensity = PanelFxCatalog.Normalize(s.SidebarFx).Count > 0 ? Round2(s.SidebarFxIntensity) : null,
+        AuraOverflow = s.AuraOverflowEnabled ? true : null,
+        WordPopColor = AppearanceOptions.NormalizeHex(s.WordPopColor) is { Length: > 0 } pop ? pop : null,
+        HoverEffect = NonDefault(InteractionEffects.NormalizeHover(s.HoverEffect), "off"),
+        HoverIntensity = InteractionEffects.NormalizeHover(s.HoverEffect) != "off" ? Round2(s.HoverIntensity) : null,
+        CursorEffect = NonDefault(InteractionEffects.NormalizeCursor(s.CursorEffect), "off"),
+        CursorIntensity = InteractionEffects.NormalizeCursor(s.CursorEffect) != "off" ? Round2(s.CursorIntensity) : null,
+        SolidComposer = s.SolidComposerEnabled ? true : null,
         TitleCometIntensity = s.TitleCometEnabled ? Round2(s.TitleCometIntensity) : null,
         TitleEqualizer = s.TitleEqualizerEnabled ? true : null,
         TitleEqualizerIntensity = s.TitleEqualizerEnabled ? Round2(s.TitleEqualizerIntensity) : null,
@@ -881,6 +909,20 @@ public static partial class AppearanceCodec
         s.TitleFxIntensity = ClampUnit(d.TitleFxIntensity, .65);
         s.HeaderFx = BandEffects.Normalize(d.HeaderFx);
         s.HeaderFxIntensity = ClampUnit(d.HeaderFxIntensity, .65);
+        s.TextureMotionEnabled = d.TextureMotion == true;
+        s.AmbientFx = AmbientFxCatalog.Normalize(d.AmbientFx);
+        s.AmbientFxIntensity = ClampUnit(d.AmbientFxIntensity, .65);
+        s.RailFx = PanelFxCatalog.Normalize(d.RailFx);
+        s.RailFxIntensity = ClampUnit(d.RailFxIntensity, .65);
+        s.SidebarFx = PanelFxCatalog.Normalize(d.SidebarFx);
+        s.SidebarFxIntensity = ClampUnit(d.SidebarFxIntensity, .65);
+        s.AuraOverflowEnabled = d.AuraOverflow == true;
+        s.WordPopColor = AppearanceOptions.NormalizeHex(d.WordPopColor);
+        s.HoverEffect = InteractionEffects.NormalizeHover(d.HoverEffect);
+        s.HoverIntensity = ClampUnit(d.HoverIntensity, .65);
+        s.CursorEffect = InteractionEffects.NormalizeCursor(d.CursorEffect);
+        s.CursorIntensity = ClampUnit(d.CursorIntensity, .65);
+        s.SolidComposerEnabled = d.SolidComposer == true;
         s.TitleCometIntensity = ClampUnit(d.TitleCometIntensity, .65);
         s.TitleEqualizerEnabled = d.TitleEqualizer == true;
         s.TitleEqualizerIntensity = ClampUnit(d.TitleEqualizerIntensity, .65);
@@ -1066,6 +1108,20 @@ public static partial class AppearanceCodec
         s.TitleFxIntensity = .65;
         s.HeaderFx = [];
         s.HeaderFxIntensity = .65;
+        s.TextureMotionEnabled = false;
+        s.AmbientFx = [];
+        s.AmbientFxIntensity = .65;
+        s.RailFx = [];
+        s.RailFxIntensity = .65;
+        s.SidebarFx = [];
+        s.SidebarFxIntensity = .65;
+        s.AuraOverflowEnabled = false;
+        s.WordPopColor = "";
+        s.HoverEffect = "off";
+        s.HoverIntensity = .65;
+        s.CursorEffect = "off";
+        s.CursorIntensity = .65;
+        s.SolidComposerEnabled = false;
         s.TitleCometIntensity = .65;
         s.TitleEqualizerEnabled = false;
         s.TitleEqualizerIntensity = .65;

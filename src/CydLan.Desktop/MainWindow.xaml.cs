@@ -26,6 +26,13 @@ public partial class MainWindow : Window
         InitializeComponent(); this.model = model; DataContext = model;
         InitMediaController();
         InitReminderEditor();
+        InteractionEffects.Install();
+        PreviewMouseMove += (_, args) =>
+        {
+            if (InteractionEffects.Cursor != "off") EffectLayer.Trail(args.GetPosition(EffectLayer));
+        };
+        MouseLeave += (_, _) => EffectLayer.HideFollowers();
+        InteractionEffects.Changed += () => { if (InteractionEffects.Cursor == "off") EffectLayer.HideFollowers(); };
         model.ScrollRequested += force => {
             bool atEnd = MessageScroller.ScrollableHeight - MessageScroller.VerticalOffset < 40;
             double offset = MessageScroller.VerticalOffset;
@@ -426,6 +433,11 @@ public partial class MainWindow : Window
         string effect = model.Settings.TypingEffect;
         if (ChatEffects.Normalize(effect, typing: true) == "off" || WindowState == WindowState.Minimized ||
             wordEnd <= 0 || wordEnd > Composer.Text.Length || !char.IsLetterOrDigit(Composer.Text, wordEnd - 1)) return;
+        if (ChatEffects.Normalize(effect, typing: true) == "wordpop")
+        {
+            PlayWordPop(wordEnd);
+            return;
+        }
         var caret = Composer.GetRectFromCharacterIndex(wordEnd - 1, trailingEdge: true);
         var anchor = caret.IsEmpty
             ? new System.Windows.Point(Composer.Padding.Left + 8, Composer.ActualHeight / 2)
@@ -433,6 +445,25 @@ public partial class MainWindow : Window
         EffectLayer.Play(Composer.TranslatePoint(anchor, EffectLayer), effect, model.Settings.Theme,
             typing: true, effect == "ink" ? model.Settings.InkBloomIntensity : model.TypingIntensity);
     }
+    /// <summary>Pops a comic highlight over the word that ends at <paramref name="wordEnd"/>.</summary>
+    private void PlayWordPop(int wordEnd)
+    {
+        string text = Composer.Text;
+        int start = wordEnd;
+        while (start > 0 && char.IsLetterOrDigit(text, start - 1)) start--;
+        if (start == wordEnd) return;
+        var first = Composer.GetRectFromCharacterIndex(start);
+        var last = Composer.GetRectFromCharacterIndex(wordEnd - 1, trailingEdge: true);
+        if (first.IsEmpty || last.IsEmpty) return;
+        // A word wrapped across lines highlights only its last line.
+        if (Math.Abs(first.Top - last.Top) > 1) first = Composer.GetRectFromCharacterIndex(wordEnd - 1);
+        var bounds = new Rect(new System.Windows.Point(first.Left, Math.Min(first.Top, last.Top)), new System.Windows.Point(last.Right, Math.Max(first.Bottom, last.Bottom)));
+        var topLeft = Composer.TranslatePoint(bounds.TopLeft, EffectLayer);
+        EffectLayer.PlayWordPop(new Rect(topLeft, bounds.Size), model.TypingIntensity);
+    }
+
+    internal void PlayHover(FrameworkElement target) => EffectLayer.PlayHover(target);
+
     private async void Composer_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
     {
         if (model is null) return;

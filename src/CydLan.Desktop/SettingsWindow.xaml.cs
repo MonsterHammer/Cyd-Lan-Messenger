@@ -29,7 +29,7 @@ public partial class SettingsWindow : Window
     private readonly ColorChannel[] appearanceChannels;
     private string selectedTheme;
     private string currentThemeFilter = "all";
-    private string titleHex = "", headerHex = "", railHex = "", sidebarHex = "", logoHex = "", iconHex = "", logoDotHex = "";
+    private string titleHex = "", headerHex = "", railHex = "", sidebarHex = "", logoHex = "", iconHex = "", logoDotHex = "", wordPopHex = "";
     private string accentHex = "", effectHex = "", outgoingBubbleHex = "", incomingBubbleHex = "", chatBackgroundHex = "";
     private double? customFontPx;
     private bool updatingThemeFilter;
@@ -99,7 +99,8 @@ public partial class SettingsWindow : Window
             new(IncomingBubbleColorBox, IncomingBubbleHexBox, IncomingBubbleColorPicker, () => incomingBubbleHex, v => incomingBubbleHex = v),
             new(LogoColorBox, LogoHexBox, LogoColorPicker, () => logoHex, v => logoHex = v),
             new(IconColorBox, IconHexBox, IconColorPicker, () => iconHex, v => iconHex = v),
-            new(LogoDotColorBox, LogoDotHexBox, LogoDotColorPicker, () => logoDotHex, v => logoDotHex = v)
+            new(LogoDotColorBox, LogoDotHexBox, LogoDotColorPicker, () => logoDotHex, v => logoDotHex = v),
+            new(WordPopColorBox, WordPopHexBox, WordPopColorPicker, () => wordPopHex, v => wordPopHex = v)
         ];
         ColorFinishBox.ItemsSource = ColorFinish.Catalog;
         TitleColorBox.ItemsSource = AppearanceOptions.SurfaceSwatches;
@@ -114,6 +115,12 @@ public partial class SettingsWindow : Window
         LogoColorBox.ItemsSource = AppearanceOptions.LogoSwatches;
         IconColorBox.ItemsSource = AppearanceOptions.IconSwatches;
         LogoDotColorBox.ItemsSource = AppearanceOptions.LogoDotSwatches;
+        WordPopColorBox.ItemsSource = AppearanceOptions.WordPopSwatches;
+        HoverEffectBox.SelectionChanged += (_, _) => ApplyInteractionPreview();
+        CursorEffectBox.SelectionChanged += (_, _) => ApplyInteractionPreview();
+        HoverIntensityBox.ValueChanged += (_, _) => ApplyInteractionPreview();
+        CursorIntensityBox.ValueChanged += (_, _) => ApplyInteractionPreview();
+        WordPopColorBox.SelectionChanged += (_, _) => ApplyInteractionPreview();
         BubbleStyleBox.ItemsSource = AppearanceOptions.BubbleStyles;
         BubbleShapeBox.ItemsSource = AppearanceOptions.BubbleShapes;
         CornerStyleBox.ItemsSource = AppearanceOptions.CornerStyles;
@@ -162,6 +169,7 @@ public partial class SettingsWindow : Window
                 AmbientEffect.SetAnimateWhenUnfocused(s.AnimateWhenUnfocused);
                 MessageMotion.Configure(s.MessageAnimation);
                 model.PreviewChromeTexture(null, null);
+                InteractionEffects.Configure(s.HoverEffect, s.HoverIntensity, s.CursorEffect, s.CursorIntensity, s.WordPopColor);
                 model.PreviewChatCanvas(null, null);
                 model.PreviewSeamlessComposer(null);
                 model.PreviewBackgroundBlur(null);
@@ -183,7 +191,7 @@ public partial class SettingsWindow : Window
                     s.ButtonSparkEnabled, model.ButtonSparkIntensity);
                 TargetAura.Configure(
                     s.TargetAura, s.TargetAuraIntensity,
-                    s.AuraSelectedModuleEnabled, s.AuraSelectedPersonEnabled, s.AuraHighlightButtonsEnabled);
+                    s.AuraSelectedModuleEnabled, s.AuraSelectedPersonEnabled, s.AuraHighlightButtonsEnabled, s.AuraOverflowEnabled);
             }
             foreach (var path in unsavedAvatars.Where(p => p != model.Settings.AvatarPath)) try { System.IO.File.Delete(path); } catch (System.IO.IOException) { }
             closing = true;
@@ -250,6 +258,7 @@ public partial class SettingsWindow : Window
         SetColorChannel(appearanceChannels[9], s.LogoColor);
         SetColorChannel(appearanceChannels[10], s.IconColor);
         SetColorChannel(appearanceChannels[11], s.LogoDotColor);
+        SetColorChannel(appearanceChannels[12], s.WordPopColor);
         LoadLogoControls(s);
         bool matchThemeChat = AppearanceOptions.NormalizeChatSurfaceMode(s.ChatSurfaceMode) == AppearanceOptions.ChatSurfaceTheme;
         ChatSurfaceTheme.IsChecked = matchThemeChat;
@@ -277,6 +286,10 @@ public partial class SettingsWindow : Window
 
         TypingEffectBox.SelectedValue = ChatEffects.Normalize(s.TypingEffect, typing: true);
         ClickEffectBox.SelectedValue = ChatEffects.Normalize(s.ClickEffect);
+        HoverEffectBox.SelectedValue = InteractionEffects.NormalizeHover(s.HoverEffect);
+        CursorEffectBox.SelectedValue = InteractionEffects.NormalizeCursor(s.CursorEffect);
+        HoverIntensityBox.Value = ClampUnit(s.HoverIntensity, .65);
+        CursorIntensityBox.Value = ClampUnit(s.CursorIntensity, .65);
         SteampunkEngineBox.IsChecked = s.SteampunkEngineEnabled;
         SakuraPetalsBox.IsChecked = s.SakuraPetalsEnabled;
         TypingIntensityBox.Value = ClampUnit(s.TypingIntensity ?? s.EffectIntensity, .75);
@@ -413,13 +426,15 @@ public partial class SettingsWindow : Window
         ButtonSparkBox.IsChecked = s.ButtonSparkEnabled;
         ButtonSparkIntensityBox.Value = ClampUnit(s.ButtonSparkIntensity, .65);
 
-        ChromeTextureBox.SelectedValue = ChromeTexture.Normalize(s.ChromeTexture);
+        SelectTextures(s.ChromeTexture);
+        TextureMotionBox.IsChecked = s.TextureMotionEnabled;
         ChromeTextureIntensityBox.Value = ClampUnit(s.ChromeTextureIntensity, .65);
         TargetAuraBox.SelectedValue = TargetAura.Normalize(s.TargetAura);
         TargetAuraIntensityBox.Value = ClampUnit(s.TargetAuraIntensity, .70);
         AuraModuleBox.IsChecked = s.AuraSelectedModuleEnabled;
         AuraPersonBox.IsChecked = s.AuraSelectedPersonEnabled;
         AuraButtonsBox.IsChecked = s.AuraHighlightButtonsEnabled;
+        AuraOverflowBox.IsChecked = s.AuraOverflowEnabled;
 
         SelectAppFont(s.UiFont);
         SelectFontItem(FontBox, s.MessageFont, "Segoe UI Variable Text");
@@ -431,6 +446,7 @@ public partial class SettingsWindow : Window
         ChatCanvasBox.SelectedValue = ChatCanvasOverlay.Normalize(s.ChatCanvasGradient);
         ChatCanvasIntensityBox.Value = ClampUnit(s.ChatCanvasGradientIntensity, .55);
         SeamlessComposerBox.IsChecked = s.SeamlessComposerEnabled;
+        SolidComposerBox.IsChecked = s.SolidComposerEnabled;
         BackgroundBlurBox.Value = double.IsFinite(s.ChatBackgroundBlur) ? Math.Clamp(s.ChatBackgroundBlur, 0, 24) : 0;
         BackgroundTransitionBox.SelectedValue = BackgroundSideTransition.Normalize(s.ChatBackgroundTransition);
         BackgroundTransitionStrengthBox.Value = ClampUnit(s.ChatBackgroundTransitionStrength, .55);
@@ -495,6 +511,7 @@ public partial class SettingsWindow : Window
         s.LogoStyle = logoStyle;
         s.LogoEffect = logoEffect;
         s.LogoDotColor = logoDotHex;
+        s.WordPopColor = wordPopHex;
         s.LogoDotEffect = logoDotEffect;
         s.IconColor = iconHex;
         s.ChatSurfaceMode = SelectedChatSurfaceMode;
@@ -516,6 +533,7 @@ public partial class SettingsWindow : Window
         s.ChatCanvasGradient = ChatCanvasOverlay.Normalize(ChatCanvasBox.SelectedValue as string);
         s.ChatCanvasGradientIntensity = ChatCanvasIntensityBox.Value;
         s.SeamlessComposerEnabled = SeamlessComposerBox.IsChecked == true;
+        s.SolidComposerEnabled = SolidComposerBox.IsChecked == true;
         s.ChatBackgroundBlur = BackgroundBlurBox.Value;
         s.ChatBackgroundOpacity = double.IsFinite(BackgroundOpacityBox.Value) ? Math.Clamp(BackgroundOpacityBox.Value, .10, 1.0) : .26;
         s.ChatBackgroundTransition = BackgroundSideTransition.Normalize(BackgroundTransitionBox.SelectedValue as string);
@@ -527,6 +545,10 @@ public partial class SettingsWindow : Window
         s.ChatBackgroundGrayscale = IsGrayscaleChecked;
         s.TypingEffect = ChatEffects.Normalize(TypingEffectBox.SelectedValue as string, typing: true);
         s.ClickEffect = ChatEffects.Normalize(ClickEffectBox.SelectedValue as string);
+        s.HoverEffect = InteractionEffects.NormalizeHover(HoverEffectBox.SelectedValue as string);
+        s.CursorEffect = InteractionEffects.NormalizeCursor(CursorEffectBox.SelectedValue as string);
+        s.HoverIntensity = HoverIntensityBox.Value;
+        s.CursorIntensity = CursorIntensityBox.Value;
         s.SteampunkEngineEnabled = SteampunkEngineBox.IsChecked == true;
         s.SakuraPetalsEnabled = SakuraPetalsBox.IsChecked == true;
         s.TypingIntensity = TypingIntensityBox.Value;
@@ -657,13 +679,15 @@ public partial class SettingsWindow : Window
         s.ButtonLiftIntensity = ButtonLiftIntensityBox.Value;
         s.ButtonSparkEnabled = ButtonSparkBox.IsChecked == true;
         s.ButtonSparkIntensity = ButtonSparkIntensityBox.Value;
-        s.ChromeTexture = ChromeTexture.Normalize(ChromeTextureBox.SelectedValue as string);
+        s.ChromeTexture = SelectedTextures;
+        s.TextureMotionEnabled = TextureMotionBox.IsChecked == true;
         s.ChromeTextureIntensity = ChromeTextureIntensityBox.Value;
         s.TargetAura = TargetAura.Normalize(TargetAuraBox.SelectedValue as string);
         s.TargetAuraIntensity = TargetAuraIntensityBox.Value;
         s.AuraSelectedModuleEnabled = AuraModuleBox.IsChecked == true;
         s.AuraSelectedPersonEnabled = AuraPersonBox.IsChecked == true;
         s.AuraHighlightButtonsEnabled = AuraButtonsBox.IsChecked == true;
+        s.AuraOverflowEnabled = AuraOverflowBox.IsChecked == true;
         WriteSceneTo(s);
     }
 
@@ -737,6 +761,7 @@ public partial class SettingsWindow : Window
         ApplyChatBackgroundPreview();
         ApplyButtonPreview();
         ApplyTargetAuraPreview();
+        ApplyInteractionPreview();
         UpdateFontPreview();
         ApplyMessageTypographyPreview();
         ApplyCompanionPreview();
@@ -899,7 +924,7 @@ public partial class SettingsWindow : Window
     private void ApplySeamlessComposerPreview()
     {
         if (!IsInitialized || closing || applyingAppearance) return;
-        model.PreviewSeamlessComposer(SeamlessComposerBox.IsChecked == true);
+        model.PreviewSeamlessComposer(SeamlessComposerBox.IsChecked == true, SolidComposerBox.IsChecked == true);
     }
 
     private string SelectedBackgroundFit =>
@@ -1216,6 +1241,13 @@ public partial class SettingsWindow : Window
         ApplyBackgroundOptionsPreview();
         ShowBackground();
     }
+    private void ApplyInteractionPreview()
+    {
+        if (!IsInitialized || closing) return;
+        InteractionEffects.Configure(HoverEffectBox.SelectedValue as string, HoverIntensityBox.Value,
+            CursorEffectBox.SelectedValue as string, CursorIntensityBox.Value, wordPopHex);
+    }
+
     private void PreviewTyping_Click(object sender, RoutedEventArgs e) => PreviewEffect((FrameworkElement)sender, TypingEffectBox, typing: true);
     private void PreviewClick_Click(object sender, RoutedEventArgs e) => PreviewEffect((FrameworkElement)sender, ClickEffectBox, typing: false);
     private void PreviewSendPulse_Click(object sender, RoutedEventArgs e)
@@ -1228,6 +1260,13 @@ public partial class SettingsWindow : Window
     {
         var position = button.TranslatePoint(new System.Windows.Point(button.ActualWidth / 2, button.ActualHeight / 2), EffectPreview);
         string? effect = choice.SelectedValue as string;
+        if (typing && effect == "wordpop")
+        {
+            ApplyInteractionPreview();
+            var topLeft = button.TranslatePoint(new System.Windows.Point(10, 4), EffectPreview);
+            EffectPreview.PlayWordPop(new Rect(topLeft, new System.Windows.Size(Math.Max(30, button.ActualWidth - 20), Math.Max(12, button.ActualHeight - 8))), TypingIntensityBox.Value);
+            return;
+        }
         double intensity = !typing ? ClickIntensityBox.Value : effect == "ink" ? InkBloomIntensityBox.Value : TypingIntensityBox.Value;
         EffectPreview.Play(position, effect, SelectedTheme, typing, intensity);
     }
@@ -1384,12 +1423,51 @@ public partial class SettingsWindow : Window
     private async void Connect_Click(object sender, RoutedEventArgs e) => await model.ConnectByAddressAsync(AddressBox.Text);
     private void ButtonEffect_Changed(object sender, RoutedEventArgs e) => ApplyButtonPreview();
     private void ButtonEffect_SliderChanged(object sender, RoutedPropertyChangedEventArgs<double> e) => ApplyButtonPreview();
-    private void ChromeTexture_Changed(object sender, SelectionChangedEventArgs e) => ApplyChromeTexturePreview();
+    private bool syncingTextures;
+
+    /// <summary>The selected texture stack, comma-separated, or "off".</summary>
+    private string SelectedTextures => ChromeTexture.Normalize(string.Join(",",
+        ChromeTextureBox.SelectedItems.Cast<ChromeTextureSwatch>().Select(t => t.Value)));
+
+    private void SelectTextures(string? value)
+    {
+        syncingTextures = true;
+        ChromeTextureBox.SelectedItems.Clear();
+        var chosen = ChromeTexture.NormalizeList(value);
+        foreach (var swatch in ChromeTexture.Catalog)
+            if (chosen.Count == 0 ? swatch.Value == ChromeTexture.Off : chosen.Contains(swatch.Value))
+                ChromeTextureBox.SelectedItems.Add(swatch);
+        syncingTextures = false;
+    }
+
+    private void ChromeTexture_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (syncingTextures) return;
+        // "None" clears the stack; picking any texture drops "None".
+        bool pickedNone = e.AddedItems.Cast<ChromeTextureSwatch>().Any(t => t.Value == ChromeTexture.Off);
+        syncingTextures = true;
+        if (pickedNone)
+        {
+            foreach (var other in ChromeTextureBox.SelectedItems.Cast<ChromeTextureSwatch>().Where(t => t.Value != ChromeTexture.Off).ToList())
+                ChromeTextureBox.SelectedItems.Remove(other);
+        }
+        else
+        {
+            foreach (var none in ChromeTextureBox.SelectedItems.Cast<ChromeTextureSwatch>().Where(t => t.Value == ChromeTexture.Off).ToList())
+                ChromeTextureBox.SelectedItems.Remove(none);
+            if (ChromeTextureBox.SelectedItems.Count == 0)
+                ChromeTextureBox.SelectedItems.Add(ChromeTexture.Catalog[0]);
+        }
+        syncingTextures = false;
+        ApplyChromeTexturePreview();
+    }
+
+    private void TextureMotion_Changed(object sender, RoutedEventArgs e) => ApplyChromeTexturePreview();
     private void ChromeTexture_SliderChanged(object sender, RoutedPropertyChangedEventArgs<double> e) => ApplyChromeTexturePreview();
     private void ApplyChromeTexturePreview()
     {
         if (!IsInitialized || closing || applyingAppearance) return;
-        model.PreviewChromeTexture(ChromeTextureBox.SelectedValue as string, ChromeTextureIntensityBox.Value);
+        model.PreviewChromeTexture(SelectedTextures, ChromeTextureIntensityBox.Value, TextureMotionBox.IsChecked == true);
     }
     private void TargetAura_Changed(object sender, SelectionChangedEventArgs e) => ApplyTargetAuraPreview();
     private void TargetAuraTarget_Changed(object sender, RoutedEventArgs e) => ApplyTargetAuraPreview();
@@ -1402,7 +1480,7 @@ public partial class SettingsWindow : Window
         bool onModule = AuraModuleBox.IsChecked == true;
         bool onPerson = AuraPersonBox.IsChecked == true;
         bool onButtons = AuraButtonsBox.IsChecked == true;
-        TargetAura.Configure(style, intensity, onModule, onPerson, onButtons);
+        TargetAura.Configure(style, intensity, onModule, onPerson, onButtons, AuraOverflowBox.IsChecked == true);
         var kind = TargetAura.KindFor(style);
         TargetAuraPreviewPerson.Kind = kind;
         TargetAuraPreviewPerson.Intensity = intensity;

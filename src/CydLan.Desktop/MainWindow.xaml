@@ -314,7 +314,7 @@
       <Grid.RowDefinitions><RowDefinition Height="38"/><RowDefinition Height="*"/></Grid.RowDefinitions>
       <Border x:Name="ChromeColorFinishLayer" Grid.RowSpan="2" Background="{DynamicResource ChromeColorFinishBrush}" IsHitTestVisible="False"/>
       <local:ChromeTexture x:Name="ChromeTextureLayer" Grid.RowSpan="2"
-                           Texture="{Binding ChromeTexture}" Intensity="{Binding ChromeTextureIntensity}"
+                           Texture="{Binding ChromeTexture}" Intensity="{Binding ChromeTextureIntensity}" Motion="{Binding TextureMotion}"
                            Visibility="{Binding ChromeTextureEnabled, Converter={StaticResource Bool}}"/>
       <Grid x:Name="TitleBarGrid" Background="{DynamicResource TitleBarBackground}" TextElement.Foreground="{DynamicResource TitleBarInk}" ClipToBounds="True" MouseLeftButtonDown="TitleBar_MouseDown">
         <local:FxBand x:Name="TitleBarFx" Kinds="{Binding TitleFx}" Intensity="{Binding TitleFxIntensity}"/>
@@ -383,6 +383,7 @@
                             Visibility="{Binding RailWingsEnabled, Converter={StaticResource Bool}}"/>
           <local:RailEffect x:Name="RailArcEffect" Kind="ArcReactor" Grid.RowSpan="3" Intensity="{Binding RailArcIntensity}"
                             Visibility="{Binding RailArcEnabled, Converter={StaticResource Bool}}"/>
+          <local:PanelFxLayer x:Name="RailPanelFx" Grid.RowSpan="3" Kinds="{Binding RailFx}" Intensity="{Binding RailFxIntensity}"/>
           <StackPanel Grid.Row="1" Margin="0,7,0,0">
             <Button x:Name="ChatNav" ToolTip="Chats" Click="Chat_Click" AutomationProperties.Name="Conversations"
                     local:ButtonEffects.IsHighlight="{Binding IsConversationSection}" local:TargetAura.Role="Module">
@@ -455,6 +456,7 @@
                                    Visibility="{Binding SidebarWingPlumesVisible, Converter={StaticResource Bool}}"/>
               <local:WeatherEffect x:Name="SidebarRepulsor" Kind="Repulsor" Intensity="{Binding RepulsorIntensity}"
                                    Visibility="{Binding SidebarRepulsorVisible, Converter={StaticResource Bool}}"/>
+              <local:AmbientFxLayer x:Name="SidebarAmbientFx" Kinds="{Binding SidebarAmbientFx}" Intensity="{Binding AmbientFxIntensity}"/>
             </Grid>
             <local:SidebarEffect x:Name="SidebarMotesEffect" Kind="Motes" Grid.RowSpan="5" Intensity="{Binding SidebarMotesIntensity}"
                                  Visibility="{Binding SidebarMotesEnabled, Converter={StaticResource Bool}}"/>
@@ -478,6 +480,7 @@
                                  Visibility="{Binding SidebarWingsEnabled, Converter={StaticResource Bool}}"/>
             <local:SidebarEffect x:Name="SidebarHudEffect" Kind="HudMatrix" Grid.RowSpan="5" Intensity="{Binding SidebarHudIntensity}"
                                  Visibility="{Binding SidebarHudEnabled, Converter={StaticResource Bool}}"/>
+            <local:PanelFxLayer x:Name="SidebarPanelFx" Grid.RowSpan="5" Kinds="{Binding SidebarFx}" Intensity="{Binding SidebarFxIntensity}"/>
             <Grid Margin="17,0,16,0" VerticalAlignment="Center">
               <StackPanel Orientation="Horizontal"><TextBlock Text="{Binding SectionTitle}" FontSize="20" FontWeight="SemiBold"/><TextBlock Text="{Binding ModeBadge}" FontSize="11" Foreground="{DynamicResource SidebarFaint}" Margin="9,7,0,0"/></StackPanel>
               <Button HorizontalAlignment="Right" Click="SidebarPlus_Click" AutomationProperties.Name="New">
@@ -803,6 +806,7 @@
                                        Visibility="{Binding WingPlumesEnabled, Converter={StaticResource Bool}}"/>
                   <local:WeatherEffect x:Name="ConversationRepulsor" Kind="Repulsor" Intensity="{Binding RepulsorIntensity}"
                                        Visibility="{Binding RepulsorEnabled, Converter={StaticResource Bool}}"/>
+                  <local:AmbientFxLayer x:Name="ConversationAmbientFx" Kinds="{Binding AmbientFx}" Intensity="{Binding AmbientFxIntensity}"/>
                 </Grid>
                 <Grid Grid.Row="1" ClipToBounds="True">
                   <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
@@ -851,6 +855,9 @@
                       <Style.Triggers>
                         <DataTrigger Binding="{Binding SeamlessComposerEnabled}" Value="True">
                           <Setter Property="Background" Value="{DynamicResource ComposerSeamlessBackground}"/>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding SolidComposerEnabled}" Value="True">
+                          <Setter Property="Background" Value="{DynamicResource Input}"/>
                         </DataTrigger>
                       </Style.Triggers>
                     </Style>
@@ -924,12 +931,13 @@
               <Border x:Name="DetailsPanel" Width="242" Visibility="Collapsed" HorizontalAlignment="Right" Background="{DynamicResource SidebarPanelBackground}" TextElement.Foreground="{DynamicResource SidebarInk}" BorderBrush="{DynamicResource Line}" BorderThickness="1,0,0,0" ClipToBounds="True">
                 <Grid>
                   <Border Background="{DynamicResource ChromeColorFinishBrush}" IsHitTestVisible="False"/>
-                  <local:ChromeTexture Texture="{Binding ChromeTexture}" Intensity="{Binding ChromeTextureIntensity}" Visibility="{Binding ChromeTextureEnabled, Converter={StaticResource Bool}}"/>
+                  <local:ChromeTexture Texture="{Binding ChromeTexture}" Intensity="{Binding ChromeTextureIntensity}" Motion="{Binding TextureMotion}" Visibility="{Binding ChromeTextureEnabled, Converter={StaticResource Bool}}"/>
                   <local:ThemeDecoration Zone="Sidebar" Visibility="{Binding ThemeDetailsEnabled, Converter={StaticResource Bool}}"/>
                   <local:SidebarEffect Kind="Motes" Intensity="{Binding SidebarMotesIntensity}" Visibility="{Binding SidebarMotesEnabled, Converter={StaticResource Bool}}"/>
                   <local:SidebarEffect Kind="EdgeGlow" Intensity="{Binding SidebarGlowIntensity}" Visibility="{Binding SidebarGlowEnabled, Converter={StaticResource Bool}}"/>
                   <local:SidebarEffect Kind="Prism" Intensity="{Binding SidebarPrismIntensity}" Visibility="{Binding SidebarPrismEnabled, Converter={StaticResource Bool}}"/>
                   <local:SidebarEffect Kind="Sweep" Intensity="{Binding SidebarSweepIntensity}" Visibility="{Binding SidebarSweepEnabled, Converter={StaticResource Bool}}"/>
+                  <local:PanelFxLayer Kinds="{Binding SidebarFx}" Intensity="{Binding SidebarFxIntensity}"/>
                   <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="20,16">
                     <Grid><TextBlock Text="Contact details" Style="{StaticResource Caption}" VerticalAlignment="Center"/><Button Style="{StaticResource Icon}" Width="28" Height="28" HorizontalAlignment="Right" Click="Details_Click" ToolTip="Close details"><local:Glyph Data="{DynamicResource IconClose}" Size="15"/></Button></Grid>
                     <Button Padding="0" Width="56" Height="56" Margin="0,28,0,16" HorizontalAlignment="Center" Click="ConversationAvatar_Click" ToolTip="View profile" AutomationProperties.Name="Expand profile">
@@ -947,12 +955,13 @@
               <Border x:Name="FilesPanel" Width="242" Visibility="Collapsed" IsVisibleChanged="FilesPanel_VisibilityChanged" HorizontalAlignment="Right" Background="{DynamicResource SidebarPanelBackground}" TextElement.Foreground="{DynamicResource SidebarInk}" BorderBrush="{DynamicResource Line}" BorderThickness="1,0,0,0" ClipToBounds="True">
                 <Grid>
                   <Border Background="{DynamicResource ChromeColorFinishBrush}" IsHitTestVisible="False"/>
-                  <local:ChromeTexture Texture="{Binding ChromeTexture}" Intensity="{Binding ChromeTextureIntensity}" Visibility="{Binding ChromeTextureEnabled, Converter={StaticResource Bool}}"/>
+                  <local:ChromeTexture Texture="{Binding ChromeTexture}" Intensity="{Binding ChromeTextureIntensity}" Motion="{Binding TextureMotion}" Visibility="{Binding ChromeTextureEnabled, Converter={StaticResource Bool}}"/>
                   <local:ThemeDecoration Zone="Sidebar" Visibility="{Binding ThemeDetailsEnabled, Converter={StaticResource Bool}}"/>
                   <local:SidebarEffect Kind="Motes" Intensity="{Binding SidebarMotesIntensity}" Visibility="{Binding SidebarMotesEnabled, Converter={StaticResource Bool}}"/>
                   <local:SidebarEffect Kind="EdgeGlow" Intensity="{Binding SidebarGlowIntensity}" Visibility="{Binding SidebarGlowEnabled, Converter={StaticResource Bool}}"/>
                   <local:SidebarEffect Kind="Prism" Intensity="{Binding SidebarPrismIntensity}" Visibility="{Binding SidebarPrismEnabled, Converter={StaticResource Bool}}"/>
                   <local:SidebarEffect Kind="Sweep" Intensity="{Binding SidebarSweepIntensity}" Visibility="{Binding SidebarSweepEnabled, Converter={StaticResource Bool}}"/>
+                  <local:PanelFxLayer Kinds="{Binding SidebarFx}" Intensity="{Binding SidebarFxIntensity}"/>
                   <Grid Margin="0,16,0,0">
                   <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                   <Grid Margin="20,0,20,8"><TextBlock Text="Files" Style="{StaticResource Caption}" VerticalAlignment="Center"/><Button Style="{StaticResource Icon}" Width="28" Height="28" HorizontalAlignment="Right" Click="ConversationFiles_Click" ToolTip="Close"><local:Glyph Data="{DynamicResource IconClose}" Size="15"/></Button></Grid>
@@ -994,12 +1003,13 @@
               <Border x:Name="GroupPanel" Width="242" Visibility="Collapsed" HorizontalAlignment="Right" Background="{DynamicResource SidebarPanelBackground}" TextElement.Foreground="{DynamicResource SidebarInk}" BorderBrush="{DynamicResource Line}" BorderThickness="1,0,0,0" ClipToBounds="True">
                 <Grid>
                   <Border Background="{DynamicResource ChromeColorFinishBrush}" IsHitTestVisible="False"/>
-                  <local:ChromeTexture Texture="{Binding ChromeTexture}" Intensity="{Binding ChromeTextureIntensity}" Visibility="{Binding ChromeTextureEnabled, Converter={StaticResource Bool}}"/>
+                  <local:ChromeTexture Texture="{Binding ChromeTexture}" Intensity="{Binding ChromeTextureIntensity}" Motion="{Binding TextureMotion}" Visibility="{Binding ChromeTextureEnabled, Converter={StaticResource Bool}}"/>
                   <local:ThemeDecoration Zone="Sidebar" Visibility="{Binding ThemeDetailsEnabled, Converter={StaticResource Bool}}"/>
                   <local:SidebarEffect Kind="Motes" Intensity="{Binding SidebarMotesIntensity}" Visibility="{Binding SidebarMotesEnabled, Converter={StaticResource Bool}}"/>
                   <local:SidebarEffect Kind="EdgeGlow" Intensity="{Binding SidebarGlowIntensity}" Visibility="{Binding SidebarGlowEnabled, Converter={StaticResource Bool}}"/>
                   <local:SidebarEffect Kind="Prism" Intensity="{Binding SidebarPrismIntensity}" Visibility="{Binding SidebarPrismEnabled, Converter={StaticResource Bool}}"/>
                   <local:SidebarEffect Kind="Sweep" Intensity="{Binding SidebarSweepIntensity}" Visibility="{Binding SidebarSweepEnabled, Converter={StaticResource Bool}}"/>
+                  <local:PanelFxLayer Kinds="{Binding SidebarFx}" Intensity="{Binding SidebarFxIntensity}"/>
                   <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="20,16">
                     <Grid><TextBlock Text="Group" Style="{StaticResource Caption}" VerticalAlignment="Center"/><Button Style="{StaticResource Icon}" Width="28" Height="28" HorizontalAlignment="Right" Click="Details_Click" ToolTip="Close"><local:Glyph Data="{DynamicResource IconClose}" Size="15"/></Button></Grid>
                     <TextBlock Text="Name" Style="{StaticResource Caption}" Margin="0,18,0,6"/>

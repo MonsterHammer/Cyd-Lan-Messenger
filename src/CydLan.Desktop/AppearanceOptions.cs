@@ -98,6 +98,7 @@ public static class AppearanceOptions
     public static IReadOnlyList<ColorOption> BubbleSwatches { get; } = BuildColorSwatches("Theme");
     public static IReadOnlyList<ColorOption> LogoSwatches { get; } = BuildColorSwatches("Classic");
     public static IReadOnlyList<ColorOption> LogoDotSwatches { get; } = BuildColorSwatches("Classic");
+    public static IReadOnlyList<ColorOption> WordPopSwatches { get; } = BuildColorSwatches("Comic yellow");
     public static IReadOnlyList<ColorOption> IconSwatches { get; } = BuildColorSwatches("Theme");
     public static IReadOnlyList<ColorOption> SurfaceSwatches { get; } = BuildChatBackgroundSwatches();
     public static IReadOnlyList<ColorOption> ChatBackgroundSwatches { get; } = BuildChatBackgroundSwatches();

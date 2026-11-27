@@ -869,6 +869,15 @@
                     </Border>
                   </CheckBox>
                 </WrapPanel>
+                <WrapPanel x:Name="AmbientFxCards" Margin="0,0,0,4"/>
+                <StackPanel x:Name="AmbientFxIntensityPanel" Visibility="Collapsed">
+                  <DockPanel Margin="0,0,0,4">
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=AmbientFxIntensityBox, StringFormat=P0}" Foreground="{DynamicResource Muted}"/>
+                    <TextBlock Text="More ambient intensity" Style="{StaticResource Label}" Margin="0"/>
+                  </DockPanel>
+                  <Slider x:Name="AmbientFxIntensityBox" Style="{StaticResource BackgroundSlider}" Minimum=".1" Maximum="1" TickFrequency=".05"
+                          SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True" AutomationProperties.Name="More ambient intensity" Margin="0,0,0,8"/>
+                </StackPanel>
                 <CheckBox x:Name="AmbientOnSidebarBox" Content="Show on side panel" Margin="0,4,0,6"/>
                 <DockPanel Margin="0,0,0,4">
                   <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=EffectSpeedBox, StringFormat={}{0:0.0}x}" Foreground="{DynamicResource Muted}"/>
@@ -1000,6 +1009,16 @@
                       <ComboBoxItem Content="Petals" Tag="petals"/>
                       <ComboBoxItem Content="Wing plumes" Tag="feathers"/>
                       <ComboBoxItem Content="Arc pulse" Tag="repulsor"/>
+                      <ComboBoxItem Content="Word pop" Tag="wordpop"/>
+                      <ComboBoxItem Content="Hearts" Tag="hearts"/>
+                      <ComboBoxItem Content="Stars" Tag="stars"/>
+                      <ComboBoxItem Content="Confetti" Tag="confetti"/>
+                      <ComboBoxItem Content="Bubbles" Tag="bubbles"/>
+                      <ComboBoxItem Content="Lightning" Tag="zap"/>
+                      <ComboBoxItem Content="Music" Tag="notes"/>
+                      <ComboBoxItem Content="Snow" Tag="snow"/>
+                      <ComboBoxItem Content="Fire" Tag="fire"/>
+                      <ComboBoxItem Content="Comic burst" Tag="comic"/>
                     </ComboBox>
                   </StackPanel>
                   <StackPanel Grid.Column="2">
@@ -1014,9 +1033,62 @@
                       <ComboBoxItem Content="Petals" Tag="petals"/>
                       <ComboBoxItem Content="Wing plumes" Tag="feathers"/>
                       <ComboBoxItem Content="Arc pulse" Tag="repulsor"/>
+                      <ComboBoxItem Content="Hearts" Tag="hearts"/>
+                      <ComboBoxItem Content="Stars" Tag="stars"/>
+                      <ComboBoxItem Content="Confetti" Tag="confetti"/>
+                      <ComboBoxItem Content="Bubbles" Tag="bubbles"/>
+                      <ComboBoxItem Content="Lightning" Tag="zap"/>
+                      <ComboBoxItem Content="Music" Tag="notes"/>
+                      <ComboBoxItem Content="Snow" Tag="snow"/>
+                      <ComboBoxItem Content="Fire" Tag="fire"/>
+                      <ComboBoxItem Content="Comic burst" Tag="comic"/>
+                      <ComboBoxItem Content="Shockwave" Tag="shockwave"/>
                     </ComboBox>
                   </StackPanel>
                 </Grid>
+                <Grid>
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="12"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                  <StackPanel>
+                    <TextBlock Text="Hover effect" Style="{StaticResource Label}"/>
+                    <ComboBox x:Name="HoverEffectBox" SelectedValuePath="Tag" AutomationProperties.Name="Hover effect" Margin="0,0,0,10">
+                      <ComboBoxItem Content="Off" Tag="off"/>
+                      <ComboBoxItem Content="Glow ring" Tag="ring"/>
+                      <ComboBoxItem Content="Sparkle" Tag="sparkle"/>
+                      <ComboBoxItem Content="Underline sweep" Tag="sweep"/>
+                      <ComboBoxItem Content="Corner brackets" Tag="brackets"/>
+                      <ComboBoxItem Content="Pop" Tag="pop"/>
+                      <ComboBoxItem Content="Halo" Tag="halo"/>
+                      <ComboBoxItem Content="Hearts" Tag="hearts"/>
+                    </ComboBox>
+                  </StackPanel>
+                  <StackPanel Grid.Column="2">
+                    <TextBlock Text="Cursor effect" Style="{StaticResource Label}"/>
+                    <ComboBox x:Name="CursorEffectBox" SelectedValuePath="Tag" AutomationProperties.Name="Cursor effect" Margin="0,0,0,10">
+                      <ComboBoxItem Content="Off" Tag="off"/>
+                      <ComboBoxItem Content="Sparkle trail" Tag="sparkle"/>
+                      <ComboBoxItem Content="Comet tail" Tag="comet"/>
+                      <ComboBoxItem Content="Ring follower" Tag="ring"/>
+                      <ComboBoxItem Content="Rainbow trail" Tag="rainbow"/>
+                      <ComboBoxItem Content="Bubbles" Tag="bubbles"/>
+                      <ComboBoxItem Content="Hearts" Tag="hearts"/>
+                      <ComboBoxItem Content="Pixel dust" Tag="pixel"/>
+                      <ComboBoxItem Content="Spotlight" Tag="spotlight"/>
+                    </ComboBox>
+                  </StackPanel>
+                </Grid>
+                <StackPanel>
+                  <StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers>
+                    <DataTrigger Binding="{Binding SelectedValue, ElementName=TypingEffectBox}" Value="wordpop"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+                  </Style.Triggers></Style></StackPanel.Style>
+                  <DockPanel Margin="0,0,0,6">
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                      <local:ColorPickerButton x:Name="WordPopColorPicker" FallbackBrush="#FFE14D" Margin="0,0,6,0" ColorChanged="ColorPicker_Changed" AutomationProperties.Name="Word pop color picker"/>
+                      <TextBox x:Name="WordPopHexBox" Width="84" MaxLength="9" Padding="8,4" FontSize="12" LostKeyboardFocus="ColorHex_Committed" KeyDown="ColorHex_KeyDown" AutomationProperties.Name="Word pop color hex"/>
+                    </StackPanel>
+                    <TextBlock Text="Word pop color" Style="{StaticResource Label}" VerticalAlignment="Center" Margin="0"/>
+                  </DockPanel>
+                  <ListBox x:Name="WordPopColorBox" Style="{StaticResource ColorChipGrid}" SelectedValuePath="Value" SelectionChanged="ColorOverride_Changed" Margin="0,0,0,10" AutomationProperties.Name="Word pop color"/>
+                </StackPanel>
                 <StackPanel>
                   <StackPanel.Style><Style TargetType="StackPanel"><Style.Triggers>
                     <DataTrigger Binding="{Binding SelectedValue, ElementName=TypingEffectBox}" Value="off"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
@@ -1054,6 +1126,30 @@
                           TickFrequency=".05" SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True"
                           AutomationProperties.Name="Click intensity" Margin="0,0,0,10"/>
                 </StackPanel>
+                <StackPanel>
+                  <StackPanel.Style><Style TargetType="StackPanel"><Style.Triggers>
+                    <DataTrigger Binding="{Binding SelectedValue, ElementName=HoverEffectBox}" Value="off"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+                  </Style.Triggers></Style></StackPanel.Style>
+                  <DockPanel Margin="0,0,0,4">
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=HoverIntensityBox, StringFormat=P0}" Foreground="{DynamicResource Muted}"/>
+                    <TextBlock Text="Hover intensity" Style="{StaticResource Label}" Margin="0"/>
+                  </DockPanel>
+                  <Slider x:Name="HoverIntensityBox" Style="{StaticResource BackgroundSlider}" Minimum=".1" Maximum="1"
+                          TickFrequency=".05" SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True"
+                          AutomationProperties.Name="Hover intensity" Margin="0,0,0,10"/>
+                </StackPanel>
+                <StackPanel>
+                  <StackPanel.Style><Style TargetType="StackPanel"><Style.Triggers>
+                    <DataTrigger Binding="{Binding SelectedValue, ElementName=CursorEffectBox}" Value="off"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+                  </Style.Triggers></Style></StackPanel.Style>
+                  <DockPanel Margin="0,0,0,4">
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=CursorIntensityBox, StringFormat=P0}" Foreground="{DynamicResource Muted}"/>
+                    <TextBlock Text="Cursor intensity" Style="{StaticResource Label}" Margin="0"/>
+                  </DockPanel>
+                  <Slider x:Name="CursorIntensityBox" Style="{StaticResource BackgroundSlider}" Minimum=".1" Maximum="1"
+                          TickFrequency=".05" SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True"
+                          AutomationProperties.Name="Cursor intensity" Margin="0,0,0,10"/>
+                </StackPanel>
                 <CheckBox x:Name="SendPulseBox" Content="Send pulse" Margin="0,4,0,8"/>
                 <StackPanel Visibility="{Binding IsChecked, ElementName=SendPulseBox, Converter={StaticResource Bool}}">
                   <DockPanel Margin="0,0,0,4">
@@ -1075,7 +1171,7 @@
                 </Grid>
               </StackPanel>
               <StackPanel x:Name="AppearanceTexturesSection" Visibility="Collapsed">
-                <ListBox x:Name="ChromeTextureBox" Style="{StaticResource SwatchGrid}" SelectedValuePath="Value" SelectionChanged="ChromeTexture_Changed"
+                <ListBox x:Name="ChromeTextureBox" Style="{StaticResource SwatchGrid}" SelectedValuePath="Value" SelectionMode="Multiple" SelectionChanged="ChromeTexture_Changed"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled"
                          Margin="0,0,0,6" AutomationProperties.Name="Background texture">
                   <ListBox.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ListBox.ItemsPanel>
@@ -1125,7 +1221,10 @@
                     </DataTemplate>
                   </ListBox.ItemTemplate>
                 </ListBox>
-                <CheckBox x:Name="TextureOnChatBox" Content="Show on chat" Margin="0,2,0,8" Checked="TextureOnChat_Changed" Unchecked="TextureOnChat_Changed"/>
+                <WrapPanel Margin="0,2,0,8">
+                  <CheckBox x:Name="TextureOnChatBox" Content="Show on chat" Margin="0,0,14,0" Checked="TextureOnChat_Changed" Unchecked="TextureOnChat_Changed"/>
+                  <CheckBox x:Name="TextureMotionBox" Content="Motion" Margin="0" Checked="TextureMotion_Changed" Unchecked="TextureMotion_Changed" AutomationProperties.Name="Texture motion"/>
+                </WrapPanel>
                 <StackPanel Margin="0,2,0,4">
                   <StackPanel.Style>
                     <Style TargetType="StackPanel">
@@ -1524,6 +1623,15 @@
                     </Grid>
                   </CheckBox>
                 </WrapPanel>
+                <WrapPanel x:Name="RailFxCards" Margin="0,0,0,4"/>
+                <StackPanel x:Name="RailFxIntensityPanel" Visibility="Collapsed">
+                  <DockPanel Margin="0,0,0,4">
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=RailFxIntensityBox, StringFormat=P0}" Foreground="{DynamicResource Muted}"/>
+                    <TextBlock Text="More side nav intensity" Style="{StaticResource Label}" Margin="0"/>
+                  </DockPanel>
+                  <Slider x:Name="RailFxIntensityBox" Style="{StaticResource BackgroundSlider}" Minimum=".1" Maximum="1" TickFrequency=".05"
+                          SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True" AutomationProperties.Name="More side nav intensity" Margin="0,0,0,8"/>
+                </StackPanel>
                 <StackPanel Visibility="{Binding IsChecked, ElementName=RailBeaconBox, Converter={StaticResource Bool}}">
                   <DockPanel Margin="0,4,0,4">
                     <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=RailBeaconIntensityBox, StringFormat=P0}" Foreground="{DynamicResource Muted}"/>
@@ -1662,6 +1770,15 @@
                     </Border>
                   </CheckBox>
                 </WrapPanel>
+                <WrapPanel x:Name="SidebarFxCards" Margin="0,0,0,4"/>
+                <StackPanel x:Name="SidebarFxIntensityPanel" Visibility="Collapsed">
+                  <DockPanel Margin="0,0,0,4">
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=SidebarFxIntensityBox, StringFormat=P0}" Foreground="{DynamicResource Muted}"/>
+                    <TextBlock Text="More side panel intensity" Style="{StaticResource Label}" Margin="0"/>
+                  </DockPanel>
+                  <Slider x:Name="SidebarFxIntensityBox" Style="{StaticResource BackgroundSlider}" Minimum=".1" Maximum="1" TickFrequency=".05"
+                          SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True" AutomationProperties.Name="More side panel intensity" Margin="0,0,0,8"/>
+                </StackPanel>
                 <StackPanel Visibility="{Binding IsChecked, ElementName=SidebarMotesBox, Converter={StaticResource Bool}}">
                   <DockPanel Margin="0,4,0,4">
                     <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=SidebarMotesIntensityBox, StringFormat=P0}" Foreground="{DynamicResource Muted}"/>
@@ -1824,7 +1941,8 @@
                   <WrapPanel Margin="0,4,0,8">
                     <CheckBox x:Name="AuraModuleBox" Content="Selected module" Margin="0,0,14,4" Checked="TargetAuraTarget_Changed" Unchecked="TargetAuraTarget_Changed"/>
                     <CheckBox x:Name="AuraPersonBox" Content="Selected person" Margin="0,0,14,4" Checked="TargetAuraTarget_Changed" Unchecked="TargetAuraTarget_Changed"/>
-                    <CheckBox x:Name="AuraButtonsBox" Content="Highlight buttons" Margin="0,0,0,4" Checked="TargetAuraTarget_Changed" Unchecked="TargetAuraTarget_Changed"/>
+                    <CheckBox x:Name="AuraButtonsBox" Content="Highlight buttons" Margin="0,0,14,4" Checked="TargetAuraTarget_Changed" Unchecked="TargetAuraTarget_Changed"/>
+                    <CheckBox x:Name="AuraOverflowBox" Content="Spill outside panels" Margin="0,0,0,4" Checked="TargetAuraTarget_Changed" Unchecked="TargetAuraTarget_Changed"/>
                   </WrapPanel>
                   <DockPanel Margin="0,0,0,6">
                     <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=TargetAuraIntensityBox, StringFormat=P0}" Foreground="{DynamicResource Muted}"/>
@@ -2425,7 +2543,9 @@
                           SmallChange=".05" LargeChange=".10" IsSnapToTickEnabled="True" ValueChanged="ChatCanvas_SliderChanged"
                           AutomationProperties.Name="Canvas gradient intensity"/>
                 </StackPanel>
-                <CheckBox x:Name="SeamlessComposerBox" Content="Seamless input bar" Margin="0,2,0,12" Checked="SeamlessComposer_Changed" Unchecked="SeamlessComposer_Changed"/>
+                <CheckBox x:Name="SeamlessComposerBox" Content="Seamless input bar" Margin="0,2,0,6" Checked="SeamlessComposer_Changed" Unchecked="SeamlessComposer_Changed"/>
+                <CheckBox x:Name="SolidComposerBox" Content="Solid input bar" Margin="22,0,0,12" Checked="SeamlessComposer_Changed" Unchecked="SeamlessComposer_Changed"
+                          Visibility="{Binding IsChecked, ElementName=SeamlessComposerBox, Converter={StaticResource Bool}}"/>
                 <Separator Margin="0,0,0,14" Background="{DynamicResource Line}"/>
                 <TextBlock Text="Background" Style="{StaticResource Label}" Margin="0,0,0,8"/>
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,14">

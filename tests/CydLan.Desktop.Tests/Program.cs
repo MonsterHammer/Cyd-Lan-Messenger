@@ -32,6 +32,7 @@ internal static partial class Program
                 else if (args.Contains("--customization-only")) await RunCustomizationVerificationAsync();
                 else if (args.Contains("--reminders-only")) await RunReminderVerificationAsync();
                 else if (args.Contains("--custom-only")) await RunLookAndBrandVerificationAsync();
+                else if (args.Contains("--effects-pack-only")) await RunEffectsPackVerificationAsync();
                 else if (args.Contains("--opacity-only")) { await TestWindowOpacityAsync(); Console.WriteLine("PASS  Window opacity"); }
                 else if (args.Contains("--floating-only")) { Directory.CreateDirectory("artifacts"); await TestFloatingLanSuiteAsync(Path.GetFullPath("artifacts")); Console.WriteLine("PASS  Floating companion suite"); }
                 else await RunAsync(args.Contains("--offline"), args.Contains("--startup-loopback"));
@@ -1578,7 +1579,7 @@ internal static partial class Program
 
     private static async Task TestChromeTexturesAsync(string artifacts)
     {
-        Check(ChromeTexture.Catalog.Count == 32, $"Expected 31 background textures + None, found {ChromeTexture.Catalog.Count}.");
+        Check(ChromeTexture.Catalog.Count == 46, $"Expected 45 background textures + None, found {ChromeTexture.Catalog.Count}.");
         Check(ChromeTexture.Normalize("starry night") == ChromeTexture.StarryNight
             && ChromeTexture.Normalize("lonely grass") == ChromeTexture.LonelyGrass
             && ChromeTexture.Normalize("grassy fields") == ChromeTexture.GrassyFields

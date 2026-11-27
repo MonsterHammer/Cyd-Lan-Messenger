@@ -335,6 +335,20 @@ public sealed class AppSettings
     public double HeaderPlasmaIntensity { get; set; } = .65;
     public string ChromeTexture { get; set; } = "off";
     public double ChromeTextureIntensity { get; set; } = .65;
+    public bool TextureMotionEnabled { get; set; }
+    public List<string> AmbientFx { get; set; } = [];
+    public double AmbientFxIntensity { get; set; } = .65;
+    public List<string> RailFx { get; set; } = [];
+    public double RailFxIntensity { get; set; } = .65;
+    public List<string> SidebarFx { get; set; } = [];
+    public double SidebarFxIntensity { get; set; } = .65;
+    public bool AuraOverflowEnabled { get; set; }
+    public string WordPopColor { get; set; } = "";
+    public string HoverEffect { get; set; } = "off";
+    public double HoverIntensity { get; set; } = .65;
+    public string CursorEffect { get; set; } = "off";
+    public double CursorIntensity { get; set; } = .65;
+    public bool SolidComposerEnabled { get; set; }
     public string TargetAura { get; set; } = "off";
     public double TargetAuraIntensity { get; set; } = .70;
     public bool AuraSelectedModuleEnabled { get; set; } = true;
