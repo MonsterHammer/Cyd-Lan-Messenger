@@ -1376,7 +1376,7 @@ internal static class Program
         }
         preferences.ShowAppearanceTab("Headers");
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
-        Check(FindText(preferences, "Title bar") is { IsVisible: true } && FindText(preferences, "Chat header") is { IsVisible: true },
+        Check(FindVisibleText(preferences, "Title bar") is not null && FindVisibleText(preferences, "Chat header") is not null,
             "Title bar and Chat header effects should be cleanly separated in the Headers tab.");
 
         foreach (string name in new[]
@@ -3099,6 +3099,14 @@ internal static class Program
         if (root is System.Windows.Controls.TextBlock block && block.Text == text) return block;
         for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
             if (FindText(VisualTreeHelper.GetChild(root, i), text) is { } found) return found;
+        return null;
+    }
+
+    private static System.Windows.Controls.TextBlock? FindVisibleText(DependencyObject root, string text)
+    {
+        if (root is System.Windows.Controls.TextBlock { IsVisible: true } block && block.Text == text) return block;
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+            if (FindVisibleText(VisualTreeHelper.GetChild(root, i), text) is { } found) return found;
         return null;
     }
 
