@@ -2038,7 +2038,7 @@
                 <StackPanel x:Name="PetColorsPanel" Visibility="Collapsed">
                   <DockPanel Margin="0,0,0,6">
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                      <local:ColorPickerButton x:Name="PetBodyColorPicker" FallbackBrush="{DynamicResource Surface}" Margin="0,0,6,0" ColorChanged="PetColorPicker_Changed" AutomationProperties.Name="Companion body color picker"/>
+                      <local:ColorPickerButton x:Name="PetBodyColorPicker" FallbackBrush="#F0F2F3" Margin="0,0,6,0" ColorChanged="PetColorPicker_Changed" AutomationProperties.Name="Companion body color picker"/>
                       <TextBox x:Name="PetBodyHexBox" Width="84" MaxLength="9" Padding="8,4" FontSize="12" LostKeyboardFocus="PetHex_Committed" KeyDown="PetHex_KeyDown" AutomationProperties.Name="Companion body color hex"/>
                     </StackPanel>
                     <TextBlock Text="Body color" Style="{StaticResource Label}" VerticalAlignment="Center" Margin="0"/>
@@ -2046,7 +2046,7 @@
                   <ListBox x:Name="PetBodyColorBox" Style="{StaticResource ColorChipGrid}" SelectedValuePath="Value" SelectionChanged="PetColor_Changed" Margin="0,0,0,12" AutomationProperties.Name="Companion body color"/>
                   <DockPanel Margin="0,0,0,6">
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                      <local:ColorPickerButton x:Name="PetAccentColorPicker" FallbackBrush="{DynamicResource Accent}" Margin="0,0,6,0" ColorChanged="PetColorPicker_Changed" AutomationProperties.Name="Companion accent color picker"/>
+                      <local:ColorPickerButton x:Name="PetAccentColorPicker" FallbackBrush="#3B7A8C" Margin="0,0,6,0" ColorChanged="PetColorPicker_Changed" AutomationProperties.Name="Companion accent color picker"/>
                       <TextBox x:Name="PetAccentHexBox" Width="84" MaxLength="9" Padding="8,4" FontSize="12" LostKeyboardFocus="PetHex_Committed" KeyDown="PetHex_KeyDown" AutomationProperties.Name="Companion accent color hex"/>
                     </StackPanel>
                     <TextBlock Text="Accent color" Style="{StaticResource Label}" VerticalAlignment="Center" Margin="0"/>
@@ -2054,7 +2054,7 @@
                   <ListBox x:Name="PetAccentColorBox" Style="{StaticResource ColorChipGrid}" SelectedValuePath="Value" SelectionChanged="PetColor_Changed" Margin="0,0,0,12" AutomationProperties.Name="Companion accent color"/>
                   <DockPanel Margin="0,0,0,6">
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                      <local:ColorPickerButton x:Name="PetDetailColorPicker" FallbackBrush="{DynamicResource AccentInk}" Margin="0,0,6,0" ColorChanged="PetColorPicker_Changed" AutomationProperties.Name="Companion detail color picker"/>
+                      <local:ColorPickerButton x:Name="PetDetailColorPicker" FallbackBrush="#97769F" Margin="0,0,6,0" ColorChanged="PetColorPicker_Changed" AutomationProperties.Name="Companion detail color picker"/>
                       <TextBox x:Name="PetDetailHexBox" Width="84" MaxLength="9" Padding="8,4" FontSize="12" LostKeyboardFocus="PetHex_Committed" KeyDown="PetHex_KeyDown" AutomationProperties.Name="Companion detail color hex"/>
                     </StackPanel>
                     <TextBlock Text="Detail color" Style="{StaticResource Label}" VerticalAlignment="Center" Margin="0"/>
@@ -2064,13 +2064,21 @@
                 <StackPanel x:Name="PetMotionPanel" Visibility="Collapsed">
                   <TextBlock Text="Vibe" Style="{StaticResource Label}"/>
                   <ListBox x:Name="PetVibeBox" Style="{StaticResource PillOptionGrid}" SelectedValuePath="Value" SelectionChanged="PetOption_Changed" Margin="0,0,0,12" AutomationProperties.Name="Companion vibe"/>
+                  <DockPanel Margin="0,0,0,6">
+                    <Button x:Name="PetTraitsClearButton" DockPanel.Dock="Right" Content="Clear" Style="{StaticResource Secondary}" Padding="8,3" Margin="0" Click="PetTraitsClear_Click" Visibility="Collapsed" AutomationProperties.Name="Clear personality"/>
+                    <TextBlock Text="Personality" Style="{StaticResource Label}" Margin="0" VerticalAlignment="Center"/>
+                  </DockPanel>
+                  <ListBox x:Name="PetTraitsBox" Style="{StaticResource PillOptionGrid}" SelectionMode="Multiple" SelectedValuePath="Value" SelectionChanged="PetTraits_Changed" Margin="0,0,0,2" AutomationProperties.Name="Companion personality"/>
+                  <TextBlock x:Name="PetTraitsSummary" FontSize="12" Foreground="{DynamicResource Accent}" TextWrapping="Wrap" Margin="0,0,0,10"/>
+                  <TextBlock Text="Personality presets" Style="{StaticResource Label}"/>
+                  <ListBox x:Name="PetTraitPresetBox" Style="{StaticResource PillOptionGrid}" SelectedValuePath="Value" SelectionChanged="PetTraitPreset_Changed" Margin="0,0,0,12" AutomationProperties.Name="Personality presets"/>
                   <TextBlock Text="Aura" Style="{StaticResource Label}"/>
                   <ListBox x:Name="PetAuraBox" Style="{StaticResource PillOptionGrid}" SelectedValuePath="Value" SelectionChanged="PetOption_Changed" Margin="0,0,0,12" AutomationProperties.Name="Companion aura"/>
                   <DockPanel Margin="0,0,0,4">
                     <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=PetSizeBox, StringFormat=P0}" Foreground="{DynamicResource Muted}"/>
                     <TextBlock Text="Size" Style="{StaticResource Label}" Margin="0"/>
                   </DockPanel>
-                  <Slider x:Name="PetSizeBox" Style="{StaticResource BackgroundSlider}" Minimum=".75" Maximum="1.35" TickFrequency=".05"
+                  <Slider x:Name="PetSizeBox" Style="{StaticResource BackgroundSlider}" Minimum=".75" Maximum="5" TickFrequency=".05"
                           SmallChange=".05" LargeChange=".15" IsSnapToTickEnabled="True" ValueChanged="PetSize_SliderChanged"
                           AutomationProperties.Name="Companion size" Margin="0,0,0,6"/>
                 </StackPanel>

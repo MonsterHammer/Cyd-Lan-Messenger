@@ -213,7 +213,7 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
     public bool NoGroup => GroupsOpen && SelectedGroup is null && ChatOpen;
     public bool HasDetails => HasPeer || InGroup;
     public IEnumerable<Peer> SelectedGroupMembers => SelectedGroup?.Members.Select(id => Peers.FirstOrDefault(p => p.Id == id) ?? new Peer { Id = id, Name = "Someone" }).ToList() ?? [];
-    public string SectionTitle => MediaOpen ? "Media" : TransfersOpen ? "Files" : Broadcasting ? "Broadcast" : GroupsOpen ? "Groups" : "Chats";
+    public string SectionTitle => RemindersOpen ? "Reminders" : MediaOpen ? "Media" : TransfersOpen ? "Files" : Broadcasting ? "Broadcast" : GroupsOpen ? "Groups" : "Chats";
     public bool CanCompose => Broadcasting || (GroupsOpen ? SelectedGroup is { Left: false } : SelectedPeer is not null);
     private bool GroupReachable => SelectedGroup is { Left: false } g && g.Members.Any(id => Peers.Any(p => p.Id == id && p.Online));
     public bool CanSend => (!string.IsNullOrWhiteSpace(Draft) || HasAttachments) && (Broadcasting ? OnlineCount > 0 : GroupsOpen ? GroupReachable : SelectedPeer?.Online == true);
@@ -228,15 +228,15 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
     }
     public bool HasAttachments => HasPeer && Attachments.Count > 0;
     public bool CanAttach => HasPeer && SelectedPeer?.Online == true;
-    public string ChatTitle => MediaOpen ? (CurrentMedia?.Title ?? "Media") : TransfersOpen ? "Files" : Broadcasting ? "Broadcast" : GroupsOpen ? SelectedGroup?.Name ?? "Groups" : SelectedPeer?.Name ?? "Conversations";
-    public string ChatSubtitle => MediaOpen ? (CurrentMedia?.MetaLabel ?? "") : TransfersOpen ? "" : Broadcasting ? $"{OnlineCount} online" : GroupsOpen ? (SelectedGroup is { } g ? GroupPeopleLabel(g) : "") : SelectedPeer is { } p ? p.Presence : "";
+    public string ChatTitle => RemindersOpen ? "Reminders" : MediaOpen ? (CurrentMedia?.Title ?? "Media") : TransfersOpen ? "Files" : Broadcasting ? "Broadcast" : GroupsOpen ? SelectedGroup?.Name ?? "Groups" : SelectedPeer?.Name ?? "Conversations";
+    public string ChatSubtitle => RemindersOpen ? ReminderSubtitle : MediaOpen ? (CurrentMedia?.MetaLabel ?? "") : TransfersOpen ? "" : Broadcasting ? $"{OnlineCount} online" : GroupsOpen ? (SelectedGroup is { } g ? GroupPeopleLabel(g) : "") : SelectedPeer is { } p ? p.Presence : "";
     private string GroupPeopleLabel(GroupChat g) => g.Left ? "You left this group" : string.Join(", ", g.Members.Select(NameOf).Append("you"));
     private string NameOf(string peerId) => Peers.FirstOrDefault(p => p.Id == peerId)?.Name ?? "Someone";
     private void SectionChanged()
     {
         replying = false;
         foreach (var name in new[] { nameof(TransfersOpen), nameof(MediaOpen), nameof(Broadcasting), nameof(GroupsOpen), nameof(ChatOpen), nameof(IsConversationSection), nameof(IsBroadcastSection),
-            nameof(IsGroupsSection), nameof(IsFilesSection), nameof(IsMediaSection), nameof(ShowPeopleList), nameof(ShowPeopleDirectory), nameof(ShowRecentList), nameof(ShowGroupList), nameof(InGroup), nameof(HasPeer), nameof(NoPeer), nameof(NoGroup),
+            nameof(IsGroupsSection), nameof(IsFilesSection), nameof(IsMediaSection), nameof(RemindersOpen), nameof(IsRemindersSection), nameof(ShowPeopleList), nameof(ShowPeopleDirectory), nameof(ShowRecentList), nameof(ShowGroupList), nameof(InGroup), nameof(HasPeer), nameof(NoPeer), nameof(NoGroup),
             nameof(HasDetails), nameof(SelectedGroupMembers), nameof(SectionTitle), nameof(ChatTitle), nameof(ChatSubtitle), nameof(Draft), nameof(ShowMiniPlayer) })
             Changed(name);
         Changed(nameof(SelectedGroup)); Changed(nameof(SelectedPeer)); Changed(nameof(SelectedRecentChat));
@@ -306,6 +306,7 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
             lan.PeerOnline += peer => UI(() => {
                 if (disposed) return;
                 var existing = Peers.FirstOrDefault(p => p.Id == peer.Id);
+                bool cameOnline = existing is not { Online: true };
                 if (existing is null) { existing = peer; Peers.Add(peer); rosterSaveTimer.Start(); }
                 else
                 {
@@ -317,6 +318,7 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
                         rosterSaveTimer.Start();
                 }
                 existing.PropertyChanged -= PeerChanged; existing.PropertyChanged += PeerChanged;
+                if (cameOnline) PeerCameOnline?.Invoke(existing.Name);
                 QueueRosterRefresh();
             });
             lan.ProfileReceived += (id, first, last, about) => UI(() => {
@@ -368,6 +370,7 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
         RefreshRecentChats();
         RefreshQuickChatPeers();
         InitMedia();
+        InitReminders();
         ApplySettings();
     }
     private void RefreshQuickChatPeers()
@@ -1298,6 +1301,10 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
         Changed(nameof(OnlineRingEnabled));
     }
 
+    private IReadOnlyList<string>? previewPetTraits;
+    public IReadOnlyList<string> PetTraitList => previewPetTraits ?? Settings.PetTraits;
+    public void PreviewPetTraits(IReadOnlyList<string>? preview) { previewPetTraits = preview; Changed(nameof(PetTraitList)); }
+
     public void PreviewPetAppearance(PetAppearance? preview)
     {
         previewPetAppearance = preview;
@@ -1578,6 +1585,8 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
         Settings.TypingEffect = ChatEffects.Normalize(Settings.TypingEffect, typing: true);
         Settings.ClickEffect = ChatEffects.Normalize(Settings.ClickEffect);
         FloatingPetStyle.Apply(PetAppearance.From(Settings), Settings);
+        Settings.PetTraits = PetTraits.Normalize(Settings.PetTraits);
+        Changed(nameof(PetTraitList));
         if (Settings.MessageFontSize is not ("small" or "medium" or "large")) Settings.MessageFontSize = "medium";
         store?.SaveSettings(Settings);
         if (previousBackground.Length > 0 && previousBackground != Settings.ChatBackgroundPath &&
@@ -1749,6 +1758,7 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
     {
         if (disposed) return;
         disposed = true;
+        DisposeReminders();
         rosterSaveTimer.Stop();
         queuedRosterRefresh?.Abort();
         try { if (networkStartup is not null) await networkStartup; }

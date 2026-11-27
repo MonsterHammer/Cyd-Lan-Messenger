@@ -74,6 +74,7 @@ public partial class App : System.Windows.Application
             if (e.Args.Contains("--compact")) { window.Width = window.MinWidth; window.Height = window.MinHeight; }
             window.Title = preview ? "CydLan · Offline preview" : labAddress is not null ? $"CydLan · Lab {labAddress}" : "CydLan · LAN messenger";
             if (e.Args.Contains("--transfers")) model.TransfersOpen = true;
+            if (e.Args.Contains("--reminders")) model.RemindersOpen = true;
             if (e.Args.Contains("--groups")) { model.GroupsOpen = true; model.SelectedGroup = model.Groups.FirstOrDefault(); }
             MainWindow = window;
             if (activateEvent is not null)
@@ -99,6 +100,11 @@ public partial class App : System.Windows.Application
                     {
                         ShowWindow(window);
                         window.OpenAppearanceTab("Companion");
+                    },
+                    id =>
+                    {
+                        ShowWindow(window);
+                        window.OpenReminders(id);
                     });
                 floatingPet.SyncVisibility();
                 if (!preview) ConnectNotifications(window, model);

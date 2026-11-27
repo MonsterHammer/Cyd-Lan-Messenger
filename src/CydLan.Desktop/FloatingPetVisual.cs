@@ -11,37 +11,39 @@ namespace CydLan.Desktop;
 /// <summary>Draws a customizable animated CydLan companion pet with modular bodies, patterns, faces, hats, wings, outfits, props, and vibes.</summary>
 public sealed partial class FloatingPetVisual : FrameworkElement
 {
+    private static SolidColorBrush Fixed(byte r, byte g, byte b) { var br = new SolidColorBrush(Color.FromRgb(r, g, b)); br.Freeze(); return br; }
+
     public static readonly DependencyProperty AccentBrushProperty = DependencyProperty.Register(
         nameof(AccentBrush), typeof(Brush), typeof(FloatingPetVisual),
-        new FrameworkPropertyMetadata(Brushes.SteelBlue, FrameworkPropertyMetadataOptions.AffectsRender));
+        new FrameworkPropertyMetadata(Fixed(0x3B, 0x7A, 0x8C), FrameworkPropertyMetadataOptions.AffectsRender));
 
     public static readonly DependencyProperty AccentSoftBrushProperty = DependencyProperty.Register(
         nameof(AccentSoftBrush), typeof(Brush), typeof(FloatingPetVisual),
-        new FrameworkPropertyMetadata(Brushes.LightBlue, FrameworkPropertyMetadataOptions.AffectsRender));
+        new FrameworkPropertyMetadata(Fixed(0xE1, 0xED, 0xF1), FrameworkPropertyMetadataOptions.AffectsRender));
 
     public static readonly DependencyProperty SurfaceBrushProperty = DependencyProperty.Register(
         nameof(SurfaceBrush), typeof(Brush), typeof(FloatingPetVisual),
-        new FrameworkPropertyMetadata(Brushes.WhiteSmoke, FrameworkPropertyMetadataOptions.AffectsRender));
+        new FrameworkPropertyMetadata(Fixed(0xF0, 0xF2, 0xF3), FrameworkPropertyMetadataOptions.AffectsRender));
 
     public static readonly DependencyProperty LineBrushProperty = DependencyProperty.Register(
         nameof(LineBrush), typeof(Brush), typeof(FloatingPetVisual),
-        new FrameworkPropertyMetadata(Brushes.Gray, FrameworkPropertyMetadataOptions.AffectsRender));
+        new FrameworkPropertyMetadata(Fixed(0xC0, 0xC8, 0xCE), FrameworkPropertyMetadataOptions.AffectsRender));
 
     public static readonly DependencyProperty InkBrushProperty = DependencyProperty.Register(
         nameof(InkBrush), typeof(Brush), typeof(FloatingPetVisual),
-        new FrameworkPropertyMetadata(Brushes.Black, FrameworkPropertyMetadataOptions.AffectsRender));
+        new FrameworkPropertyMetadata(Fixed(0x1D, 0x23, 0x26), FrameworkPropertyMetadataOptions.AffectsRender));
 
     public static readonly DependencyProperty OnlineBrushProperty = DependencyProperty.Register(
         nameof(OnlineBrush), typeof(Brush), typeof(FloatingPetVisual),
-        new FrameworkPropertyMetadata(Brushes.MediumSeaGreen, FrameworkPropertyMetadataOptions.AffectsRender));
+        new FrameworkPropertyMetadata(Fixed(0x4E, 0x95, 0xA9), FrameworkPropertyMetadataOptions.AffectsRender));
 
     public static readonly DependencyProperty AwayBrushProperty = DependencyProperty.Register(
         nameof(AwayBrush), typeof(Brush), typeof(FloatingPetVisual),
-        new FrameworkPropertyMetadata(Brushes.Goldenrod, FrameworkPropertyMetadataOptions.AffectsRender));
+        new FrameworkPropertyMetadata(Fixed(0xB0, 0x8A, 0x3E), FrameworkPropertyMetadataOptions.AffectsRender));
 
     public static readonly DependencyProperty DangerBrushProperty = DependencyProperty.Register(
         nameof(DangerBrush), typeof(Brush), typeof(FloatingPetVisual),
-        new FrameworkPropertyMetadata(Brushes.IndianRed, FrameworkPropertyMetadataOptions.AffectsRender));
+        new FrameworkPropertyMetadata(Fixed(0xB4, 0x49, 0x5B), FrameworkPropertyMetadataOptions.AffectsRender));
 
     public static readonly DependencyProperty ThemeDesignProperty = DependencyProperty.Register(
         nameof(ThemeDesign), typeof(DecorationDesign), typeof(FloatingPetVisual),
@@ -50,6 +52,9 @@ public sealed partial class FloatingPetVisual : FrameworkElement
     public static readonly DependencyProperty PetStyleProperty = DependencyProperty.Register(
         nameof(PetStyle), typeof(PetAppearance), typeof(FloatingPetVisual),
         new FrameworkPropertyMetadata(PetAppearance.Default, FrameworkPropertyMetadataOptions.AffectsRender));
+
+    /// <summary>The host already sizes this control by the companion size.</summary>
+    public bool SizeFromBounds { get; set; }
 
     public Brush AccentBrush { get => (Brush)GetValue(AccentBrushProperty); set => SetValue(AccentBrushProperty, value); }
     public Brush AccentSoftBrush { get => (Brush)GetValue(AccentSoftBrushProperty); set => SetValue(AccentSoftBrushProperty, value); }
@@ -106,16 +111,8 @@ public sealed partial class FloatingPetVisual : FrameworkElement
 
     public FloatingPetVisual()
     {
+        // The companion keeps its own look; theme changes never restyle it.
         IsHitTestVisible = false;
-        SetResourceReference(AccentBrushProperty, "Accent");
-        SetResourceReference(AccentSoftBrushProperty, "AccentSoft");
-        SetResourceReference(SurfaceBrushProperty, "Surface");
-        SetResourceReference(LineBrushProperty, "Line");
-        SetResourceReference(InkBrushProperty, "Ink");
-        SetResourceReference(OnlineBrushProperty, "Online");
-        SetResourceReference(AwayBrushProperty, "Away");
-        SetResourceReference(DangerBrushProperty, "Danger");
-        SetResourceReference(ThemeDesignProperty, "ThemeDecorationDesign");
     }
 
     protected override void OnRender(DrawingContext dc)
@@ -180,12 +177,17 @@ public sealed partial class FloatingPetVisual : FrameworkElement
             : sleepyMood ? Math.Sin(breathPhase * .3) * 2.4
             : Math.Sin(breathPhase * .55 * cadence) * (style.Vibe == "zoomies" ? 3.0 : 2.2);
 
+        var (moodTilt, moodShake, moodSquash) = MoodMotion(breathPhase, facing >= 0 ? 1 : -1);
+        tiltDeg += moodTilt;
+        bool moodHappy = MoodIsHappy;
+        bool showHappy = isExcited || moodHappy;
+
         double baseFit = Math.Min(w / 144.0, h / 130.0);
-        double totalScale = baseFit * FloatingPetStyle.ClampSize(style.Size);
+        double totalScale = baseFit * (SizeFromBounds ? 1.0 : Math.Min(FloatingPetStyle.ClampSize(style.Size), FloatingPetStyle.MaxInlineSize));
         double groundScreenY = h - Math.Max(6, 7 * baseFit);
 
-        dc.PushTransform(new TranslateTransform(w * .5, groundScreenY));
-        dc.PushTransform(new ScaleTransform(totalScale, totalScale));
+        dc.PushTransform(new TranslateTransform(w * .5 + moodShake * totalScale, groundScreenY));
+        dc.PushTransform(new ScaleTransform(totalScale, totalScale * moodSquash));
 
         // Ground shadow (softly shrinks/fades as the companion rises).
         double shadowScale = Math.Clamp(1.0 - totalLift / 34.0, .58, 1.0);
@@ -233,6 +235,7 @@ public sealed partial class FloatingPetVisual : FrameworkElement
         dc.PushClip(bodyGeo);
         dc.DrawGeometry(bodyFill, null, bodyGeo);
         DrawPatternOverlay(dc, style.Pattern, bodyTop, bodyBottom, bodyW, bodyH, surface, accent, accentSoft, detail, topFill, darkBody);
+        DrawMoodBodyTint(dc, bodyGeo, breathPhase);
 
         // Glossy top-left highlight crescent.
         dc.DrawRoundedRectangle(
@@ -255,11 +258,14 @@ public sealed partial class FloatingPetVisual : FrameworkElement
         double eyeY = faceCenterY + (isExcited || hopArc > 3 ? -1.4 : 0);
         double eyeSep = style.Body == "bean" ? 7.2 : 8.4;
 
-        DrawCheeks(dc, style.Cheeks, lookX, eyeY, eyeSep, accent, detail, featureInk, isHovered, isExcited);
-        DrawEyes(dc, style.Eyes, lookX, eyeY, eyeSep, accent, detail, featureInk, surface, blinkProgress, isHovered, isExcited, sleepyMood);
-        if (style.Brows != FloatingPetStyle.None)
+        DrawCheeks(dc, style.Cheeks, lookX, eyeY, eyeSep, accent, detail, featureInk, isHovered, showHappy);
+        DrawMoodCheeks(dc, lookX, eyeY, eyeSep);
+        if (sleepyMood || !DrawMoodEyes(dc, lookX, eyeY, eyeSep, featureInk, accent, breathPhase, blinkProgress))
+            DrawEyes(dc, style.Eyes, lookX, eyeY, eyeSep, accent, detail, featureInk, surface, blinkProgress, isHovered, showHappy, sleepyMood);
+        if (!DrawMoodBrows(dc, lookX, eyeY - 6.3, eyeSep, featureInk) && style.Brows != FloatingPetStyle.None)
             DrawBrows(dc, style.Brows, lookX, eyeY - 6.3, eyeSep, featureInk);
-        DrawMouth(dc, style.Mouth, lookX, eyeY + 4.5, featureInk, detail, isHovered, isExcited, sleepyMood, blinkProgress);
+        if (sleepyMood || !DrawMoodMouth(dc, lookX, eyeY + 4.5, featureInk, detail, breathPhase))
+            DrawMouth(dc, style.Mouth, lookX, eyeY + 4.5, featureInk, detail, isHovered, showHappy, sleepyMood, blinkProgress);
         if (style.Glasses != FloatingPetStyle.None)
             DrawGlasses(dc, style.Glasses, lookX, eyeY, eyeSep, accent, detail, featureInk, facing);
 
@@ -270,6 +276,7 @@ public sealed partial class FloatingPetVisual : FrameworkElement
 
         // 8. Props / orbiting particles & sleepy/excited/dancing mood cues.
         DrawPropAndCues(dc, style.Prop, bodyTop, bodyBottom, bodyW, accent, detail, featureInk, breathPhase, hopArc, facing, isExcited, sleepyMood, isDancing);
+        if (!sleepyMood) DrawMoodCues(dc, bodyTop, bodyBottom, bodyW, eyeY, eyeSep, lookX, accent, detail, featureInk, breathPhase);
 
         dc.Pop(); // tilt
         dc.Pop(); // scale

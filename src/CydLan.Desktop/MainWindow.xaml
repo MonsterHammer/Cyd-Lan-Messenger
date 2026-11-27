@@ -14,6 +14,70 @@
     <local:SmileyVisibilityConverter x:Key="SmileyVisibility"/>
     <local:LookMessageConverter x:Key="LookMessage"/>
     <local:MediaFileVisibilityConverter x:Key="MediaFile"/>
+    <local:ResourceKeyConverter x:Key="ResourceKey"/>
+    <Style x:Key="ReminderPills" TargetType="ListBox">
+      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBox"><ItemsPresenter/></ControlTemplate></Setter.Value></Setter>
+      <Setter Property="ItemsPanel"><Setter.Value><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></Setter.Value></Setter>
+      <Setter Property="ItemContainerStyle">
+        <Setter.Value>
+          <Style TargetType="ListBoxItem">
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Margin" Value="0,0,6,6"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="AutomationProperties.Name" Value="{Binding Name, Mode=OneTime}"/>
+            <Setter Property="Template">
+              <Setter.Value>
+                <ControlTemplate TargetType="ListBoxItem">
+                  <Border x:Name="Pill" Padding="10,5" CornerRadius="{DynamicResource ControlCorner}"
+                          Background="{DynamicResource Canvas}" BorderBrush="{DynamicResource Line}" BorderThickness="1">
+                    <TextBlock Text="{Binding Name, Mode=OneTime}" Foreground="{DynamicResource Ink}" FontSize="12" VerticalAlignment="Center"/>
+                  </Border>
+                  <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Pill" Property="BorderBrush" Value="{DynamicResource Muted}"/></Trigger>
+                    <Trigger Property="IsSelected" Value="True">
+                      <Setter TargetName="Pill" Property="Background" Value="{DynamicResource AccentSoft}"/>
+                      <Setter TargetName="Pill" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                    </Trigger>
+                  </ControlTemplate.Triggers>
+                </ControlTemplate>
+              </Setter.Value>
+            </Setter>
+          </Style>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="ReminderIconGrid" TargetType="ListBox" BasedOn="{StaticResource ReminderPills}">
+      <Setter Property="ItemContainerStyle">
+        <Setter.Value>
+          <Style TargetType="ListBoxItem">
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Margin" Value="0,0,5,5"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="ToolTip" Value="{Binding Name, Mode=OneTime}"/>
+            <Setter Property="AutomationProperties.Name" Value="{Binding Name, Mode=OneTime}"/>
+            <Setter Property="Template">
+              <Setter.Value>
+                <ControlTemplate TargetType="ListBoxItem">
+                  <Border x:Name="Chip" Width="34" Height="34" CornerRadius="{DynamicResource ControlCorner}"
+                          Background="{DynamicResource Canvas}" BorderBrush="{DynamicResource Line}" BorderThickness="1">
+                    <local:Glyph x:Name="ChipGlyph" Size="17" Foreground="{DynamicResource Muted}"
+                                 Data="{Binding Value, Mode=OneTime, Converter={StaticResource ResourceKey}, ConverterParameter=icon}"/>
+                  </Border>
+                  <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Chip" Property="BorderBrush" Value="{DynamicResource Muted}"/></Trigger>
+                    <Trigger Property="IsSelected" Value="True">
+                      <Setter TargetName="Chip" Property="Background" Value="{DynamicResource AccentSoft}"/>
+                      <Setter TargetName="Chip" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                      <Setter TargetName="ChipGlyph" Property="Foreground" Value="{DynamicResource Accent}"/>
+                    </Trigger>
+                  </ControlTemplate.Triggers>
+                </ControlTemplate>
+              </Setter.Value>
+            </Setter>
+          </Style>
+        </Setter.Value>
+      </Setter>
+    </Style>
     <Style x:Key="MediaSlider" TargetType="Slider">
       <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Slider">
@@ -345,6 +409,15 @@
               <local:Glyph Data="{DynamicResource IconMedia}" Size="19"/>
               <Button.Style><Style TargetType="Button" BasedOn="{StaticResource RailNavIcon}"><Style.Triggers><DataTrigger Binding="{Binding IsMediaSection}" Value="True"><Setter Property="Background" Value="{DynamicResource RailNavSelected}"/><Setter Property="Foreground" Value="{DynamicResource Accent}"/></DataTrigger></Style.Triggers></Style></Button.Style>
             </Button>
+            <Button x:Name="RemindersNav" ToolTip="Reminders" Click="Reminders_Click" AutomationProperties.Name="Reminders"
+                    local:ButtonEffects.IsHighlight="{Binding IsRemindersSection}" local:TargetAura.Role="Module">
+              <Grid>
+                <local:Glyph Data="{DynamicResource IconBell}" Size="19"/>
+                <Border Width="8" Height="8" CornerRadius="4" Background="{DynamicResource Danger}" HorizontalAlignment="Right" VerticalAlignment="Top"
+                        Margin="0,-1,-2,0" IsHitTestVisible="False" Visibility="{Binding HasDueReminders, Converter={StaticResource Bool}}"/>
+              </Grid>
+              <Button.Style><Style TargetType="Button" BasedOn="{StaticResource RailNavIcon}"><Style.Triggers><DataTrigger Binding="{Binding IsRemindersSection}" Value="True"><Setter Property="Background" Value="{DynamicResource RailNavSelected}"/><Setter Property="Foreground" Value="{DynamicResource Accent}"/></DataTrigger></Style.Triggers></Style></Button.Style>
+            </Button>
           </StackPanel>
           <StackPanel Grid.Row="2" VerticalAlignment="Bottom" Margin="0,0,0,18">
             <Button Style="{StaticResource RailNavIcon}" ToolTip="Preferences" Click="Settings_Click" AutomationProperties.Name="Preferences"><local:Glyph Data="{DynamicResource IconSettings}" Size="19"/></Button>
@@ -412,6 +485,7 @@
                 <Button.Style><Style TargetType="Button" BasedOn="{StaticResource SidebarIcon}"><Setter Property="ToolTip" Value="Connect"/><Style.Triggers>
                   <DataTrigger Binding="{Binding IsGroupsSection}" Value="True"><Setter Property="ToolTip" Value="New group"/></DataTrigger>
                   <DataTrigger Binding="{Binding IsMediaSection}" Value="True"><Setter Property="ToolTip" Value="Add files"/></DataTrigger>
+                  <DataTrigger Binding="{Binding IsRemindersSection}" Value="True"><Setter Property="ToolTip" Value="New reminder"/></DataTrigger>
                   <DataTrigger Binding="{Binding IsFilesSection}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
                 </Style.Triggers></Style></Button.Style>
               </Button>
@@ -532,6 +606,13 @@
                   <Button Content="Add folder" Style="{StaticResource Secondary}" HorizontalAlignment="Stretch" Margin="0,8,0,0" Click="AddMediaFolder_Click" AutomationProperties.Name="Add media folder"/>
                   <Button Content="Clear added" Style="{StaticResource Secondary}" HorizontalAlignment="Stretch" Margin="0,8,0,0" Click="ClearMediaAdded_Click" Visibility="{Binding HasAddedMediaSources, Converter={StaticResource Bool}}" AutomationProperties.Name="Clear added media"/>
                 </StackPanel>
+              </StackPanel>
+              <StackPanel Margin="8,0" Visibility="{Binding IsRemindersSection, Converter={StaticResource Bool}}">
+                <RadioButton x:Name="ReminderFilterToday" Style="{StaticResource FilterRow}" Tag="today" Checked="ReminderFilter_Checked" IsChecked="True" AutomationProperties.Name="Today's reminders"><Grid><TextBlock Text="Today"/><TextBlock Text="{Binding RemindersTodayCount}" Foreground="{DynamicResource Faint}" HorizontalAlignment="Right"/></Grid></RadioButton>
+                <RadioButton x:Name="ReminderFilterUpcoming" Style="{StaticResource FilterRow}" Tag="upcoming" Checked="ReminderFilter_Checked" AutomationProperties.Name="Upcoming reminders"><Grid><TextBlock Text="Upcoming"/><TextBlock Text="{Binding RemindersUpcomingCount}" Foreground="{DynamicResource Faint}" HorizontalAlignment="Right"/></Grid></RadioButton>
+                <RadioButton x:Name="ReminderFilterDone" Style="{StaticResource FilterRow}" Tag="done" Checked="ReminderFilter_Checked" AutomationProperties.Name="Done reminders"><Grid><TextBlock Text="Done"/><TextBlock Text="{Binding RemindersDoneCount}" Foreground="{DynamicResource Faint}" HorizontalAlignment="Right"/></Grid></RadioButton>
+                <RadioButton x:Name="ReminderFilterAll" Style="{StaticResource FilterRow}" Tag="all" Checked="ReminderFilter_Checked" AutomationProperties.Name="All reminders"><Grid><TextBlock Text="All"/><TextBlock Text="{Binding RemindersAllCount}" Foreground="{DynamicResource Faint}" HorizontalAlignment="Right"/></Grid></RadioButton>
+                <Button Content="New reminder" Style="{StaticResource Secondary}" HorizontalAlignment="Stretch" Margin="8,14,8,0" Click="NewReminder_Click" AutomationProperties.Name="New reminder"/>
               </StackPanel>
               </Grid>
               <Border x:Name="MiniPlayerCard" Grid.Row="1" Visibility="{Binding ShowMiniPlayer, Converter={StaticResource Bool}}"
@@ -956,6 +1037,145 @@
                 </Grid></Border>
               </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
               <TextBlock Text="No files" Foreground="{DynamicResource ContentMuted}" HorizontalAlignment="Center" VerticalAlignment="Center"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding NoTransfersShown}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+            </Grid>
+            <Grid x:Name="RemindersSectionGrid" Grid.Row="1" Visibility="{Binding RemindersOpen, Converter={StaticResource Bool}}" Margin="26,12,26,16" SizeChanged="RemindersSection_SizeChanged">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition x:Name="ReminderGapColumn" Width="18"/><ColumnDefinition x:Name="ReminderEditorColumn" Width="340"/></Grid.ColumnDefinitions>
+              <ItemsControl x:Name="RemindersList" ItemsSource="{Binding RemindersView}" ScrollViewer.VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Reminders list">
+                <ItemsControl.Template><ControlTemplate TargetType="ItemsControl"><ScrollViewer Focusable="False" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><ItemsPresenter/></ScrollViewer></ControlTemplate></ItemsControl.Template>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate DataType="{x:Type local:ReminderRow}">
+                    <Border x:Name="Card" Background="{DynamicResource Surface}" CornerRadius="{DynamicResource ComposerCorner}" Padding="14,12" Margin="0,0,0,10"
+                            BorderBrush="Transparent" BorderThickness="1.5" Cursor="Hand" Tag="{Binding Id}" MouseLeftButtonUp="ReminderCard_Click"
+                            AutomationProperties.Name="{Binding Title}">
+                      <Border.ContextMenu>
+                        <ContextMenu>
+                          <MenuItem Header="Edit" Tag="{Binding Id}" Click="ReminderEdit_Click"/>
+                          <MenuItem Header="Done" Tag="{Binding Id}" Click="ReminderDone_Click" IsEnabled="{Binding CanAct}"/>
+                          <MenuItem Header="Snooze">
+                            <MenuItem Header="5 minutes" Tag="{Binding Id}" CommandParameter="5" Click="ReminderSnooze_Click"/>
+                            <MenuItem Header="10 minutes" Tag="{Binding Id}" CommandParameter="10" Click="ReminderSnooze_Click"/>
+                            <MenuItem Header="30 minutes" Tag="{Binding Id}" CommandParameter="30" Click="ReminderSnooze_Click"/>
+                            <MenuItem Header="1 hour" Tag="{Binding Id}" CommandParameter="60" Click="ReminderSnooze_Click"/>
+                          </MenuItem>
+                          <MenuItem Header="Skip today" Tag="{Binding Id}" Click="ReminderSkip_Click"/>
+                          <MenuItem Header="Undo done" Tag="{Binding Id}" Click="ReminderUndo_Click" IsEnabled="{Binding IsDone}"/>
+                          <MenuItem Header="Turned on" Tag="{Binding Id}" IsCheckable="True" IsChecked="{Binding Enabled, Mode=OneWay}" Click="ReminderToggle_Click"/>
+                          <Separator/>
+                          <MenuItem Header="Delete" Tag="{Binding Id}" Click="ReminderDelete_Click"/>
+                        </ContextMenu>
+                      </Border.ContextMenu>
+                      <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="46"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <Border x:Name="IconDisc" Width="36" Height="36" CornerRadius="18" Background="{DynamicResource AccentSoft}" HorizontalAlignment="Left" VerticalAlignment="Top">
+                          <local:Glyph x:Name="IconGlyph" Data="{Binding Icon, Converter={StaticResource ResourceKey}}" Size="18" Foreground="{DynamicResource Accent}"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,10,0">
+                          <TextBlock x:Name="TitleText" Text="{Binding Title}" FontSize="14.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                          <TextBlock Text="{Binding Schedule}" FontSize="12" Foreground="{DynamicResource Muted}" Margin="0,3,0,0" TextWrapping="Wrap"/>
+                          <TextBlock Text="{Binding Note}" FontSize="12" Foreground="{DynamicResource Faint}" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" Visibility="{Binding HasNote, Converter={StaticResource Bool}}"/>
+                          <WrapPanel Margin="0,7,0,0">
+                            <Border x:Name="StateChip" CornerRadius="{DynamicResource ControlCorner}" Padding="7,2" Background="{DynamicResource Hover}" Margin="0,0,6,0">
+                              <TextBlock x:Name="StateText" Text="{Binding StateLabel}" FontSize="11" Foreground="{DynamicResource Muted}"/>
+                            </Border>
+                            <Border CornerRadius="{DynamicResource ControlCorner}" Padding="7,2" Background="{DynamicResource AccentSoft}" Margin="0,0,6,0" Visibility="{Binding HasStreak, Converter={StaticResource Bool}}">
+                              <TextBlock Text="{Binding StreakLabel}" FontSize="11" Foreground="{DynamicResource Accent}" FontWeight="SemiBold"/>
+                            </Border>
+                            <TextBlock Text="{Binding TotalLabel}" FontSize="11" Foreground="{DynamicResource Faint}" VerticalAlignment="Center"/>
+                          </WrapPanel>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                          <Button Content="Done" Style="{StaticResource Primary}" Padding="12,5" MinWidth="76" Tag="{Binding Id}" Click="ReminderDone_Click"
+                                  Visibility="{Binding CanAct, Converter={StaticResource Bool}}" AutomationProperties.Name="Mark reminder done"/>
+                          <Button Content="Snooze" Style="{StaticResource Secondary}" Padding="10,5" MinWidth="76" Margin="0,6,0,0" Tag="{Binding Id}" CommandParameter="10" Click="ReminderSnooze_Click"
+                                  Visibility="{Binding CanAct, Converter={StaticResource Bool}}" AutomationProperties.Name="Snooze reminder"/>
+                          <Button Content="Undo" Style="{StaticResource Secondary}" Padding="10,5" Tag="{Binding Id}" Click="ReminderUndo_Click"
+                                  Visibility="{Binding IsDone, Converter={StaticResource Bool}}" AutomationProperties.Name="Undo reminder done"/>
+                        </StackPanel>
+                      </Grid>
+                    </Border>
+                    <DataTemplate.Triggers>
+                      <DataTrigger Binding="{Binding IsDue}" Value="True">
+                        <Setter TargetName="Card" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                        <Setter TargetName="StateChip" Property="Background" Value="{DynamicResource Accent}"/>
+                        <Setter TargetName="StateText" Property="Foreground" Value="{DynamicResource AccentInk}"/>
+                      </DataTrigger>
+                      <DataTrigger Binding="{Binding State}" Value="Missed">
+                        <Setter TargetName="StateText" Property="Foreground" Value="{DynamicResource Danger}"/>
+                      </DataTrigger>
+                      <DataTrigger Binding="{Binding IsUrgent}" Value="True">
+                        <Setter TargetName="IconGlyph" Property="Foreground" Value="{DynamicResource Danger}"/>
+                      </DataTrigger>
+                      <DataTrigger Binding="{Binding IsDone}" Value="True">
+                        <Setter TargetName="Card" Property="Opacity" Value=".72"/>
+                      </DataTrigger>
+                      <DataTrigger Binding="{Binding Enabled}" Value="False">
+                        <Setter TargetName="Card" Property="Opacity" Value=".55"/>
+                      </DataTrigger>
+                    </DataTemplate.Triggers>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <TextBlock Text="No reminders" Foreground="{DynamicResource ContentMuted}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding NoRemindersShown, Converter={StaticResource Bool}}"/>
+
+              <Border x:Name="ReminderEditor" Grid.Column="2" Background="{DynamicResource Surface}" CornerRadius="{DynamicResource ComposerCorner}" Padding="16,14" VerticalAlignment="Top">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="{Binding ActualHeight, ElementName=RemindersSectionGrid}">
+                  <StackPanel Margin="0,0,4,0">
+                    <DockPanel Margin="0,0,0,12">
+                      <Button x:Name="ReminderCloseButton" DockPanel.Dock="Right" Style="{StaticResource Icon}" Width="28" Height="28" ToolTip="Close" Click="ReminderEditorClose_Click" Visibility="Collapsed" AutomationProperties.Name="Close reminder editor"><local:Glyph Data="{DynamicResource IconClose}" Size="14"/></Button>
+                      <Button x:Name="ReminderNewButton" DockPanel.Dock="Right" Style="{StaticResource Icon}" Width="28" Height="28" ToolTip="New reminder" Click="NewReminder_Click" AutomationProperties.Name="Start a new reminder"><local:Glyph Data="{DynamicResource IconPlus}" Size="15"/></Button>
+                      <TextBlock x:Name="ReminderEditorTitle" Text="New reminder" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    </DockPanel>
+                    <TextBlock Text="Title" FontSize="12" Foreground="{DynamicResource Muted}" Margin="0,0,0,5"/>
+                    <TextBox x:Name="ReminderTitleBox" MaxLength="80" Padding="9,7" Margin="0,0,0,10" TextChanged="ReminderField_Changed" AutomationProperties.Name="Reminder title"/>
+                    <TextBlock Text="Note" FontSize="12" Foreground="{DynamicResource Muted}" Margin="0,0,0,5"/>
+                    <TextBox x:Name="ReminderNoteBox" MaxLength="200" Padding="9,7" Margin="0,0,0,10" AutomationProperties.Name="Reminder note"/>
+                    <TextBlock Text="Icon" FontSize="12" Foreground="{DynamicResource Muted}" Margin="0,0,0,5"/>
+                    <ListBox x:Name="ReminderIconBox" Style="{StaticResource ReminderIconGrid}" SelectedValuePath="Value" Margin="0,0,0,6" AutomationProperties.Name="Reminder icon"/>
+                    <TextBlock Text="When" FontSize="12" Foreground="{DynamicResource Muted}" Margin="0,4,0,5"/>
+                    <ListBox x:Name="ReminderRepeatBox" Style="{StaticResource ReminderPills}" SelectedValuePath="Value" SelectionChanged="ReminderRepeat_Changed" Margin="0,0,0,4" AutomationProperties.Name="Reminder repeat"/>
+                    <StackPanel x:Name="ReminderDatePanel" Orientation="Horizontal" Margin="0,2,0,8">
+                      <Button Style="{StaticResource Icon}" Width="28" Height="28" Click="ReminderDatePrev_Click" ToolTip="Previous day" AutomationProperties.Name="Previous day"><local:Glyph Data="{DynamicResource IconChevronLeft}" Size="14"/></Button>
+                      <TextBlock x:Name="ReminderDateText" MinWidth="128" TextAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold" FontSize="13"/>
+                      <Button Style="{StaticResource Icon}" Width="28" Height="28" Click="ReminderDateNext_Click" ToolTip="Next day" AutomationProperties.Name="Next day"><local:Glyph Data="{DynamicResource IconChevronRight}" Size="14"/></Button>
+                      <Button Content="+1 week" Style="{StaticResource Secondary}" Padding="8,4" Margin="8,0,0,0" Click="ReminderDateWeek_Click" AutomationProperties.Name="One week later"/>
+                    </StackPanel>
+                    <ListBox x:Name="ReminderDaysBox" Style="{StaticResource ReminderPills}" SelectionMode="Multiple" SelectedValuePath="Value" SelectionChanged="ReminderField_Changed" Margin="0,2,0,4" AutomationProperties.Name="Reminder days of week"/>
+                    <StackPanel x:Name="ReminderMonthPanel" Orientation="Horizontal" Margin="0,2,0,8">
+                      <Button Style="{StaticResource Icon}" Width="28" Height="28" Click="ReminderMonthPrev_Click" ToolTip="Earlier day" AutomationProperties.Name="Earlier day of month"><local:Glyph Data="{DynamicResource IconChevronLeft}" Size="14"/></Button>
+                      <TextBlock x:Name="ReminderMonthText" MinWidth="128" TextAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold" FontSize="13"/>
+                      <Button Style="{StaticResource Icon}" Width="28" Height="28" Click="ReminderMonthNext_Click" ToolTip="Later day" AutomationProperties.Name="Later day of month"><local:Glyph Data="{DynamicResource IconChevronRight}" Size="14"/></Button>
+                    </StackPanel>
+                    <Grid Margin="0,4,0,4">
+                      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="10"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                      <StackPanel>
+                        <TextBlock Text="From" FontSize="12" Foreground="{DynamicResource Muted}" Margin="0,0,0,5"/>
+                        <TextBox x:Name="ReminderStartBox" Padding="9,7" Text="09:00" TextChanged="ReminderField_Changed" AutomationProperties.Name="Reminder start time"/>
+                      </StackPanel>
+                      <StackPanel Grid.Column="2">
+                        <TextBlock Text="Until" FontSize="12" Foreground="{DynamicResource Muted}" Margin="0,0,0,5"/>
+                        <TextBox x:Name="ReminderEndBox" Padding="9,7" TextChanged="ReminderField_Changed" AutomationProperties.Name="Reminder end time"/>
+                      </StackPanel>
+                    </Grid>
+                    <WrapPanel Margin="0,4,0,6">
+                      <Button Content="In 5 min" Style="{StaticResource Secondary}" Padding="8,4" Margin="0,0,6,6" Tag="5" Click="ReminderQuickTime_Click"/>
+                      <Button Content="In 30 min" Style="{StaticResource Secondary}" Padding="8,4" Margin="0,0,6,6" Tag="30" Click="ReminderQuickTime_Click"/>
+                      <Button Content="In 1 hour" Style="{StaticResource Secondary}" Padding="8,4" Margin="0,0,6,6" Tag="60" Click="ReminderQuickTime_Click"/>
+                      <Button Content="Tomorrow 9 AM" Style="{StaticResource Secondary}" Padding="8,4" Margin="0,0,6,6" Tag="tomorrow" Click="ReminderQuickTime_Click"/>
+                    </WrapPanel>
+                    <TextBlock Text="Remind every" FontSize="12" Foreground="{DynamicResource Muted}" Margin="0,2,0,5"/>
+                    <ListBox x:Name="ReminderEveryBox" Style="{StaticResource ReminderPills}" SelectedValuePath="Value" SelectionChanged="ReminderField_Changed" Margin="0,0,0,6" AutomationProperties.Name="Reminder interval"/>
+                    <TextBlock Text="Priority" FontSize="12" Foreground="{DynamicResource Muted}" Margin="0,2,0,5"/>
+                    <ListBox x:Name="ReminderPriorityBox" Style="{StaticResource ReminderPills}" SelectedValuePath="Value" Margin="0,0,0,8" AutomationProperties.Name="Reminder priority"/>
+                    <TextBlock x:Name="ReminderSummaryText" FontSize="12" Foreground="{DynamicResource Accent}" TextWrapping="Wrap" Margin="0,2,0,4"/>
+                    <TextBlock x:Name="ReminderErrorText" FontSize="12" Foreground="{DynamicResource Danger}" TextWrapping="Wrap" Margin="0,0,0,4" Visibility="Collapsed"/>
+                    <DockPanel Margin="0,8,0,0" LastChildFill="False">
+                      <Button x:Name="ReminderDeleteButton" DockPanel.Dock="Left" Content="Delete" Style="{StaticResource Secondary}" Click="ReminderEditorDelete_Click" AutomationProperties.Name="Delete this reminder"/>
+                      <Button x:Name="ReminderSaveButton" DockPanel.Dock="Right" Content="Save" Style="{StaticResource Primary}" Click="ReminderSave_Click" AutomationProperties.Name="Save reminder"/>
+                      <Button x:Name="ReminderTestButton" DockPanel.Dock="Right" Content="Try it" Style="{StaticResource Secondary}" Margin="0,0,8,0" Click="ReminderTest_Click" AutomationProperties.Name="Preview this reminder on the companion"/>
+                    </DockPanel>
+                  </StackPanel>
+                </ScrollViewer>
+              </Border>
             </Grid>
             <Grid x:Name="MediaSectionGrid" Grid.Row="1" Visibility="{Binding MediaOpen, Converter={StaticResource Bool}}" Margin="26,12,26,16">
               <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>

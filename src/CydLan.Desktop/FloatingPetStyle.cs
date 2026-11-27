@@ -78,7 +78,9 @@ public static class FloatingPetStyle
     public const string Auto = "auto";
     public const string None = "none";
     public const double MinSize = .75;
-    public const double MaxSize = 1.35;
+    public const double MaxSize = 5.0;
+    /// <summary>Largest size drawn inside a fixed-size preview.</summary>
+    public const double MaxInlineSize = 1.35;
 
     public static IReadOnlyList<StyleOption> Bodies { get; } =
     [
@@ -96,7 +98,7 @@ public static class FloatingPetStyle
 
     public static IReadOnlyList<StyleOption> Ears { get; } =
     [
-        new(Auto, "Theme"),
+        new(Auto, "Classic"),
         new("cat", "Cat"),
         new("bunny", "Bunny"),
         new("bear", "Bear"),
@@ -176,7 +178,7 @@ public static class FloatingPetStyle
 
     public static IReadOnlyList<StyleOption> Hats { get; } =
     [
-        new(Auto, "Theme"),
+        new(Auto, "Classic"),
         new(None, "None"),
         new("antenna", "Antenna"),
         new("sprout", "Sprout"),
@@ -195,7 +197,7 @@ public static class FloatingPetStyle
 
     public static IReadOnlyList<StyleOption> Outfits { get; } =
     [
-        new(Auto, "Theme"),
+        new(Auto, "Classic"),
         new("bowtie", "Bow tie"),
         new("scarf", "Scarf"),
         new("hoodie", "Hoodie"),
@@ -278,7 +280,7 @@ public static class FloatingPetStyle
         new("sleepy", "Sleepy")
     ];
 
-    public static IReadOnlyList<ColorOption> BodySwatches { get; } = BuildSwatches("Theme",
+    public static IReadOnlyList<ColorOption> BodySwatches { get; } = BuildSwatches("Classic",
     [
         ("#FFFDF9", "Cream"),
         ("#FCE7F3", "Sakura"),
@@ -294,7 +296,7 @@ public static class FloatingPetStyle
         ("#DC2626", "Ruby")
     ]);
 
-    public static IReadOnlyList<ColorOption> AccentSwatches { get; } = BuildSwatches("Theme",
+    public static IReadOnlyList<ColorOption> AccentSwatches { get; } = BuildSwatches("Classic",
     [
         ("#3B82F6", "Cobalt"),
         ("#06B6D4", "Cyan"),
@@ -310,7 +312,7 @@ public static class FloatingPetStyle
         ("#F8FAFC", "Pearl")
     ]);
 
-    public static IReadOnlyList<ColorOption> DetailSwatches { get; } = BuildSwatches("Theme",
+    public static IReadOnlyList<ColorOption> DetailSwatches { get; } = BuildSwatches("Classic",
     [
         ("#F472B6", "Pink"),
         ("#38BDF8", "Sky"),
@@ -342,7 +344,19 @@ public static class FloatingPetStyle
         new("Knight", new("cube", "elf", "dot", "smirk", "none", "none", "crown", "armor", "cape", "sparkles", "boots", "solid", "bouncy", "#E2E8F0", "#3B82F6", "#FACC15", 1.05, "focused", "sunburst")),
         new("Shark", new("bean", "fin", "cat", "grin", "stripes", "none", "cap", "hoodie", "shark", "none", "sneakers", "belly", "zoomies", "#E0F2FE", "#0284C7", "#FFFFFF", 1.05, "focused", "bubbles")),
         new("Puppy", new("squircle", "floppy", "big", "blep", "freckles", "none", "sprout", "scarf", "tail", "balloon", "paws", "spots", "bouncy", "#FEF3C7", "#D97706", "#F472B6", .95, "worried", "none")),
-        new("Gamer", new("cube", "cat", "sparkle", "fang", "stripes", "goggles", "tophat", "hoodie", "jetpack", "gamepad", "wheels", "grid", "zoomies", "#1E1B4B", "#A855F7", "#4ADE80", 1.0, "happy", "neon"))
+        new("Gamer", new("cube", "cat", "sparkle", "fang", "stripes", "goggles", "tophat", "hoodie", "jetpack", "gamepad", "wheels", "grid", "zoomies", "#1E1B4B", "#A855F7", "#4ADE80", 1.0, "happy", "neon")),
+        new("Astronaut", new("round", "none", "visor", "smile", "none", "none", "antenna", "star", "jetpack", "orbit", "boots", "solid", "calm", "#F8FAFC", "#1E293B", "#F97316", 1.0, "soft", "stars")),
+        new("Reindeer", new("bean", "antler", "big", "smile", "blush", "none", "none", "scarf", "tail", "lantern", "paws", "belly", "bouncy", "#B45309", "#DC2626", "#FFFDF9", 1.0, "happy", "none")),
+        new("Frog", new("round", "none", "big", "grin", "blush", "none", "crown", "none", "none", "none", "paws", "belly", "calm", "#84CC16", "#166534", "#FACC15", .95, "none", "none")),
+        new("Pirate", new("pear", "bear", "dot", "smirk", "stripes", "patch", "tophat", "tie", "cape", "lantern", "boots", "stripes", "bouncy", "#FDE6C4", "#1F2937", "#DC2626", 1.05, "focused", "none")),
+        new("Penguin", new("bean", "none", "dot", "beak", "blush", "none", "beanie", "scarf", "none", "none", "paws", "tuxedo", "calm", "#18181B", "#F8FAFC", "#F59E0B", .95, "none", "none")),
+        new("Fairy", new("star", "elf", "sparkle", "kiss", "hearts", "none", "flower", "heart", "fairy", "wand", "hover", "gradient", "bouncy", "#EDE9FE", "#C084FC", "#F472B6", .9, "happy", "sakura")),
+        new("Robot", new("cube", "mecha", "visor", "whistle", "none", "goggles", "antenna", "armor", "mecha", "gamepad", "wheels", "grid", "zoomies", "#94A3B8", "#0EA5E9", "#FACC15", 1.0, "unibrow", "ring")),
+        new("Vampire", new("pear", "devil", "cat", "fang", "none", "monocle", "tophat", "bowtie", "bat", "lantern", "boots", "tuxedo", "calm", "#E2E8F0", "#7F1D1D", "#18181B", 1.0, "thick", "none")),
+        new("Turtle", new("round", "none", "chill", "smile", "freckles", "round", "cap", "none", "shell", "coffee", "paws", "spots", "sleepy", "#86EFAC", "#15803D", "#FBBF24", 1.0, "soft", "bubbles")),
+        new("Rock star", new("squircle", "fox", "star", "grin", "stars", "shades", "headphones", "tie", "cape", "music", "sneakers", "stripes", "zoomies", "#18181B", "#EF4444", "#FACC15", 1.1, "focused", "sunburst")),
+        new("Lovebug", new("heart", "bunny", "heart", "kiss", "hearts", "none", "bow", "heart", "fairy", "hearts", "hover", "solid", "bouncy", "#FFE4E6", "#E11D48", "#F472B6", .95, "happy", "sakura")),
+        new("Kaiju", new("bean", "fin", "spiral", "fang", "stripes", "none", "crown", "none", "tail", "fire", "boots", "spots", "zoomies", "#10B981", "#064E3B", "#F97316", 1.15, "thick", "neon"))
     ];
 
     public static long CombinationCount { get; } =

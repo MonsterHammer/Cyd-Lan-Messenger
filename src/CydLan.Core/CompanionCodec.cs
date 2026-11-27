@@ -52,7 +52,7 @@ public static class CompanionProfileCodec
             string t = (v ?? "").Trim().ToUpperInvariant();
             return t.Length == 0 ? null : t;
         }
-        double size = double.IsFinite(s.PetSize) ? Math.Round(Math.Clamp(s.PetSize, .75, 1.35), 2) : 1.0;
+        double size = double.IsFinite(s.PetSize) ? Math.Round(Math.Clamp(s.PetSize, .75, 5.0), 2) : 1.0;
 
         var wire = new WirePet
         {
@@ -124,7 +124,7 @@ public static class CompanionProfileCodec
             target.PetBodyColor = wire.Bc ?? "";
             target.PetAccentColor = wire.Ac ?? "";
             target.PetDetailColor = wire.Dc ?? "";
-            target.PetSize = wire.Sz is { } sz && double.IsFinite(sz) ? Math.Clamp(sz, .75, 1.35) : 1.0;
+            target.PetSize = wire.Sz is { } sz && double.IsFinite(sz) ? Math.Clamp(sz, .75, 5.0) : 1.0;
             return true;
         }
         catch (Exception e) when (e is FormatException or JsonException)

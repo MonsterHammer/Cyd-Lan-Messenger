@@ -23,7 +23,14 @@ if (args.Contains("--isolated-mixed"))
     return 0;
 }
 
+if (args.Contains("--reminders-only"))
+{
+    try { await ReminderTests.RunAsync(); Console.WriteLine("PASS  Reminder schedules, nudges, snooze, streaks and storage"); return 0; }
+    catch (Exception e) { Console.WriteLine("FAIL  " + e); return 1; }
+}
+
 var tests = new (string Name, Func<Task> Run)[] {
+    ("Reminder schedules, nudges, snooze, streaks and storage", ReminderTests.RunAsync),
     ("Persistent diagnostics: rotation, concurrency, privacy and disk failures", DiagnosticLogTests.RunAsync),
     ("Legacy XML fixtures, escaping and Unicode", TestXml),
     ("LAN Messenger emoticon codes", TestSmileys),

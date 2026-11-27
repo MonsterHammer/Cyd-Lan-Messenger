@@ -205,6 +205,7 @@ public sealed class AppSettings
     public string PetVibe { get; set; } = "bouncy";
     public string PetBrows { get; set; } = "none";
     public string PetAura { get; set; } = "none";
+    public List<string> PetTraits { get; set; } = [];
     public string PetBodyColor { get; set; } = "";
     public string PetAccentColor { get; set; } = "";
     public string PetDetailColor { get; set; } = "";
@@ -521,6 +522,8 @@ public sealed class LocalStore
     public void SaveGroups(IEnumerable<GroupChat> groups) => Write("groups.json", groups.ToArray());
     public List<FileTransfer> LoadTransfers() => Read<List<FileTransfer>>("transfers.json") ?? [];
     public void SaveTransfers(IEnumerable<FileTransfer> transfers) => Write("transfers.json", transfers.Take(2000).ToArray());
+    public List<Reminder> LoadReminders() => Read<List<Reminder>>("reminders.json") ?? [];
+    public void SaveReminders(IEnumerable<Reminder> reminders) => Write("reminders.json", reminders.ToArray());
     private T? Read<T>(string name)
     {
         var path = System.IO.Path.Combine(DirectoryPath, name);

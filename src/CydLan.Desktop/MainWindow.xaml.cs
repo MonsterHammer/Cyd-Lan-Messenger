@@ -25,6 +25,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent(); this.model = model; DataContext = model;
         InitMediaController();
+        InitReminderEditor();
         model.ScrollRequested += force => {
             bool atEnd = MessageScroller.ScrollableHeight - MessageScroller.VerticalOffset < 40;
             double offset = MessageScroller.VerticalOffset;
@@ -111,17 +112,18 @@ public partial class MainWindow : Window
         if (model.Preview && System.Windows.Application.Current is App app) await app.QuitAsync();
         else Hide();
     }
-    private void Chat_Click(object sender, RoutedEventArgs e) { model.TransfersOpen = false; model.MediaOpen = false; model.Broadcasting = false; model.GroupsOpen = false; }
+    private void Chat_Click(object sender, RoutedEventArgs e) { model.RemindersOpen = false; model.TransfersOpen = false; model.MediaOpen = false; model.Broadcasting = false; model.GroupsOpen = false; }
     private void PeopleTab_Click(object sender, RoutedEventArgs e) => model.ShowRecentChats = false;
     private void RecentTab_Click(object sender, RoutedEventArgs e) => model.ShowRecentChats = true;
     private void Groups_Click(object sender, RoutedEventArgs e)
     {
-        model.TransfersOpen = false; model.MediaOpen = false; model.GroupsOpen = true;
+        model.RemindersOpen = false; model.TransfersOpen = false; model.MediaOpen = false; model.GroupsOpen = true;
         if (model.SelectedGroup is null && model.Groups.Count > 0) model.SelectedGroup = model.Groups[0];
     }
     private void SidebarPlus_Click(object sender, RoutedEventArgs e)
     {
-        if (model.IsMediaSection) AddMediaFiles_Click(sender, e);
+        if (model.IsRemindersSection) NewReminder_Click(sender, e);
+        else if (model.IsMediaSection) AddMediaFiles_Click(sender, e);
         else if (model.IsGroupsSection) NewGroup_Click(sender, e);
         else Settings_Click(sender, e);
     }
@@ -567,7 +569,7 @@ public partial class MainWindow : Window
             return;
         }
         if (!model.CanAttach) { model.Toast = "No online contact selected"; return; }
-        model.TransfersOpen = false; model.MediaOpen = false; AttachFiles(files); Composer.Focus(); e.Handled = true;
+        model.RemindersOpen = false; model.TransfersOpen = false; model.MediaOpen = false; AttachFiles(files); Composer.Focus(); e.Handled = true;
     }
     private void RemoveAttachment_Click(object sender, RoutedEventArgs e) { if (((FrameworkElement)sender).DataContext is Attachment item) model.RemoveAttachment(item); }
     private void MessageImage_Click(object sender, MouseButtonEventArgs e)

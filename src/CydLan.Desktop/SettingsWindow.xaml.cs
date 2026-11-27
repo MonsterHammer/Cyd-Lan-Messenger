@@ -118,6 +118,7 @@ public partial class SettingsWindow : Window
         ChatCanvasBox.ItemsSource = ChatCanvasOverlay.Catalog;
         BackgroundTransitionBox.ItemsSource = BackgroundSideTransition.Catalog;
         InitCompanionControls(s);
+        InitPersonalityControls(s);
         InitSceneControls();
 
         backgroundPath = s.ChatBackgroundPath;
@@ -125,6 +126,7 @@ public partial class SettingsWindow : Window
 
         LoadAppearanceControls(s);
         LoadCompanionControls(s);
+        LoadPersonality(s.PetTraits);
         RefreshPresets();
         applyingAppearance = false;
 
@@ -164,6 +166,7 @@ public partial class SettingsWindow : Window
                 model.PreviewMessageTypography(null, null, null);
                 model.PreviewAvatarOptions(null, null);
                 model.PreviewPetAppearance(null);
+                model.PreviewPetTraits(null);
                 model.PreviewSceneEffects(null);
                 ButtonEffects.Configure(
                     s.ButtonGlowEnabled, model.ButtonGlowIntensity,
@@ -1451,11 +1454,13 @@ public partial class SettingsWindow : Window
             s.ChatBackgroundOpacity = double.IsFinite(BackgroundOpacityBox.Value) ? Math.Clamp(BackgroundOpacityBox.Value, .10, 1.0) : .26;
             WriteAppearanceTo(s);
             WriteCompanionTo(s);
+            s.PetTraits = SelectedTraits();
             s.SavedPresets = savedPresets.Select(p => new AppearancePreset { Id = p.Id, Name = p.Name, Code = p.Code }).ToList();
             s.SavedCompanions = GetSavedCompanionsForSave();
             s.LastSettingsPage = NormalizePage(model.LastSettingsPage);
             s.LastAppearanceTab = NormalizeAppearanceTab(model.LastAppearanceTab);
         });
+        model.PreviewPetTraits(null);
         if (networkChanged) model.Toast = "Restart CydLan to use the new network settings.";
         saved = true; Close();
     }

@@ -2616,8 +2616,9 @@ internal static class Program
         // Verify context menu "Quick chat" stays open cleanly across input frames.
         quickChat.Hide();
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        await Task.Delay(300); // let the 250 ms "just deactivated" guard lapse, as a real right-click would
         var menu = (System.Windows.Controls.ContextMenu)petWindow.FindName("PetContextMenu");
-        ((System.Windows.Controls.MenuItem)menu.Items[0]).RaiseEvent(new RoutedEventArgs(System.Windows.Controls.MenuItem.ClickEvent));
+        menu.Items.OfType<System.Windows.Controls.MenuItem>().First(i => i.Header as string == "Quick chat").RaiseEvent(new RoutedEventArgs(System.Windows.Controls.MenuItem.ClickEvent));
         await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
         Check(quickChat.IsVisible, "Context menu Quick chat action must keep quick-chat open.");
         quickChat.Hide();

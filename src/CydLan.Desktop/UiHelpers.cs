@@ -172,3 +172,13 @@ public sealed class MediaFileVisibilityConverter : IValueConverter
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
 }
+
+/// <summary>Looks up an application resource (for example an icon geometry) by the key the binding supplies.</summary>
+public sealed class ResourceKeyConverter : IValueConverter
+{
+    public object? Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
+        value is string { Length: > 0 } key
+            ? System.Windows.Application.Current?.TryFindResource(parameter as string == "icon" ? ReminderIcons.Resource(key) : key)
+            : null;
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
+}
