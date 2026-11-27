@@ -22,7 +22,6 @@ public partial class SettingsWindow : Window
         Func<string> Get,
         Action<string> Set);
 
-    private const string UiFontThemeDefault = "Theme default";
     private readonly MainViewModel model;
     private readonly string originalTheme;
     private readonly AppearanceOverrides originalOverrides;
@@ -30,7 +29,7 @@ public partial class SettingsWindow : Window
     private readonly ColorChannel[] appearanceChannels;
     private string selectedTheme;
     private string currentThemeFilter = "all";
-    private string titleHex = "", headerHex = "", railHex = "", sidebarHex = "";
+    private string titleHex = "", headerHex = "", railHex = "", sidebarHex = "", logoHex = "", iconHex = "", logoDotHex = "";
     private string accentHex = "", effectHex = "", outgoingBubbleHex = "", incomingBubbleHex = "", chatBackgroundHex = "";
     private double? customFontPx;
     private bool updatingThemeFilter;
@@ -67,7 +66,7 @@ public partial class SettingsWindow : Window
         // Messages
         var systemFonts = Fonts.SystemFontFamilies.Select(f => f.Source).Append("Segoe UI Variable Text").Distinct().OrderBy(n => n).ToList();
         FontBox.ItemsSource = systemFonts;
-        UiFontBox.ItemsSource = systemFonts.Prepend(UiFontThemeDefault).ToList();
+        InitAppFontGallery(systemFonts, s);
         (s.SendWithCtrlEnter ? SendCtrlEnter : SendEnter).IsChecked = true;
         TrimBox.IsChecked = s.TrimMessages;
         // History
@@ -97,7 +96,10 @@ public partial class SettingsWindow : Window
             new(AccentColorBox, AccentHexBox, AccentColorPicker, () => accentHex, v => accentHex = v),
             new(EffectColorBox, EffectHexBox, EffectColorPicker, () => effectHex, v => effectHex = v),
             new(OutgoingBubbleColorBox, OutgoingBubbleHexBox, OutgoingBubbleColorPicker, () => outgoingBubbleHex, v => outgoingBubbleHex = v),
-            new(IncomingBubbleColorBox, IncomingBubbleHexBox, IncomingBubbleColorPicker, () => incomingBubbleHex, v => incomingBubbleHex = v)
+            new(IncomingBubbleColorBox, IncomingBubbleHexBox, IncomingBubbleColorPicker, () => incomingBubbleHex, v => incomingBubbleHex = v),
+            new(LogoColorBox, LogoHexBox, LogoColorPicker, () => logoHex, v => logoHex = v),
+            new(IconColorBox, IconHexBox, IconColorPicker, () => iconHex, v => iconHex = v),
+            new(LogoDotColorBox, LogoDotHexBox, LogoDotColorPicker, () => logoDotHex, v => logoDotHex = v)
         ];
         ColorFinishBox.ItemsSource = ColorFinish.Catalog;
         TitleColorBox.ItemsSource = AppearanceOptions.SurfaceSwatches;
@@ -109,6 +111,9 @@ public partial class SettingsWindow : Window
         OutgoingBubbleColorBox.ItemsSource = AppearanceOptions.BubbleSwatches;
         IncomingBubbleColorBox.ItemsSource = AppearanceOptions.BubbleSwatches;
         ChatBackgroundColorBox.ItemsSource = AppearanceOptions.ChatBackgroundSwatches;
+        LogoColorBox.ItemsSource = AppearanceOptions.LogoSwatches;
+        IconColorBox.ItemsSource = AppearanceOptions.IconSwatches;
+        LogoDotColorBox.ItemsSource = AppearanceOptions.LogoDotSwatches;
         BubbleStyleBox.ItemsSource = AppearanceOptions.BubbleStyles;
         BubbleShapeBox.ItemsSource = AppearanceOptions.BubbleShapes;
         CornerStyleBox.ItemsSource = AppearanceOptions.CornerStyles;
@@ -204,7 +209,6 @@ public partial class SettingsWindow : Window
             ChatCanvasBox.ItemsSource = null;
             BackgroundTransitionBox.ItemsSource = null;
             FontBox.ItemsSource = null;
-            UiFontBox.ItemsSource = null;
             PresetBox.ItemsSource = null;
             BackgroundPreviewHorizontalMask.OpacityMask = null;
             BackgroundPreviewVerticalMask.OpacityMask = null;
@@ -243,6 +247,10 @@ public partial class SettingsWindow : Window
         SetColorChannel(appearanceChannels[6], s.CustomEffectColor);
         SetColorChannel(appearanceChannels[7], s.CustomOutgoingBubbleColor);
         SetColorChannel(appearanceChannels[8], s.CustomIncomingBubbleColor);
+        SetColorChannel(appearanceChannels[9], s.LogoColor);
+        SetColorChannel(appearanceChannels[10], s.IconColor);
+        SetColorChannel(appearanceChannels[11], s.LogoDotColor);
+        LoadLogoControls(s);
         bool matchThemeChat = AppearanceOptions.NormalizeChatSurfaceMode(s.ChatSurfaceMode) == AppearanceOptions.ChatSurfaceTheme;
         ChatSurfaceTheme.IsChecked = matchThemeChat;
         ChatSurfaceSeparate.IsChecked = !matchThemeChat;
@@ -413,8 +421,7 @@ public partial class SettingsWindow : Window
         AuraPersonBox.IsChecked = s.AuraSelectedPersonEnabled;
         AuraButtonsBox.IsChecked = s.AuraHighlightButtonsEnabled;
 
-        string uiFont = (s.UiFont ?? "").Trim();
-        SelectFontItem(UiFontBox, uiFont.Length == 0 ? UiFontThemeDefault : uiFont, UiFontThemeDefault);
+        SelectAppFont(s.UiFont);
         SelectFontItem(FontBox, s.MessageFont, "Segoe UI Variable Text");
         SizeBox.SelectedItem = SizeBox.Items.Cast<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag == s.MessageFontSize) ?? SizeBox.Items[1];
         customFontPx = s.MessageFontSizePx is { } px && double.IsFinite(px) ? Math.Clamp(Math.Round(px), 11, 22) : null;
@@ -484,6 +491,12 @@ public partial class SettingsWindow : Window
         s.CustomHeaderColor = headerHex;
         s.CustomRailColor = railHex;
         s.CustomSidebarColor = sidebarHex;
+        s.LogoColor = logoHex;
+        s.LogoStyle = logoStyle;
+        s.LogoEffect = logoEffect;
+        s.LogoDotColor = logoDotHex;
+        s.LogoDotEffect = logoDotEffect;
+        s.IconColor = iconHex;
         s.ChatSurfaceMode = SelectedChatSurfaceMode;
         s.CustomChatBackgroundColor = chatBackgroundHex;
         s.BubbleStyle = AppearanceOptions.NormalizeBubbleStyle(BubbleStyleBox.SelectedValue as string);
@@ -493,6 +506,7 @@ public partial class SettingsWindow : Window
         s.AvatarShape = AppearanceOptions.NormalizeAvatarShape(AvatarShapeBox.SelectedValue as string);
         s.OnlineRingEnabled = OnlineRingBox.IsChecked == true;
         s.UiFont = SelectedUiFont;
+        s.ImportedFonts = importedFonts.ToList();
         s.MessageFont = FontBox.SelectedItem as string ?? "Segoe UI Variable Text";
         s.MessageFontSize = SelectedFontSizeTag;
         s.MessageFontSizePx = customFontPx;
@@ -667,7 +681,7 @@ public partial class SettingsWindow : Window
         : AnimPop.IsChecked == true ? MessageMotion.Pop
         : MessageMotion.Off;
 
-    private string SelectedUiFont => UiFontBox.SelectedItem is string font && font != UiFontThemeDefault ? font : "";
+    private string SelectedUiFont => chosenUiFont;
     private string SelectedFontSizeTag => (SizeBox.SelectedItem as ComboBoxItem)?.Tag as string ?? "medium";
     private static double ClampUnit(double value, double fallback) => double.IsFinite(value) ? Math.Clamp(value, .1, 1) : fallback;
 
@@ -690,7 +704,13 @@ public partial class SettingsWindow : Window
         titleHex,
         headerHex,
         railHex,
-        sidebarHex);
+        sidebarHex,
+        logoHex,
+        iconHex,
+        logoStyle,
+        logoEffect,
+        logoDotHex,
+        logoDotEffect);
 
     private void ApplyLiveThemeOverrides()
     {
@@ -698,6 +718,7 @@ public partial class SettingsWindow : Window
         var overrides = BuildCurrentOverrides();
         ThemeManager.Apply(SelectedTheme, overrides);
         model.PreviewAvatarOptions(overrides.AvatarShape, OnlineRingBox.IsChecked == true);
+        RefreshLogoPreviews();
     }
 
     private void ApplyAllLivePreviews()
@@ -845,7 +866,6 @@ public partial class SettingsWindow : Window
     private void ColorFinish_SliderChanged(object sender, RoutedPropertyChangedEventArgs<double> e) => ApplyLiveThemeOverrides();
     private void Density_Checked(object sender, RoutedEventArgs e) => ApplyLiveThemeOverrides();
     private void AvatarOption_Changed(object sender, RoutedEventArgs e) => ApplyLiveThemeOverrides();
-    private void UiFont_Changed(object sender, SelectionChangedEventArgs e) => ApplyLiveThemeOverrides();
 
     private void MessageAnim_Checked(object sender, RoutedEventArgs e)
     {
@@ -1288,6 +1308,7 @@ public partial class SettingsWindow : Window
         string normalized = NormalizePage(name);
         foreach (var page in new[] { GeneralPage, AccountPage, MessagesPage, HistoryPage, AlertsPage, NetworkPage, FilesPage, AppearancePage, AboutPage })
             page.Visibility = page.Name == normalized ? Visibility.Visible : Visibility.Collapsed;
+        AppearanceHeader.Visibility = AppearancePage.Visibility;
         if (!restoringNavigation && !closing) model.LastSettingsPage = normalized;
         UpdateCompanionTimerState();
         PreferencesScroller.ScrollToTop();

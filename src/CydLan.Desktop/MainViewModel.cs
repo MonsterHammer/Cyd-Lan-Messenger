@@ -40,6 +40,7 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
     public const int MaxAttachments = 10;
     /// <summary>Where sent and received images are kept so conversation history can show them later.</summary>
     public string ImagesDirectory { get; }
+    public string FontsDirectory => Path.Combine(Path.GetDirectoryName(ImagesDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)) ?? ImagesDirectory, "fonts");
     public AppSettings Settings { get; }
     public bool Preview { get; }
     public ObservableCollection<Peer> Peers { get; } = [];

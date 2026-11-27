@@ -14,7 +14,7 @@
       <Button Padding="7,5" HorizontalContentAlignment="Stretch" Click="Open_Click" AutomationProperties.Name="Open CydLan">
         <Grid>
           <Grid.ColumnDefinitions><ColumnDefinition Width="36"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-          <Image Width="24" Height="24" VerticalAlignment="Top" HorizontalAlignment="Left" Source="{DynamicResource BrandMark}"/>
+          <local:BrandLogo Width="24" Height="24" VerticalAlignment="Top" HorizontalAlignment="Left"/>
           <StackPanel Grid.Column="1">
             <TextBlock x:Name="SenderName" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
             <TextBlock x:Name="MessageText" Foreground="{DynamicResource Muted}" FontSize="12" Margin="0,4,0,0"

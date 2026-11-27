@@ -62,7 +62,7 @@
       </ControlTemplate></Setter.Value></Setter>
     </Style>
     <Style TargetType="Window">
-      <Setter Property="Icon" Value="{StaticResource BrandAppIcon}"/>
+      <Setter Property="Icon" Value="{DynamicResource BrandAppIcon}"/>
       <Setter Property="FontFamily" Value="{DynamicResource UiFont}"/><Setter Property="FontSize" Value="13"/>
       <Setter Property="Foreground" Value="{DynamicResource Ink}"/><Setter Property="Background" Value="{DynamicResource Canvas}"/>
       <Setter Property="UseLayoutRounding" Value="True"/>

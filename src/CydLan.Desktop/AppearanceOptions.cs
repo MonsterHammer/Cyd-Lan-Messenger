@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
@@ -31,7 +31,13 @@ public sealed record AppearanceOverrides(
     string CustomTitleColor = "",
     string CustomHeaderColor = "",
     string CustomRailColor = "",
-    string CustomSidebarColor = "")
+    string CustomSidebarColor = "",
+    string LogoColor = "",
+    string IconColor = "",
+    string LogoStyle = LogoCatalog.Classic,
+    string LogoEffect = LogoEffects.None,
+    string LogoDotColor = "",
+    string LogoDotEffect = LogoDotEffects.None)
 {
     public static AppearanceOverrides Default { get; } = new(
         "", "", "", "",
@@ -67,7 +73,13 @@ public sealed record AppearanceOverrides(
         AppearanceOptions.NormalizeHex(s.CustomTitleColor),
         AppearanceOptions.NormalizeHex(s.CustomHeaderColor),
         AppearanceOptions.NormalizeHex(s.CustomRailColor),
-        AppearanceOptions.NormalizeHex(s.CustomSidebarColor));
+        AppearanceOptions.NormalizeHex(s.CustomSidebarColor),
+        AppearanceOptions.NormalizeHex(s.LogoColor),
+        AppearanceOptions.NormalizeHex(s.IconColor),
+        LogoCatalog.Normalize(s.LogoStyle),
+        LogoEffects.Normalize(s.LogoEffect),
+        AppearanceOptions.NormalizeHex(s.LogoDotColor),
+        LogoDotEffects.Normalize(s.LogoDotEffect));
 }
 
 /// <summary>Normalization, curated swatch catalogs, and Win32 layered window opacity support.</summary>
@@ -84,6 +96,9 @@ public static class AppearanceOptions
     public static IReadOnlyList<ColorOption> AccentSwatches { get; } = BuildColorSwatches("Theme");
     public static IReadOnlyList<ColorOption> EffectSwatches { get; } = BuildColorSwatches("Match accent");
     public static IReadOnlyList<ColorOption> BubbleSwatches { get; } = BuildColorSwatches("Theme");
+    public static IReadOnlyList<ColorOption> LogoSwatches { get; } = BuildColorSwatches("Classic");
+    public static IReadOnlyList<ColorOption> LogoDotSwatches { get; } = BuildColorSwatches("Classic");
+    public static IReadOnlyList<ColorOption> IconSwatches { get; } = BuildColorSwatches("Theme");
     public static IReadOnlyList<ColorOption> SurfaceSwatches { get; } = BuildChatBackgroundSwatches();
     public static IReadOnlyList<ColorOption> ChatBackgroundSwatches { get; } = BuildChatBackgroundSwatches();
 
@@ -218,6 +233,8 @@ internal static class WindowOpacityHelper
     private const int GwlExStyle = -20;
     private const int WsExLayered = 0x00080000;
     private const uint LwaAlpha = 0x00000002;
+    private const int WmStyleChanging = 0x007C;
+    private static readonly Dictionary<IntPtr, byte> Wanted = [];
 
     public static void Apply(Window window, double opacity)
     {
@@ -228,6 +245,7 @@ internal static class WindowOpacityHelper
         int exStyle = GetWindowLong(handle, GwlExStyle);
         if (clamped >= .999)
         {
+            Wanted.Remove(handle);
             if ((exStyle & WsExLayered) != 0)
             {
                 SetLayeredWindowAttributes(handle, 0, 255, LwaAlpha);
@@ -235,10 +253,55 @@ internal static class WindowOpacityHelper
             }
             return;
         }
+        if (!Wanted.ContainsKey(handle))
+        {
+            Subclass(handle);
+            window.Closed += (_, _) => Wanted.Remove(handle);
+        }
+        byte alpha = (byte)Math.Round(clamped * 255);
+        Wanted[handle] = alpha;
         if ((exStyle & WsExLayered) == 0)
             SetWindowLong(handle, GwlExStyle, exStyle | WsExLayered);
-        SetLayeredWindowAttributes(handle, 0, (byte)Math.Round(clamped * 255), LwaAlpha);
+        SetLayeredWindowAttributes(handle, 0, alpha, LwaAlpha);
     }
+
+    // WPF's own message handling strips WS_EX_LAYERED from windows it did not create as layered, and its
+    // hooks run before anything added through HwndSource. Wrapping the window procedure gives us the last word.
+    private delegate IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam);
+    private static readonly Dictionary<IntPtr, (IntPtr Original, WndProc Proc)> Subclassed = [];
+
+    private static void Subclass(IntPtr handle)
+    {
+        if (Subclassed.ContainsKey(handle)) return;
+        WndProc proc = null!;
+        proc = (hwnd, msg, wParam, lParam) =>
+        {
+            var original = Subclassed[hwnd].Original;
+            if (msg == WmStyleChanging && wParam.ToInt64() == GwlExStyle && Wanted.ContainsKey(hwnd))
+            {
+                IntPtr result = CallWindowProc(original, hwnd, msg, wParam, lParam);
+                var style = Marshal.PtrToStructure<StyleStruct>(lParam);
+                style.New |= WsExLayered;
+                Marshal.StructureToPtr(style, lParam, false);
+                return result;
+            }
+            if (msg == WmNcDestroy)
+            {
+                SetWindowLongPtr(hwnd, GwlpWndProc, original);
+                Subclassed.Remove(hwnd);
+                Wanted.Remove(hwnd);
+            }
+            return CallWindowProc(original, hwnd, msg, wParam, lParam);
+        };
+        IntPtr previous = SetWindowLongPtr(handle, GwlpWndProc, Marshal.GetFunctionPointerForDelegate(proc));
+        Subclassed[handle] = (previous, proc);
+    }
+
+    private const int GwlpWndProc = -4, WmNcDestroy = 0x0082;
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")] private static extern IntPtr SetWindowLongPtr(IntPtr hwnd, int index, IntPtr value);
+    [DllImport("user32.dll", EntryPoint = "CallWindowProcW")] private static extern IntPtr CallWindowProc(IntPtr previous, IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam);
+
+    [StructLayout(LayoutKind.Sequential)] private struct StyleStruct { public int Old; public int New; }
 
     [DllImport("user32.dll", EntryPoint = "GetWindowLongW")] private static extern int GetWindowLong(IntPtr hwnd, int index);
     [DllImport("user32.dll", EntryPoint = "SetWindowLongW")] private static extern int SetWindowLong(IntPtr hwnd, int index, int value);

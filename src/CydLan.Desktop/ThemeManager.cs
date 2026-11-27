@@ -377,6 +377,7 @@ public static class ThemeManager
         ApplyBubbleOverrides(app, activeOverrides, canvasColor, sidebarColor, surfaceColor, lineColor, inkColor, accentColor, accentInk, accentSoft, isDark);
         ApplyAvatarOverrides(app, activeOverrides.AvatarShape);
         ApplyUiFont(app, activeOverrides.UiFont);
+        ApplyBrandOverrides(app, activeOverrides, isDark);
 
         // WPF does not refresh a Window's own style-set Foreground on a palette swap, which leaves inherited
         // text in the old colour. Binding the window-level brushes directly keeps every open window in sync.
@@ -818,6 +819,46 @@ public static class ThemeManager
         app.Resources["HeaderAvatarCorner"] = new CornerRadius(headerRadius);
         app.Resources["HeaderAvatarRadius"] = headerRadius;
     }
+
+    /// <summary>Recolors the CydLan mark and tints every outline icon when the user picks colors for them.</summary>
+    private static void ApplyBrandOverrides(Application app, AppearanceOverrides overrides, bool isDark)
+    {
+        bool customColor = AppearanceOptions.TryParseHex(overrides.LogoColor, out var logo);
+        string style = LogoCatalog.Normalize(overrides.LogoStyle);
+        bool customDot = AppearanceOptions.TryParseHex(overrides.LogoDotColor, out var dot);
+        string dotEffect = LogoDotEffects.Normalize(overrides.LogoDotEffect);
+        if (customColor || customDot || style != LogoCatalog.Classic || dotEffect != LogoDotEffects.None)
+            app.Resources["BrandMark"] = LogoCatalog.Build(style, customColor ? logo : LogoStroke(isDark), customDot ? dot : LogoDot(isDark), dotEffect);
+        app.Resources["LogoEffect"] = LogoEffects.Normalize(overrides.LogoEffect);
+
+        // The window, taskbar and tray icon sit on a dark tile, so they use the on-dark defaults.
+        bool customIcon = customColor || customDot || style != LogoCatalog.Classic;
+        var iconStroke = customColor ? logo : LogoStroke(true);
+        var iconDot = customDot ? dot : LogoDot(true);
+        string iconKey = customIcon ? $"{style}|{iconStroke}|{iconDot}" : "";
+        if (customIcon) app.Resources["BrandAppIcon"] = LogoCatalog.BuildAppIcon(style, iconStroke, iconDot);
+        else app.Resources.Remove("BrandAppIcon");
+        CustomAppIcon = customIcon ? (System.Windows.Media.ImageSource)app.Resources["BrandAppIcon"] : null;
+        if (iconKey != appIconKey)
+        {
+            appIconKey = iconKey;
+            AppIconChanged?.Invoke();
+        }
+        app.Resources["IconTint"] = AppearanceOptions.TryParseHex(overrides.IconColor, out var icon)
+            ? FrozenBrush(icon)
+            : FrozenBrush(System.Windows.Media.Colors.Transparent);
+    }
+
+    private static string appIconKey = "";
+
+    /// <summary>The app icon drawn from the chosen logo, or null while the stock icon applies.</summary>
+    public static System.Windows.Media.ImageSource? CustomAppIcon { get; private set; }
+
+    /// <summary>Raised when the window, taskbar and tray icon need redrawing.</summary>
+    public static event Action? AppIconChanged;
+
+    internal static System.Windows.Media.Color LogoStroke(bool isDark) => isDark ? System.Windows.Media.Color.FromRgb(0x85, 0xB1, 0xBF) : System.Windows.Media.Color.FromRgb(0x4E, 0x8C, 0x9E);
+    internal static System.Windows.Media.Color LogoDot(bool isDark) => isDark ? System.Windows.Media.Color.FromRgb(0xED, 0xF4, 0xF6) : System.Windows.Media.Color.FromRgb(0x1F, 0x2B, 0x30);
 
     private static void ApplyUiFont(Application app, string uiFont)
     {

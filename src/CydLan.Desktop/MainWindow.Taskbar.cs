@@ -105,6 +105,12 @@ public partial class MainWindow
         return IntPtr.Zero;
     }
 
+    /// <summary>Asks Windows for a fresh taskbar thumbnail after the logo changes.</summary>
+    internal void RefreshTaskbarIcon()
+    {
+        if (PresentationSource.FromVisual(this) is HwndSource source) DwmInvalidateIconicBitmaps(source.Handle);
+    }
+
     private static void FlashTaskbarButton(IntPtr hwnd)
     {
         var info = new FlashInfo
@@ -131,6 +137,7 @@ public partial class MainWindow
     [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr window, IntPtr afterWindow, int x, int y, int width, int height, uint flags);
     [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool FlashWindowEx(ref FlashInfo info);
     [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(IntPtr window, int attribute, ref int value, int size);
+    [DllImport("dwmapi.dll")] private static extern int DwmInvalidateIconicBitmaps(IntPtr window);
     [DllImport("dwmapi.dll")] private static extern int DwmSetIconicThumbnail(IntPtr window, IntPtr bitmap, uint flags);
     [DllImport("gdi32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool DeleteObject(IntPtr handle);
 

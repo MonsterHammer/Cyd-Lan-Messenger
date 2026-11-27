@@ -21,7 +21,7 @@
     <StackPanel>
       <Grid Margin="8,6,8,11">
         <Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-        <Image Width="28" Height="28" Source="{DynamicResource BrandMark}" HorizontalAlignment="Left"/>
+        <local:BrandLogo Width="28" Height="28" HorizontalAlignment="Left"/>
         <StackPanel Grid.Column="1"><TextBlock Text="CydLan" FontSize="15" FontWeight="SemiBold"/><TextBlock Text="{Binding ConnectionSummary}" FontSize="11" Foreground="{DynamicResource Faint}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/></StackPanel>
       </Grid>
       <Border Background="{DynamicResource Line}" Height="1" Margin="3,0,3,5"/>

@@ -351,6 +351,12 @@ public sealed class AppSettings
     public string CustomHeaderColor { get; set; } = "";
     public string CustomRailColor { get; set; } = "";
     public string CustomSidebarColor { get; set; } = "";
+    public string LogoColor { get; set; } = "";
+    public string LogoStyle { get; set; } = "classic";
+    public string LogoEffect { get; set; } = "none";
+    public string LogoDotColor { get; set; } = "";
+    public string LogoDotEffect { get; set; } = "none";
+    public string IconColor { get; set; } = "";
     public string ChatSurfaceMode { get; set; } = "separate";
     public string CustomChatBackgroundColor { get; set; } = "";
     public string BubbleStyle { get; set; } = "soft";
@@ -365,6 +371,7 @@ public sealed class AppSettings
     public string AvatarShape { get; set; } = "default";
     public bool OnlineRingEnabled { get; set; }
     public string UiFont { get; set; } = "";
+    public List<string> ImportedFonts { get; set; } = [];
     public double WindowOpacity { get; set; } = 1.0;
     public double EffectSpeed { get; set; } = 1.0;
     public string MessageAnimation { get; set; } = "off";

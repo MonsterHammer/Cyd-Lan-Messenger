@@ -80,6 +80,40 @@
         </Setter.Value>
       </Setter>
     </Style>
+    <Style x:Key="FontPillGrid" TargetType="ListBox" BasedOn="{StaticResource SwatchGrid}">
+      <Setter Property="ItemsPanel"><Setter.Value><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></Setter.Value></Setter>
+      <Setter Property="ItemContainerStyle">
+        <Setter.Value>
+          <Style TargetType="ListBoxItem">
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Margin" Value="0,0,6,6"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="AutomationProperties.Name" Value="{Binding Name, Mode=OneTime}"/>
+            <Setter Property="Template">
+              <Setter.Value>
+                <ControlTemplate TargetType="ListBoxItem">
+                  <Border x:Name="Pill" Width="112" Height="52" Padding="10,6" CornerRadius="{DynamicResource ControlCorner}"
+                          Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Line}" BorderThickness="1">
+                    <StackPanel VerticalAlignment="Center">
+                      <TextBlock Text="Aa Bb 123" FontFamily="{Binding Preview, Mode=OneTime}" FontSize="16" Foreground="{DynamicResource Ink}" TextTrimming="CharacterEllipsis"/>
+                      <TextBlock Text="{Binding Name, Mode=OneTime}" FontSize="10.5" Foreground="{DynamicResource Muted}" TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
+                  </Border>
+                  <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Pill" Property="BorderBrush" Value="{DynamicResource Muted}"/></Trigger>
+                    <Trigger Property="IsSelected" Value="True">
+                      <Setter TargetName="Pill" Property="Background" Value="{DynamicResource AccentSoft}"/>
+                      <Setter TargetName="Pill" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                      <Setter TargetName="Pill" Property="BorderThickness" Value="1.5"/>
+                    </Trigger>
+                  </ControlTemplate.Triggers>
+                </ControlTemplate>
+              </Setter.Value>
+            </Setter>
+          </Style>
+        </Setter.Value>
+      </Setter>
+    </Style>
     <Style x:Key="ColorChipGrid" TargetType="ListBox" BasedOn="{StaticResource SwatchGrid}">
       <Setter Property="ItemsPanel"><Setter.Value><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></Setter.Value></Setter>
       <Setter Property="ItemContainerStyle">
@@ -225,6 +259,26 @@
         <Grid x:Name="DragArea" Background="Transparent">
           <Button Style="{StaticResource Icon}" Width="30" Height="30" HorizontalAlignment="Right" ToolTip="Close" Click="Cancel_Click"><local:Glyph Data="{DynamicResource IconClose}" Size="16"/></Button>
         </Grid>
+        <Grid Grid.Row="1">
+          <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+          <StackPanel x:Name="AppearanceHeader" Visibility="Collapsed" Margin="0,0,8,0">
+              <TextBlock Text="Appearance" Style="{StaticResource Heading}" Margin="0,0,0,10"/>
+              <Border BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Margin="0,0,0,14">
+                <WrapPanel x:Name="AppearanceTabsPanel">
+                  <RadioButton x:Name="AppearanceThemesTab" Content="Themes" Tag="Themes" Style="{StaticResource Tab}" GroupName="AppearanceSection" IsChecked="True" Checked="AppearanceTab_Checked" Margin="0,0,10,0" AutomationProperties.Name="Themes tab"/>
+                  <RadioButton x:Name="AppearanceColorsTab" Content="Colors" Tag="Colors" Style="{StaticResource Tab}" GroupName="AppearanceSection" Checked="AppearanceTab_Checked" Margin="0,0,10,0" AutomationProperties.Name="Colors tab"/>
+                  <RadioButton x:Name="AppearanceBubblesTab" Content="Bubbles" Tag="Bubbles" Style="{StaticResource Tab}" GroupName="AppearanceSection" Checked="AppearanceTab_Checked" Margin="0,0,10,0" AutomationProperties.Name="Bubbles tab"/>
+                  <RadioButton x:Name="AppearanceTexturesTab" Content="Textures" Tag="Textures" Style="{StaticResource Tab}" GroupName="AppearanceSection" Checked="AppearanceTab_Checked" Margin="0,0,10,0" AutomationProperties.Name="Textures tab"/>
+                  <RadioButton x:Name="AppearanceAmbientTab" Content="Ambient" Tag="Ambient" Style="{StaticResource Tab}" GroupName="AppearanceSection" Checked="AppearanceTab_Checked" Margin="0,0,10,0" AutomationProperties.Name="Ambient tab"/>
+                  <RadioButton x:Name="AppearanceHeadersTab" Content="Headers" Tag="Headers" Style="{StaticResource Tab}" GroupName="AppearanceSection" Checked="AppearanceTab_Checked" Margin="0,0,10,0" AutomationProperties.Name="Headers tab"/>
+                  <RadioButton x:Name="AppearancePanelsTab" Content="Panels" Tag="Panels" Style="{StaticResource Tab}" GroupName="AppearanceSection" Checked="AppearanceTab_Checked" Margin="0,0,10,0" AutomationProperties.Name="Panels tab"/>
+                  <RadioButton x:Name="AppearanceAuraTab" Content="Aura" Tag="Aura" Style="{StaticResource Tab}" GroupName="AppearanceSection" Checked="AppearanceTab_Checked" Margin="0,0,10,0" AutomationProperties.Name="Aura tab"/>
+                  <RadioButton x:Name="AppearanceCompanionTab" Content="Companion" Tag="Companion" Style="{StaticResource Tab}" GroupName="AppearanceSection" Checked="AppearanceTab_Checked" Margin="0,0,10,0" AutomationProperties.Name="Companion tab"/>
+                  <RadioButton x:Name="AppearanceSceneTab" Content="Scene" Tag="Scene" Style="{StaticResource Tab}" GroupName="AppearanceSection" Checked="AppearanceTab_Checked" Margin="0,0,10,0" AutomationProperties.Name="Scene tab"/>
+                  <RadioButton x:Name="AppearanceCustomizeTab" Content="Fonts &amp; bg" Tag="Customize" Style="{StaticResource Tab}" GroupName="AppearanceSection" Checked="AppearanceTab_Checked" AutomationProperties.Name="Fonts and background tab"/>
+                </WrapPanel>
+              </Border>
+          </StackPanel>
         <ScrollViewer x:Name="PreferencesScroller" Grid.Row="1" VerticalScrollBarVisibility="Auto">
           <Grid>
             <StackPanel x:Name="GeneralPage" Style="{StaticResource Page}" Visibility="Visible">
@@ -331,23 +385,11 @@
             </StackPanel>
 
             <StackPanel x:Name="AppearancePage" Style="{StaticResource Page}">
-              <TextBlock Text="Appearance" Style="{StaticResource Heading}" Margin="0,0,0,10"/>
-              <Border BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1" Margin="0,0,0,14">
-                <WrapPanel x:Name="AppearanceTabsPanel">
-                  <RadioButton x:Name="AppearanceThemesTab" Content="Themes" Tag="Themes" Style="{StaticResource Tab}" GroupName="AppearanceSection" IsChecked="True" Checked="AppearanceTab_Checked" Margin="0,0,10,0" AutomationProperties.Name="Themes tab"/>
-                  <RadioButton x:Name="AppearanceColorsTab" Content="Colors" Tag="Colors" Style="{StaticResource Tab}" GroupName="AppearanceSection" Checked="AppearanceTab_Checked" Margin="0,0,10,0" AutomationProperties.Name="Colors tab"/>
-                  <RadioButton x:Name="AppearanceBubblesTab" Content="Bubbles" Tag="Bubbles" Style="{StaticResource Tab}" GroupName="AppearanceSection" Checked="AppearanceTab_Checked" Margin="0,0,10,0" AutomationProperties.Name="Bubbles tab"/>
-                  <RadioButton x:Name="AppearanceTexturesTab" Content="Textures" Tag="Textures" Style="{StaticResource Tab}" GroupName="AppearanceSection" Checked="AppearanceTab_Checked" Margin="0,0,10,0" AutomationProperties.Name="Textures tab"/>
-                  <RadioButton x:Name="AppearanceAmbientTab" Content="Ambient" Tag="Ambient" Style="{StaticResource Tab}" GroupName="AppearanceSection" Checked="AppearanceTab_Checked" Margin="0,0,10,0" AutomationProperties.Name="Ambient tab"/>
-                  <RadioButton x:Name="AppearanceHeadersTab" Content="Headers" Tag="Headers" Style="{StaticResource Tab}" GroupName="AppearanceSection" Checked="AppearanceTab_Checked" Margin="0,0,10,0" AutomationProperties.Name="Headers tab"/>
-                  <RadioButton x:Name="AppearancePanelsTab" Content="Panels" Tag="Panels" Style="{StaticResource Tab}" GroupName="AppearanceSection" Checked="AppearanceTab_Checked" Margin="0,0,10,0" AutomationProperties.Name="Panels tab"/>
-                  <RadioButton x:Name="AppearanceAuraTab" Content="Aura" Tag="Aura" Style="{StaticResource Tab}" GroupName="AppearanceSection" Checked="AppearanceTab_Checked" Margin="0,0,10,0" AutomationProperties.Name="Aura tab"/>
-                  <RadioButton x:Name="AppearanceCompanionTab" Content="Companion" Tag="Companion" Style="{StaticResource Tab}" GroupName="AppearanceSection" Checked="AppearanceTab_Checked" Margin="0,0,10,0" AutomationProperties.Name="Companion tab"/>
-                  <RadioButton x:Name="AppearanceSceneTab" Content="Scene" Tag="Scene" Style="{StaticResource Tab}" GroupName="AppearanceSection" Checked="AppearanceTab_Checked" Margin="0,0,10,0" AutomationProperties.Name="Scene tab"/>
-                  <RadioButton x:Name="AppearanceCustomizeTab" Content="Fonts &amp; bg" Tag="Customize" Style="{StaticResource Tab}" GroupName="AppearanceSection" Checked="AppearanceTab_Checked" AutomationProperties.Name="Fonts and background tab"/>
-                </WrapPanel>
-              </Border>
               <StackPanel x:Name="AppearanceThemesSection">
+                <TextBlock Text="Sets" Style="{StaticResource Label}"/>
+                <ListBox x:Name="AppearanceSetBox" Style="{StaticResource PillOptionGrid}" SelectionChanged="AppearanceSet_Changed" Margin="0,0,0,6" AutomationProperties.Name="Appearance sets"/>
+                <Separator Margin="0,4,0,12" Background="{DynamicResource Line}"/>
+                <TextBlock Text="Themes" Style="{StaticResource Label}"/>
                 <Border Background="{DynamicResource Surface}" CornerRadius="{DynamicResource ControlCorner}" Padding="3" Margin="0,0,0,12" Width="216" HorizontalAlignment="Left">
                   <UniformGrid Columns="3">
                     <RadioButton x:Name="ThemeFilterAll" Content="All" Tag="all" Style="{StaticResource Segment}" GroupName="ThemeCategory" IsChecked="True" Checked="ThemeFilter_Checked" AutomationProperties.Name="All themes"/>
@@ -2219,10 +2261,78 @@
                     </Grid>
                   </StackPanel>
                 </Border>
+                </Popup>
               </StackPanel>
               <StackPanel x:Name="AppearanceCustomizeSection" Visibility="Collapsed">
-                <TextBlock Text="Interface font" Style="{StaticResource Label}"/>
-                <ComboBox x:Name="UiFontBox" MaxDropDownHeight="260" SelectionChanged="UiFont_Changed" Margin="0,0,0,12" AutomationProperties.Name="Interface font"/>
+                <DockPanel Margin="0,0,0,6">
+                  <Button DockPanel.Dock="Right" Content="Import font" Style="{StaticResource Secondary}" Padding="10,4" Click="ImportFont_Click" AutomationProperties.Name="Import font"/>
+                  <TextBlock Text="App font" Style="{StaticResource Label}" Margin="0" VerticalAlignment="Center"/>
+                </DockPanel>
+                <ListBox x:Name="AppFontGallery" Style="{StaticResource FontPillGrid}" SelectedValuePath="Value" SelectionChanged="AppFontGallery_Changed" Margin="0,0,0,4" AutomationProperties.Name="App font"/>
+                <TextBlock x:Name="FontImportError" FontSize="12" Foreground="{DynamicResource Danger}" Visibility="Collapsed" Margin="0,0,0,6"/>
+                <Separator Margin="0,6,0,12" Background="{DynamicResource Line}"/>
+                <DockPanel Margin="0,0,0,6">
+                  <local:BrandLogo x:Name="LogoPreview" DockPanel.Dock="Right" Width="30" Height="30" Margin="0,0,6,0"/>
+                  <TextBlock Text="Logo" Style="{StaticResource Label}" Margin="0" VerticalAlignment="Center"/>
+                </DockPanel>
+                <ListBox x:Name="LogoStyleBox" Style="{StaticResource SwatchGrid}" SelectedValuePath="Value" SelectionChanged="LogoStyle_Changed" Margin="0,0,0,8" AutomationProperties.Name="Logo">
+                  <ListBox.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ListBox.ItemsPanel>
+                  <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem">
+                      <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                      <Setter Property="Margin" Value="0,0,6,6"/>
+                      <Setter Property="Cursor" Value="Hand"/>
+                      <Setter Property="AutomationProperties.Name" Value="{Binding Name, Mode=OneTime}"/>
+                      <Setter Property="ToolTip" Value="{Binding Name, Mode=OneTime}"/>
+                      <Setter Property="Template">
+                        <Setter.Value>
+                          <ControlTemplate TargetType="ListBoxItem">
+                            <Border x:Name="Tile" Width="52" Height="52" CornerRadius="{DynamicResource ControlCorner}" Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Line}" BorderThickness="1">
+                              <Image Source="{Binding Preview}" Width="34" Height="34"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Tile" Property="BorderBrush" Value="{DynamicResource Muted}"/></Trigger>
+                              <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Tile" Property="Background" Value="{DynamicResource AccentSoft}"/>
+                                <Setter TargetName="Tile" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                                <Setter TargetName="Tile" Property="BorderThickness" Value="2"/>
+                              </Trigger>
+                            </ControlTemplate.Triggers>
+                          </ControlTemplate>
+                        </Setter.Value>
+                      </Setter>
+                    </Style>
+                  </ListBox.ItemContainerStyle>
+                </ListBox>
+                <TextBlock Text="Logo effect" Style="{StaticResource Label}"/>
+                <ListBox x:Name="LogoEffectBox" Style="{StaticResource PillOptionGrid}" SelectedValuePath="Value" SelectionChanged="LogoEffect_Changed" Margin="0,0,0,12" AutomationProperties.Name="Logo effect"/>
+                <DockPanel Margin="0,0,0,6">
+                  <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <local:ColorPickerButton x:Name="LogoColorPicker" FallbackBrush="#85B1BF" Margin="0,0,6,0" ColorChanged="ColorPicker_Changed" AutomationProperties.Name="Logo color picker"/>
+                    <TextBox x:Name="LogoHexBox" Width="84" MaxLength="9" Padding="8,4" FontSize="12" LostKeyboardFocus="ColorHex_Committed" KeyDown="ColorHex_KeyDown" AutomationProperties.Name="Logo color hex"/>
+                  </StackPanel>
+                  <TextBlock Text="Logo color" Style="{StaticResource Label}" VerticalAlignment="Center" Margin="0"/>
+                </DockPanel>
+                <ListBox x:Name="LogoColorBox" Style="{StaticResource ColorChipGrid}" SelectedValuePath="Value" SelectionChanged="ColorOverride_Changed" Margin="0,0,0,12" AutomationProperties.Name="Logo color"/>
+                <DockPanel Margin="0,0,0,6">
+                  <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <local:ColorPickerButton x:Name="LogoDotColorPicker" FallbackBrush="#1F2B30" Margin="0,0,6,0" ColorChanged="ColorPicker_Changed" AutomationProperties.Name="Dot color picker"/>
+                    <TextBox x:Name="LogoDotHexBox" Width="84" MaxLength="9" Padding="8,4" FontSize="12" LostKeyboardFocus="ColorHex_Committed" KeyDown="ColorHex_KeyDown" AutomationProperties.Name="Dot color hex"/>
+                  </StackPanel>
+                  <TextBlock Text="Dot color" Style="{StaticResource Label}" VerticalAlignment="Center" Margin="0"/>
+                </DockPanel>
+                <ListBox x:Name="LogoDotColorBox" Style="{StaticResource ColorChipGrid}" SelectedValuePath="Value" SelectionChanged="ColorOverride_Changed" Margin="0,0,0,12" AutomationProperties.Name="Dot color"/>
+                <TextBlock Text="Dot effect" Style="{StaticResource Label}"/>
+                <ListBox x:Name="LogoDotEffectBox" Style="{StaticResource PillOptionGrid}" SelectedValuePath="Value" SelectionChanged="LogoDotEffect_Changed" Margin="0,0,0,12" AutomationProperties.Name="Dot effect"/>
+                <DockPanel Margin="0,0,0,6">
+                  <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <local:ColorPickerButton x:Name="IconColorPicker" FallbackBrush="{DynamicResource Muted}" Margin="0,0,6,0" ColorChanged="ColorPicker_Changed" AutomationProperties.Name="Icon color picker"/>
+                    <TextBox x:Name="IconHexBox" Width="84" MaxLength="9" Padding="8,4" FontSize="12" LostKeyboardFocus="ColorHex_Committed" KeyDown="ColorHex_KeyDown" AutomationProperties.Name="Icon color hex"/>
+                  </StackPanel>
+                  <TextBlock Text="Icon color" Style="{StaticResource Label}" VerticalAlignment="Center" Margin="0"/>
+                </DockPanel>
+                <ListBox x:Name="IconColorBox" Style="{StaticResource ColorChipGrid}" SelectedValuePath="Value" SelectionChanged="ColorOverride_Changed" Margin="0,0,0,12" AutomationProperties.Name="Icon color"/>
+                <Separator Margin="0,0,0,14" Background="{DynamicResource Line}"/>
                 <Grid>
                   <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="12"/><ColumnDefinition Width="130"/></Grid.ColumnDefinitions>
                   <StackPanel><TextBlock Text="Message font" Style="{StaticResource Label}"/><ComboBox x:Name="FontBox" MaxDropDownHeight="260" SelectionChanged="Font_Changed" AutomationProperties.Name="Message font"/></StackPanel>
@@ -2531,7 +2641,7 @@
             </StackPanel>
             <StackPanel x:Name="AboutPage" Style="{StaticResource Page}">
               <TextBlock Text="About" Style="{StaticResource Heading}"/>
-              <Image Source="{DynamicResource BrandMark}" Width="48" Height="48" HorizontalAlignment="Left" Margin="0,0,0,12"/>
+              <local:BrandLogo Width="48" Height="48" HorizontalAlignment="Left" Margin="0,0,0,12"/>
               <TextBlock Text="Cyd Lan Messenger" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap"/>
               <TextBlock x:Name="VersionText" Margin="0,6,0,16"/>
               <TextBlock Text="Developer" Style="{StaticResource Label}"/>
@@ -2561,6 +2671,7 @@
             </StackPanel>
           </Grid>
         </ScrollViewer>
+        </Grid>
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Bottom">
           <Button Content="Cancel" Style="{StaticResource Secondary}" Click="Cancel_Click" Margin="0,0,8,0"/>
           <Button Content="Save" AutomationProperties.Name="Save" Style="{StaticResource Primary}" Click="Save_Click"/>

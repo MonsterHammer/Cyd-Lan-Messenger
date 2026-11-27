@@ -14,6 +14,8 @@ public sealed class Glyph : FrameworkElement
         new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
     public static readonly DependencyProperty ForegroundProperty = TextElement.ForegroundProperty.AddOwner(typeof(Glyph),
         new FrameworkPropertyMetadata(Brushes.Black, FrameworkPropertyMetadataOptions.Inherits | FrameworkPropertyMetadataOptions.AffectsRender));
+    public static readonly DependencyProperty IconTintProperty = DependencyProperty.Register(nameof(IconTint), typeof(Brush), typeof(Glyph),
+        new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
     public static readonly DependencyProperty SizeProperty = DependencyProperty.Register(nameof(Size), typeof(double), typeof(Glyph),
         new FrameworkPropertyMetadata(18.0, FrameworkPropertyMetadataOptions.AffectsMeasure | FrameworkPropertyMetadataOptions.AffectsRender));
     public static readonly DependencyProperty StrokeThicknessProperty = DependencyProperty.Register(nameof(StrokeThickness), typeof(double), typeof(Glyph),
@@ -21,6 +23,8 @@ public sealed class Glyph : FrameworkElement
 
     public Geometry? Data { get => (Geometry?)GetValue(DataProperty); set => SetValue(DataProperty, value); }
     public Brush Foreground { get => (Brush)GetValue(ForegroundProperty); set => SetValue(ForegroundProperty, value); }
+    /// <summary>App-wide icon color; transparent or unset keeps the inherited text color.</summary>
+    public Brush? IconTint { get => (Brush?)GetValue(IconTintProperty); set => SetValue(IconTintProperty, value); }
     public double Size { get => (double)GetValue(SizeProperty); set => SetValue(SizeProperty, value); }
     public double StrokeThickness { get => (double)GetValue(StrokeThicknessProperty); set => SetValue(StrokeThicknessProperty, value); }
 
@@ -32,13 +36,25 @@ public sealed class Glyph : FrameworkElement
         SnapsToDevicePixelsProperty.OverrideMetadata(typeof(Glyph), new FrameworkPropertyMetadata(true));
     }
 
+    public Glyph() => SetResourceReference(IconTintProperty, "IconTint");
+
+    private Brush StrokeBrush()
+    {
+        if (IconTint is not SolidColorBrush { Color.A: > 0 } tint) return Foreground;
+        // Icons drawn on accent or danger fills keep their contrast color.
+        if (Foreground is SolidColorBrush fg && (SameColor(fg, "AccentInk") || SameColor(fg, "Danger"))) return Foreground;
+        return tint;
+    }
+
+    private bool SameColor(SolidColorBrush brush, string key) => TryFindResource(key) is SolidColorBrush r && r.Color == brush.Color;
+
     protected override System.Windows.Size MeasureOverride(System.Windows.Size available) => new(Size, Size);
 
     protected override void OnRender(DrawingContext dc)
     {
         if (Data is null || Size <= 0) return;
         double scale = Size / 24;
-        var pen = new Pen(Foreground, StrokeThickness / scale) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round, LineJoin = PenLineJoin.Round };
+        var pen = new Pen(StrokeBrush(), StrokeThickness / scale) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round, LineJoin = PenLineJoin.Round };
         dc.PushTransform(new ScaleTransform(scale, scale));
         dc.DrawGeometry(null, pen, Data);
         dc.Pop();

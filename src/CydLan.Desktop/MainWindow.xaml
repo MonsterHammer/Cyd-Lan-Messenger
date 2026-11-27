@@ -340,7 +340,7 @@
                                Visibility="{Binding ThemeDetailsEnabled, Converter={StaticResource Bool}}"/>
         <local:SceneEffectsLayer Zone="title" Items="{Binding SceneEffects}"/>
         <StackPanel Orientation="Horizontal" Margin="15,0,0,0" VerticalAlignment="Center">
-          <Image Source="{DynamicResource BrandMark}" Width="20" Height="20" Margin="0,0,9,0"/>
+          <local:BrandLogo Width="20" Height="20" Margin="0,0,9,0"/>
           <TextBlock Text="CydLan" FontSize="13" Foreground="{DynamicResource TitleBarMuted}" VerticalAlignment="Center"/>
           <Button Style="{StaticResource TitleIcon}" Width="32" Height="30" Margin="14,0,0,0" Click="ToggleSidebar_Click" ToolTip="Conversations" AutomationProperties.Name="Toggle conversations sidebar"><local:Glyph Data="{DynamicResource IconSidebar}" Size="17"/></Button>
         </StackPanel>
@@ -816,7 +816,7 @@
                     <ItemsControl x:Name="MessageList" ItemsSource="{Binding Messages}" ItemTemplate="{StaticResource MessageTemplate}" HorizontalContentAlignment="Stretch"/>
                   </ScrollViewer>
                   <StackPanel Grid.Row="1" MaxWidth="370" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="25" Visibility="{Binding NoPeer, Converter={StaticResource Bool}}">
-                    <Image Source="{DynamicResource BrandMark}" Width="64" Height="64"/>
+                    <local:BrandLogo Width="64" Height="64"/>
                   </StackPanel>
                   <StackPanel Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding NoGroup, Converter={StaticResource Bool}}">
                     <local:Glyph Data="{DynamicResource IconUsers}" Size="40" StrokeThickness="2" Foreground="{DynamicResource Accent}"/>

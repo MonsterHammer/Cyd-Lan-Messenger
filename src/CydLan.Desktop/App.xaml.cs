@@ -183,6 +183,7 @@ public partial class App : System.Windows.Application
             });
         };
         tray.DoubleClick += (_, _) => ShowWindow(window);
+        ThemeManager.AppIconChanged += () => Dispatcher.BeginInvoke(RefreshAppIcon);
     }
     internal void ConnectNotifications(MainWindow window, MainViewModel source)
     {
@@ -206,10 +207,46 @@ public partial class App : System.Windows.Application
     }
     internal static Icon MakeIcon(int size = 32)
     {
+        if (ThemeManager.CustomAppIcon is { } custom) return RenderIcon(custom, size);
         using var stream = GetResourceStream(new Uri("pack://application:,,,/CydLan;component/Assets/cydlan.ico")).Stream;
         using var icon = new Icon(stream, size, size);
         return (Icon)icon.Clone();
     }
+    private static Icon RenderIcon(ImageSource source, int size)
+    {
+        var visual = new DrawingVisual();
+        using (var dc = visual.RenderOpen()) dc.DrawImage(source, new Rect(0, 0, size, size));
+        var bitmap = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(visual);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using var png = new MemoryStream();
+        encoder.Save(png);
+        png.Position = 0;
+        using var drawn = new Bitmap(png);
+        IntPtr handle = drawn.GetHicon();
+        try
+        {
+            using var borrowed = System.Drawing.Icon.FromHandle(handle);
+            return (Icon)borrowed.Clone();
+        }
+        finally { DestroyIcon(handle); }
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool DestroyIcon(IntPtr handle);
+
+    private void RefreshAppIcon()
+    {
+        if (tray is not null)
+        {
+            var old = tray.Icon;
+            tray.Icon = MakeIcon();
+            old?.Dispose();
+        }
+        foreach (Window w in Windows)
+            if (w is MainWindow main) main.RefreshTaskbarIcon();
+    }
+
     // Draws the popup over the main window at its real offset, so the screenshot shows the backdrop too.
     private static RenderTargetBitmap Composite(Window main, Window popup)
     {

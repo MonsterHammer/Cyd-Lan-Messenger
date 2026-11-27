@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
@@ -10,7 +10,7 @@ using System.Windows.Threading;
 using CydLan.Core;
 using CydLan.Desktop;
 
-internal static class Program
+internal static partial class Program
 {
     // Use WPF's normal application lifetime while bypassing the desktop entry
     // point, which would otherwise open real LAN sockets and the user's profile.
@@ -30,6 +30,10 @@ internal static class Program
             {
                 if (args.Contains("--effects-benchmark")) await RunEffectsBenchmarkAsync();
                 else if (args.Contains("--customization-only")) await RunCustomizationVerificationAsync();
+                else if (args.Contains("--reminders-only")) await RunReminderVerificationAsync();
+                else if (args.Contains("--custom-only")) await RunLookAndBrandVerificationAsync();
+                else if (args.Contains("--opacity-only")) { await TestWindowOpacityAsync(); Console.WriteLine("PASS  Window opacity"); }
+                else if (args.Contains("--floating-only")) { Directory.CreateDirectory("artifacts"); await TestFloatingLanSuiteAsync(Path.GetFullPath("artifacts")); Console.WriteLine("PASS  Floating companion suite"); }
                 else await RunAsync(args.Contains("--offline"), args.Contains("--startup-loopback"));
             }
             catch (Exception e) { Console.WriteLine("FAIL  " + e); exitCode = 1; }
@@ -3175,6 +3179,14 @@ internal static class Program
         for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
             if (FindText(VisualTreeHelper.GetChild(root, i), text) is { } found) return found;
         return null;
+    }
+
+    private static List<string> FindAutomationElements(DependencyObject root)
+    {
+        var names = new List<string>();
+        if (root is FrameworkElement fe && System.Windows.Automation.AutomationProperties.GetName(fe) is { Length: > 0 } name) names.Add(name);
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++) names.AddRange(FindAutomationElements(VisualTreeHelper.GetChild(root, i)));
+        return names;
     }
 
     private static System.Windows.Controls.TextBlock? FindVisibleText(DependencyObject root, string text)
