@@ -55,14 +55,14 @@ internal sealed class PetInviteToast : Window
         pet.SetMood(PetMood.Fired);
 
         var name = new TextBlock { Text = invite.PeerName, FontWeight = FontWeights.SemiBold, FontSize = 13.5, TextTrimming = TextTrimming.CharacterEllipsis };
-        var summary = new TextBlock { Text = "Battle · " + invite.Summary, FontSize = 11.5, Margin = new Thickness(0, 2, 0, 0) };
+        var summary = new TextBlock { Text = (invite.IsTrade ? "Trade · " : "Battle · ") + invite.Summary, FontSize = 11.5, Margin = new Thickness(0, 2, 0, 0) };
         summary.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
         var decline = new Button { Content = "Decline", Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(0, 0, 6, 0) };
         decline.SetResourceReference(StyleProperty, "Secondary");
         decline.Click += async (_, _) => { Close(); await model.Arena.DeclineAsync(invite); };
-        var accept = new Button { Content = "Battle", Padding = new Thickness(14, 4, 14, 4) };
+        var accept = new Button { Content = invite.IsTrade ? "Trade" : "Battle", Padding = new Thickness(14, 4, 14, 4) };
         accept.SetResourceReference(StyleProperty, "Primary");
-        System.Windows.Automation.AutomationProperties.SetName(accept, "Accept battle from " + invite.PeerName);
+        System.Windows.Automation.AutomationProperties.SetName(accept, (invite.IsTrade ? "Accept trade from " : "Accept battle from ") + invite.PeerName);
         accept.Click += async (_, _) => { Close(); await model.Arena.AcceptAsync(invite); };
 
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 10, 0, 0) };

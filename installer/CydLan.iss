@@ -45,3 +45,6 @@ Name: "{userdesktop}\CydLan"; Filename: "{app}\CydLan.exe"; WorkingDir: "{app}";
 
 [Run]
 Filename: "{app}\CydLan.exe"; Description: "Open CydLan"; Flags: nowait postinstall skipifsilent unchecked
+
+[UninstallRun]
+Filename: "{app}\CydLan.exe"; Parameters: "--reset-stats"; RunOnceId: "ResetPetStats"; Flags: runhidden waituntilterminated skipifdoesntexist

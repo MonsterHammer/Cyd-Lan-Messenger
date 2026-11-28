@@ -22,9 +22,28 @@ public partial class App : System.Windows.Application
     private DiagnosticLog? log;
     private bool quitting;
     internal bool IsQuitting => quitting;
+    public static bool ResetPetStats(string dataDirectory)
+    {
+        string path = Path.Combine(dataDirectory, "settings.json");
+        if (!File.Exists(path)) return false;
+        var store = new LocalStore(dataDirectory);
+        var settings = store.LoadSettings();
+        settings.PetGame = new PetProgress();
+        store.SaveSettings(settings);
+        return true;
+    }
+
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        if (e.Args.Contains("--reset-stats"))
+        {
+            string appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            ResetPetStats(Path.Combine(appData, "CydLan"));
+            ResetPetStats(Path.Combine(appData, "CydLan-Lab"));
+            Shutdown(0);
+            return;
+        }
         bool captureTray = e.Args.Contains("--tray-screenshot");
         bool captureSettings = e.Args.Contains("--settings-screenshot");
         bool capturing = captureTray || captureSettings || e.Args.Contains("--screenshot");

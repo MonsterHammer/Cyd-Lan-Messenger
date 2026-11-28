@@ -1072,7 +1072,6 @@
                       <ComboBoxItem Content="Bubbles" Tag="bubbles"/>
                       <ComboBoxItem Content="Hearts" Tag="hearts"/>
                       <ComboBoxItem Content="Pixel dust" Tag="pixel"/>
-                      <ComboBoxItem Content="Spotlight" Tag="spotlight"/>
                     </ComboBox>
                   </StackPanel>
                 </Grid>

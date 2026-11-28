@@ -20,7 +20,7 @@ public static class InteractionEffects
 {
     public static readonly Color DefaultWordPop = Color.FromRgb(0xFF, 0xE1, 0x4D);
     private static readonly string[] HoverKinds = ["ring", "sparkle", "sweep", "brackets", "pop", "halo", "hearts"];
-    private static readonly string[] CursorKinds = ["sparkle", "comet", "ring", "rainbow", "bubbles", "hearts", "pixel", "spotlight"];
+    private static readonly string[] CursorKinds = ["sparkle", "comet", "ring", "rainbow", "bubbles", "hearts", "pixel"];
     private static bool installed;
 
     public static string Hover { get; private set; } = "off";
@@ -81,7 +81,6 @@ public sealed class ChatEffects : Canvas
     private Point lastTrail = new(double.NaN, double.NaN);
     private double trailHue;
     private Ellipse? ringFollower;
-    private Ellipse? spotlight;
     private DateTime lastHover;
     private FrameworkElement? lastHoverTarget;
 
@@ -118,7 +117,7 @@ public sealed class ChatEffects : Canvas
     {
         if (Children.Count >= MaxChildren)
             for (int i = 0; i < Children.Count; i++)
-                if (Children[i] != ringFollower && Children[i] != spotlight) { Children.RemoveAt(i); break; }
+                if (Children[i] != ringFollower) { Children.RemoveAt(i); break; }
         Children.Add(element);
     }
 
@@ -455,9 +454,9 @@ public sealed class ChatEffects : Canvas
         if (kind == "off" || !CanAnimate) { HideFollowers(); return; }
         double k = InteractionEffects.CursorIntensity;
         var accent = Accent;
-        if (kind is "ring" or "spotlight")
+        if (kind == "ring")
         {
-            Follow(p, kind, k, accent);
+            Follow(p, k, accent);
             return;
         }
         double step = kind is "comet" or "rainbow" ? 5 : 16;
@@ -500,36 +499,17 @@ public sealed class ChatEffects : Canvas
         }
     }
 
-    private void Follow(Point p, string kind, double k, Color accent)
+    private void Follow(Point p, double k, Color accent)
     {
-        if (kind == "ring")
+        if (ringFollower is null)
         {
-            if (spotlight is not null) { Children.Remove(spotlight); spotlight = null; }
-            if (ringFollower is null)
-            {
-                ringFollower = new Ellipse { Width = 26, Height = 26, StrokeThickness = 1.6, IsHitTestVisible = false };
-                Children.Add(ringFollower);
-                SetLeft(ringFollower, p.X - 13);
-                SetTop(ringFollower, p.Y - 13);
-            }
-            ringFollower.Stroke = Solid(accent, .4 + .6 * k);
-            Glide(ringFollower, p, 13, 160);
+            ringFollower = new Ellipse { Width = 26, Height = 26, StrokeThickness = 1.6, IsHitTestVisible = false };
+            Children.Add(ringFollower);
+            SetLeft(ringFollower, p.X - 13);
+            SetTop(ringFollower, p.Y - 13);
         }
-        else
-        {
-            if (ringFollower is not null) { Children.Remove(ringFollower); ringFollower = null; }
-            if (spotlight is null)
-            {
-                spotlight = new Ellipse { Width = 220, Height = 220, IsHitTestVisible = false };
-                Children.Insert(0, spotlight);
-            }
-            var fill = new RadialGradientBrush();
-            fill.GradientStops.Add(new GradientStop(Color.FromArgb((byte)(60 * k + 20), accent.R, accent.G, accent.B), 0));
-            fill.GradientStops.Add(new GradientStop(Color.FromArgb(0, accent.R, accent.G, accent.B), 1));
-            fill.Freeze();
-            spotlight.Fill = fill;
-            Glide(spotlight, p, 110, 90);
-        }
+        ringFollower.Stroke = Solid(accent, .4 + .6 * k);
+        Glide(ringFollower, p, 13, 160);
     }
 
     private static void Glide(FrameworkElement element, Point p, double half, int milliseconds)
@@ -542,7 +522,6 @@ public sealed class ChatEffects : Canvas
     internal void HideFollowers()
     {
         if (ringFollower is not null) { Children.Remove(ringFollower); ringFollower = null; }
-        if (spotlight is not null) { Children.Remove(spotlight); spotlight = null; }
         lastTrail = new Point(double.NaN, double.NaN);
     }
 

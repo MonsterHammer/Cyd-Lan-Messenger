@@ -87,6 +87,7 @@
         </Grid>
         <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,10,0,10">
           <RadioButton x:Name="WorldTabButton" Content="World" GroupName="LobbyTab" Style="{StaticResource LobbyTab}" IsChecked="True" Checked="LobbyTab_Checked"/>
+          <RadioButton x:Name="TournamentTabButton" Content="Tournament" GroupName="LobbyTab" Style="{StaticResource LobbyTab}" Checked="LobbyTab_Checked"/>
           <RadioButton x:Name="PetTabButton" Content="Pet" GroupName="LobbyTab" Style="{StaticResource LobbyTab}" Checked="LobbyTab_Checked"/>
           <RadioButton x:Name="DeckTabButton" GroupName="LobbyTab" Style="{StaticResource LobbyTab}" Checked="LobbyTab_Checked" AutomationProperties.Name="Deck"/>
           <RadioButton x:Name="ShopTabButton" Content="Shop" GroupName="LobbyTab" Style="{StaticResource LobbyTab}" Checked="LobbyTab_Checked"/>
@@ -141,7 +142,7 @@
                         <local:FloatingPetVisual DockPanel.Dock="Left" Width="48" Height="44" PetStyle="{Binding Appearance}" Margin="0,0,8,0"/>
                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                           <Button Content="Decline" Style="{StaticResource Secondary}" Padding="8,3" FontSize="11" Margin="0,0,6,0" Tag="{Binding}" Click="DeclineInvite_Click"/>
-                          <Button Content="Duel" Style="{StaticResource Primary}" Padding="10,3" FontSize="11" Tag="{Binding}" Click="AcceptInvite_Click"/>
+                          <Button Content="{Binding AcceptText}" Style="{StaticResource Primary}" Padding="10,3" FontSize="11" Tag="{Binding}" Click="AcceptInvite_Click"/>
                         </StackPanel>
                         <StackPanel VerticalAlignment="Center">
                           <TextBlock Text="{Binding PeerName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
@@ -154,7 +155,7 @@
               </ItemsControl>
             </StackPanel>
             <StackPanel x:Name="FriendsArea" Margin="0,12,0,0">
-              <TextBlock Text="Duel online" Style="{StaticResource SectionTitle}"/>
+              <TextBlock Text="Online" Style="{StaticResource SectionTitle}"/>
               <TextBlock x:Name="NoFriendsText" Text="No CydLan users online" FontSize="12" Foreground="{DynamicResource Faint}" Margin="2,2,0,0"/>
               <ItemsControl x:Name="FriendList">
                 <ItemsControl.ItemTemplate>
@@ -162,8 +163,12 @@
                     <Border Style="{StaticResource Card}" Padding="10,6" Margin="0,0,0,6">
                       <DockPanel>
                         <local:FloatingPetVisual DockPanel.Dock="Left" Width="44" Height="40" PetStyle="{Binding Appearance}" Margin="0,0,8,0"/>
-                        <Button DockPanel.Dock="Right" Content="{Binding ActionText}" Style="{StaticResource Secondary}" Padding="10,3" FontSize="11" VerticalAlignment="Center"
-                                Tag="{Binding}" Click="Challenge_Click" AutomationProperties.Name="{Binding ActionName}"/>
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                          <Button Content="{Binding TradeActionText}" Style="{StaticResource Secondary}" Padding="10,3" FontSize="11" Margin="0,0,6,0"
+                                  Tag="{Binding}" Click="Trade_Click" AutomationProperties.Name="{Binding TradeActionName}"/>
+                          <Button Content="{Binding ActionText}" Style="{StaticResource Secondary}" Padding="10,3" FontSize="11"
+                                  Tag="{Binding}" Click="Challenge_Click" AutomationProperties.Name="{Binding ActionName}"/>
+                        </StackPanel>
                         <TextBlock Text="{Binding Name}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                       </DockPanel>
                     </Border>
@@ -172,6 +177,48 @@
               </ItemsControl>
             </StackPanel>
 
+            </StackPanel>
+          </ScrollViewer>
+          <ScrollViewer x:Name="TournamentTab" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+            <StackPanel>
+              <Border Style="{StaticResource Card}" Padding="12,10">
+                <StackPanel>
+                  <DockPanel>
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                      <Border Padding="8,2" CornerRadius="9" Background="{DynamicResource Canvas}" BorderBrush="{DynamicResource Line}" BorderThickness="1" Margin="0,0,6,0">
+                        <TextBlock x:Name="TourneyTimerText" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Muted}"/>
+                      </Border>
+                      <Border x:Name="TourneyBadge" Padding="8,2" CornerRadius="9">
+                        <TextBlock x:Name="TourneyBadgeText" FontSize="11" FontWeight="SemiBold" Foreground="#1D2326"/>
+                      </Border>
+                    </StackPanel>
+                    <StackPanel>
+                      <TextBlock x:Name="TourneySlotText" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Muted}"/>
+                      <TextBlock x:Name="TourneyNameText" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
+                  </DockPanel>
+                  <ItemsControl x:Name="TournamentFights" Margin="0,8,0,0">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                        <Border CornerRadius="8" Padding="6,4" Margin="0,0,0,4" BorderThickness="1.5" BorderBrush="{Binding Edge}" Opacity="{Binding Fade}">
+                          <DockPanel>
+                            <local:FloatingPetVisual DockPanel.Dock="Left" Width="40" Height="36" PetStyle="{Binding Look}" Margin="0,0,8,0"/>
+                            <TextBlock DockPanel.Dock="Right" Text="{Binding Tag}" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource Accent}" VerticalAlignment="Center"/>
+                            <StackPanel VerticalAlignment="Center">
+                              <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                              <TextBlock Text="{Binding Detail}" FontSize="10.5" Foreground="{DynamicResource Muted}"/>
+                            </StackPanel>
+                          </DockPanel>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                  <Button x:Name="TournamentFightButton" Content="Fight" Style="{StaticResource Primary}" Padding="0,9" Click="TournamentBattle_Click" Margin="0,6,0,0"/>
+                  <Button x:Name="TournamentDeckNeededButton" Style="{StaticResource Secondary}" Margin="0,6,0,0" Padding="8,5" Click="DeckNeeded_Click" Visibility="Collapsed" BorderBrush="#EF4444" BorderThickness="1">
+                    <TextBlock x:Name="TournamentDeckNeededText" Foreground="#EF4444" FontWeight="SemiBold" FontSize="11.5"/>
+                  </Button>
+                </StackPanel>
+              </Border>
             </StackPanel>
           </ScrollViewer>
           <ScrollViewer x:Name="PetTab" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
@@ -252,7 +299,7 @@
               <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
-                  <Border Style="{StaticResource Card}" Width="214" Margin="0,0,8,8" Padding="8,6" BorderBrush="{Binding RarityBrush}" BorderThickness="1.5"
+                  <Border Style="{StaticResource Card}" Width="228" Margin="0,0,8,8" Padding="8,6" BorderBrush="{Binding RarityBrush}" BorderThickness="1.5"
                           Tag="{Binding Id}" MouseRightButtonUp="CardTile_RightClick">
                     <DockPanel>
                       <Grid DockPanel.Dock="Left" Width="40" Height="40" Margin="0,0,8,0" VerticalAlignment="Top">
@@ -261,8 +308,12 @@
                           <Image.Clip><RectangleGeometry Rect="0,0,40,40" RadiusX="8" RadiusY="8"/></Image.Clip>
                         </Image>
                       </Grid>
-                      <Button DockPanel.Dock="Right" Content="Add" Style="{StaticResource Primary}" Padding="8,2" FontSize="11" VerticalAlignment="Center" Margin="6,0,0,0"
-                              Tag="{Binding Id}" Click="AddToDeck_Click" IsEnabled="{Binding CanAdd}" AutomationProperties.Name="{Binding AddName}"/>
+                      <StackPanel DockPanel.Dock="Right" VerticalAlignment="Center" Margin="6,0,0,0">
+                        <Button Content="Add" Style="{StaticResource Primary}" Padding="8,2" FontSize="11"
+                                Tag="{Binding Id}" Click="AddToDeck_Click" IsEnabled="{Binding CanAdd}" AutomationProperties.Name="{Binding AddName}"/>
+                        <Button Content="{Binding SellText}" Style="{StaticResource Secondary}" Padding="6,2" FontSize="10.5" Margin="0,4,0,0"
+                                Tag="{Binding Id}" Click="SellCard_Click" IsEnabled="{Binding CanSell}" AutomationProperties.Name="{Binding SellName}"/>
+                      </StackPanel>
                       <StackPanel>
                         <DockPanel>
                           <TextBlock DockPanel.Dock="Right" Text="{Binding CountText}" FontSize="10.5" Foreground="{DynamicResource Faint}" Margin="4,0,0,0"/>
@@ -284,6 +335,42 @@
           </ScrollViewer>
           <ScrollViewer x:Name="ShopTab" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
             <StackPanel>
+            <!-- Card raffle -->
+            <DockPanel Margin="0,0,0,6">
+              <Button x:Name="SpinButton" DockPanel.Dock="Right" Content="Spin · 80" Style="{StaticResource Primary}" Padding="12,3" FontSize="11.5" Click="SpinRaffle_Click" AutomationProperties.Name="Spin card raffle"/>
+              <TextBlock Text="Card raffle" Style="{StaticResource SectionTitle}" VerticalAlignment="Bottom" Margin="2,0,0,0"/>
+            </DockPanel>
+            <Border Style="{StaticResource Card}" Padding="12,10" Margin="0,0,0,12">
+              <DockPanel>
+                <Grid DockPanel.Dock="Left" Width="116" Height="124" Margin="0,0,14,0" VerticalAlignment="Center">
+                  <Canvas x:Name="RaffleWheel" Width="116" Height="116" VerticalAlignment="Bottom">
+                    <Canvas.RenderTransform>
+                      <RotateTransform x:Name="RaffleWheelRotate" Angle="0" CenterX="58" CenterY="58"/>
+                    </Canvas.RenderTransform>
+                  </Canvas>
+                  <Polygon Points="52,0 64,0 58,11" Fill="{DynamicResource Accent}" Stroke="{DynamicResource Surface}" StrokeThickness="1.2" VerticalAlignment="Top"/>
+                </Grid>
+                <Border x:Name="RaffleResultCard" Style="{StaticResource Card}" Padding="10,8" Visibility="Collapsed" VerticalAlignment="Center" BorderThickness="1.5" MouseRightButtonUp="CardTile_RightClick">
+                  <DockPanel>
+                    <Grid DockPanel.Dock="Left" Width="44" Height="44" Margin="0,0,10,0">
+                      <Border x:Name="RaffleCardBg" CornerRadius="8" Opacity=".35"/>
+                      <Image x:Name="RaffleCardArt" Width="44" Height="44" RenderOptions.BitmapScalingMode="NearestNeighbor">
+                        <Image.Clip><RectangleGeometry Rect="0,0,44,44" RadiusX="8" RadiusY="8"/></Image.Clip>
+                      </Image>
+                      <Border HorizontalAlignment="Left" VerticalAlignment="Top" Width="17" Height="17" CornerRadius="8.5" Background="{DynamicResource Accent}" Margin="-4,-4,0,0">
+                        <TextBlock x:Name="RaffleCardCost" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AccentInk}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                      </Border>
+                    </Grid>
+                    <StackPanel VerticalAlignment="Center">
+                      <TextBlock x:Name="RaffleCardName" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis"/>
+                      <TextBlock x:Name="RaffleCardDetail" FontSize="11" Foreground="{DynamicResource Muted}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                      <TextBlock x:Name="RaffleCardExtra" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource Accent}" Margin="0,2,0,0" Visibility="Collapsed"/>
+                    </StackPanel>
+                  </DockPanel>
+                </Border>
+              </DockPanel>
+            </Border>
+
             <!-- Daily shop -->
             <DockPanel Margin="0,0,0,6">
               <Button x:Name="DailyButton" DockPanel.Dock="Right" Content="Daily bonus" Style="{StaticResource Primary}" Padding="10,3" FontSize="11.5" Click="Daily_Click"/>
@@ -439,6 +526,110 @@
           </StackPanel>
         </DockPanel>
         <Canvas x:Name="DragLayer" Grid.RowSpan="4" IsHitTestVisible="False" Panel.ZIndex="200"/>
+      </Grid>
+
+      <!-- Card trade -->
+      <Grid x:Name="TradePanel" Visibility="Collapsed">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <Grid>
+          <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="12"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+          <Border Style="{StaticResource Card}" Padding="12,10">
+            <StackPanel>
+              <DockPanel Margin="0,0,0,8">
+                <local:FloatingPetVisual x:Name="TradeMyPet" DockPanel.Dock="Left" Width="44" Height="40" Margin="0,0,8,0"/>
+                <TextBlock x:Name="TradeMyState" DockPanel.Dock="Right" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource Accent}" VerticalAlignment="Center"/>
+                <TextBlock x:Name="TradeMyName" FontWeight="SemiBold" FontSize="13.5" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+              </DockPanel>
+              <Border x:Name="TradeMyEmpty" CornerRadius="8" BorderBrush="{DynamicResource Line}" BorderThickness="1" Padding="10,14" Background="{DynamicResource Canvas}">
+                <TextBlock Text="—" HorizontalAlignment="Center" Foreground="{DynamicResource Faint}"/>
+              </Border>
+              <Border x:Name="TradeMyCardBox" Style="{StaticResource Card}" Padding="8,6" Visibility="Collapsed" BorderThickness="1.5" MouseRightButtonUp="CardTile_RightClick">
+                <DockPanel>
+                  <Grid DockPanel.Dock="Left" Width="40" Height="40" Margin="0,0,8,0">
+                    <Border x:Name="TradeMyCardBg" CornerRadius="8" Opacity=".35"/>
+                    <Image x:Name="TradeMyCardArt" Width="40" Height="40" RenderOptions.BitmapScalingMode="NearestNeighbor">
+                      <Image.Clip><RectangleGeometry Rect="0,0,40,40" RadiusX="8" RadiusY="8"/></Image.Clip>
+                    </Image>
+                    <Border HorizontalAlignment="Left" VerticalAlignment="Top" Width="16" Height="16" CornerRadius="8" Background="{DynamicResource Accent}" Margin="-4,-4,0,0">
+                      <TextBlock x:Name="TradeMyCardCost" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AccentInk}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                  </Grid>
+                  <StackPanel VerticalAlignment="Center">
+                    <TextBlock x:Name="TradeMyCardName" FontWeight="SemiBold" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock x:Name="TradeMyCardDetail" FontSize="10.5" Foreground="{DynamicResource Muted}" TextWrapping="Wrap"/>
+                  </StackPanel>
+                </DockPanel>
+              </Border>
+            </StackPanel>
+          </Border>
+          <Border Grid.Column="2" Style="{StaticResource Card}" Padding="12,10">
+            <StackPanel>
+              <DockPanel Margin="0,0,0,8">
+                <local:FloatingPetVisual x:Name="TradeTheirPet" DockPanel.Dock="Left" Width="44" Height="40" Margin="0,0,8,0"/>
+                <TextBlock x:Name="TradeTheirState" DockPanel.Dock="Right" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource Accent}" VerticalAlignment="Center"/>
+                <TextBlock x:Name="TradeTheirName" FontWeight="SemiBold" FontSize="13.5" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+              </DockPanel>
+              <Border x:Name="TradeTheirEmpty" CornerRadius="8" BorderBrush="{DynamicResource Line}" BorderThickness="1" Padding="10,14" Background="{DynamicResource Canvas}">
+                <TextBlock Text="—" HorizontalAlignment="Center" Foreground="{DynamicResource Faint}"/>
+              </Border>
+              <Border x:Name="TradeTheirCardBox" Style="{StaticResource Card}" Padding="8,6" Visibility="Collapsed" BorderThickness="1.5" MouseRightButtonUp="CardTile_RightClick">
+                <DockPanel>
+                  <Grid DockPanel.Dock="Left" Width="40" Height="40" Margin="0,0,8,0">
+                    <Border x:Name="TradeTheirCardBg" CornerRadius="8" Opacity=".35"/>
+                    <Image x:Name="TradeTheirCardArt" Width="40" Height="40" RenderOptions.BitmapScalingMode="NearestNeighbor">
+                      <Image.Clip><RectangleGeometry Rect="0,0,40,40" RadiusX="8" RadiusY="8"/></Image.Clip>
+                    </Image>
+                    <Border HorizontalAlignment="Left" VerticalAlignment="Top" Width="16" Height="16" CornerRadius="8" Background="{DynamicResource Accent}" Margin="-4,-4,0,0">
+                      <TextBlock x:Name="TradeTheirCardCost" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AccentInk}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                  </Grid>
+                  <StackPanel VerticalAlignment="Center">
+                    <TextBlock x:Name="TradeTheirCardName" FontWeight="SemiBold" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock x:Name="TradeTheirCardDetail" FontSize="10.5" Foreground="{DynamicResource Muted}" TextWrapping="Wrap"/>
+                  </StackPanel>
+                </DockPanel>
+              </Border>
+            </StackPanel>
+          </Border>
+        </Grid>
+
+        <TextBlock x:Name="TradeStatusText" Grid.Row="1" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource Accent}" Margin="2,10,0,0" Visibility="Collapsed"/>
+
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Margin="0,10,0,10">
+          <ItemsControl x:Name="TradeCollectionList">
+            <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Button Style="{StaticResource Secondary}" Width="210" Margin="0,0,8,8" Padding="8,6" BorderBrush="{Binding RarityBrush}" BorderThickness="1.5"
+                        Tag="{Binding Id}" Click="TradePick_Click" MouseRightButtonUp="CardTile_RightClick" AutomationProperties.Name="{Binding PickName}">
+                  <DockPanel>
+                    <Grid DockPanel.Dock="Left" Width="36" Height="36" Margin="0,0,8,0">
+                      <Border CornerRadius="8" Background="{Binding KindBrush}" Opacity=".35"/>
+                      <Image Source="{Binding Art}" Width="36" Height="36" RenderOptions.BitmapScalingMode="NearestNeighbor">
+                        <Image.Clip><RectangleGeometry Rect="0,0,36,36" RadiusX="8" RadiusY="8"/></Image.Clip>
+                      </Image>
+                    </Grid>
+                    <StackPanel>
+                      <DockPanel>
+                        <TextBlock DockPanel.Dock="Right" Text="{Binding CountText}" FontSize="10.5" Foreground="{DynamicResource Faint}" Margin="4,0,0,0"/>
+                        <Border DockPanel.Dock="Left" Width="15" Height="15" CornerRadius="7.5" Background="{DynamicResource Accent}" Margin="0,0,5,0">
+                          <TextBlock Text="{Binding Cost}" FontSize="9.5" FontWeight="Bold" Foreground="{DynamicResource AccentInk}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="11.5" TextTrimming="CharacterEllipsis"/>
+                      </DockPanel>
+                      <TextBlock Text="{Binding Detail}" FontSize="10" Foreground="{DynamicResource Muted}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                    </StackPanel>
+                  </DockPanel>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right">
+          <Button x:Name="TradeCancelButton" Content="Cancel" Style="{StaticResource Secondary}" Padding="14,7" Margin="0,0,8,0" Click="TradeCancel_Click"/>
+          <Button x:Name="TradeLockButton" Content="Lock" Style="{StaticResource Primary}" Padding="18,7" Click="TradeLock_Click"/>
+        </StackPanel>
       </Grid>
   </Grid>
 </UserControl>

@@ -390,7 +390,7 @@ internal static class PetGameTests
         Check(firstHit >= 0 && ev[firstHit].Actor == 1, "A slowed pet acts after a slower foe.");
         var regen = Duel(["renewal"], ["strike"]);
         ev = regen.PlayRound([0], [0]);
-        Check(ev.Any(e => e.Kind == "heal" && e.Actor == 0 && e.Card == "") && regen.Sides[0].Regen == 4, "Regen heals at the end of the round.");
+        Check(ev.Any(e => e.Kind == "heal" && e.Actor == 0 && e.Card == "") && regen.Sides[0].Regen == 3, "Regen heals at the end of the round.");
         int Hit(string[] mine) { var d = Duel(mine, []); d.PlayRound(Enumerable.Range(0, mine.Length), []); return d.Sides[1].Loadout.MaxHp - d.Sides[1].Hp; }
         Check(Hit(["ragepill", "whirlwind"]) > Hit(["whirlwind"]), "Rage hits harder.");
         var clean = Duel(["rinse"], []);
@@ -417,7 +417,7 @@ internal static class PetGameTests
             "An on-hit energy trap pays bonus energy next round when hit.");
 
         var thief = Duel(["sap"], []);
-        thief.Sides[0].Energy = 1; thief.Sides[1].Energy = 1;
+        thief.Sides[0].Energy = 2; thief.Sides[1].Energy = 1;
         ev = thief.PlayRound([0], []);
         Check(ev.Any(e => e.Kind == "stealenergy" && e.Actor == 0) && thief.Sides[0].Energy == PetCards.EnergyPerRound + 1 && thief.Sides[1].Energy == PetCards.EnergyPerRound,
             "Energy steal drains the foe and adds energy next round.");
@@ -447,8 +447,8 @@ internal static class PetGameTests
         vitBattle.Sides[0].Hand.Clear(); vitBattle.Sides[0].Hand.AddRange(["prayer", "renewal"]);
         vitBattle.Sides[0].Energy = PetCards.MaxEnergy;
         ev = vitBattle.PlayRound([0, 1], []);
-        Check(ev.First(e => e.Kind == "heal" && e.Card == "prayer").Amount == PetCards.Scale(7, 15)
-            && ev.First(e => e.Kind == "regen").Amount == PetCards.Scale(5, 15), "Vitality scales Heal and Regen.");
+        Check(ev.First(e => e.Kind == "heal" && e.Card == "prayer").Amount == PetCards.Scale(5, 15)
+            && ev.First(e => e.Kind == "regen").Amount == PetCards.Scale(4, 15), "Vitality scales Heal and Regen.");
 
         var speedBattle = new CardBattle(Plain("S", "light") with { Speed = 15 }, Plain("G", "leaf"), 11);
         speedBattle.Sides[0].Hand.Clear(); speedBattle.Sides[0].Hand.AddRange(["focus", "sparkleshot", "shieldbash"]);
@@ -465,6 +465,58 @@ internal static class PetGameTests
         var forged = PetCards.SanitizeLoadout(new("Cheater", "bad", 9999, "lava", 9999, 99, 99, 99, ["hellfire", "hellfire", "hellfire"], 99));
         Check(forged.Level == PetGame.MaxLevel && forged.Power == PetGame.EvenStat && forged.Deck.Count == PetCards.DeckSize && forged.Deck.Count(c => c == "hellfire") == 1,
             "Forged duel loadouts are clamped to legal stats and copy limits.");
+
+        // Selling cards: requires strictly more than 20 cards owned, pays half price, keeps deck legal.
+        var seller = new PetProgress { Seed = 19, Coins = 0 };
+        PetCards.EnsureStarted(seller, rnd);
+        Check(PetCards.TotalOwned(seller) == PetCards.DeckSize && !PetCards.CanSell(seller, seller.Deck[0]) && PetCards.SellCard(seller, seller.Deck[0]) == 0,
+            "Cannot sell cards when at the 20-card minimum.");
+        PetCards.AddCard(seller, "hellfire");
+        Check(PetCards.TotalOwned(seller) == PetCards.DeckSize + 1 && PetCards.CanSell(seller, "hellfire"), "Can sell once above 20 cards.");
+        int earned = PetCards.SellCard(seller, "hellfire");
+        Check(earned == PetCards.SellPrice(PetCards.CardOf("hellfire")) && seller.Coins == earned && PetCards.Owned(seller, "hellfire") == 0 && PetCards.TotalOwned(seller) == PetCards.DeckSize,
+            "Selling removes one card, pays half price, and stops at 20 cards.");
+
+        // Trading cards: 1-for-1 swap works even at 20 cards and keeps deck legal.
+        string giveFromDeck = seller.Deck[0];
+        Check(PetCards.TradeCards(seller, giveFromDeck, "hellfire") && PetCards.Owned(seller, "hellfire") == 1 && PetCards.TotalOwned(seller) == PetCards.DeckSize,
+            "Trading swaps one owned card for another while keeping collection size at 20.");
+
+        // Spin raffle: spends SpinPrice coins and awards a card from the catalog.
+        var spinner = new PetProgress { Seed = 23, Coins = PetCards.SpinPrice * 5 };
+        PetCards.EnsureStarted(spinner, rnd);
+        for (int i = 0; i < 5; i++)
+        {
+            var spin = PetCards.SpinRaffle(spinner, rnd);
+            Check(spin is not null && PetCards.IsCard(spin.Card.Id), "Spin raffle awards a valid card.");
+        }
+        Check(spinner.Coins < PetCards.SpinPrice && PetCards.SpinRaffle(spinner, rnd) is null, "Cannot spin without enough coins.");
+
+        // Balancing: OP cards cost 4 energy and heals are nerfed.
+        Check(PetCards.CardOf("solarflare").Cost == 4 && PetCards.CardOf("hellfire").Cost == 4 && PetCards.CardOf("skyfall").Cost == 4
+            && PetCards.CardOf("combo").Cost == 2 && PetCards.CardOf("vampire").Cost == 3 && PetCards.CardOf("archangel").Heal == 17,
+            "Strong cards cost more energy and heals are toned down.");
+
+        // Local tournament: depends on user's local time slot, scales fairly to player bonus, crowns champion on round 3.
+        var tProg = new PetProgress { Seed = 31, Level = 4, Power = 1, Guard = 1 };
+        PetCards.EnsureStarted(tProg, rnd);
+        var tMorning = new DateTime(2026, 11, 28, 9, 15, 0, DateTimeKind.Local);
+        var tEvening = new DateTime(2026, 11, 28, 19, 15, 0, DateTimeKind.Local);
+        var evMorning = PetTournament.EventFor(tProg, tMorning);
+        var evEvening = PetTournament.EventFor(tProg, tEvening);
+        Check(evMorning.Slot != evEvening.Slot && evMorning.Bracket.Count == PetTournament.RoundsPerTournament
+            && evMorning.Bracket.All(c => c.Power + c.Guard + c.Speed + c.Vitality <= PetGame.BaseTotal + PetGame.SpentPoints(tProg) + 1),
+            "Local tournament depends on local time and keeps enemy stats fair.");
+        PetTournament.Advance(tProg, evMorning.Slot, true, out bool c0, out _);
+        Check(!c0 && tProg.TournamentRound == 1, "Round 1 win advances to Semifinal.");
+        PetTournament.Advance(tProg, evMorning.Slot, true, out bool c1, out _);
+        Check(!c1 && tProg.TournamentRound == 2, "Round 2 win advances to Final.");
+        PetTournament.Advance(tProg, evMorning.Slot, true, out bool c2, out bool first2);
+        Check(c2 && first2 && tProg.TournamentRound == 0 && tProg.TournamentWins == 1 && tProg.TournamentWonSlot == evMorning.Slot,
+            "Winning the Final crowns the champion and records the slot.");
+        var champReward = PetTournament.Reward(tProg, 1, 2, champion: true, firstClear: true, DateTime.UtcNow);
+        Check(champReward.Coins > 70 && champReward.Xp > 45 && PetTournament.RollChampionCard(tProg, rnd, true) is not null,
+            "Tournament champion pays bonus coins, XP and a card.");
     }
 
     private static AppSettings Settings(string name) => new() { DisplayName = name, Port = 0, UserId = AppSettings.NewUserId() };

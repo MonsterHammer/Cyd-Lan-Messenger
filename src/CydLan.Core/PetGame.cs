@@ -50,6 +50,10 @@ public sealed class PetProgress
     public int StageFight { get; set; }
     public int CardWins { get; set; }
     public int CardLosses { get; set; }
+    public string TournamentSlot { get; set; } = "";
+    public int TournamentRound { get; set; }
+    public string TournamentWonSlot { get; set; } = "";
+    public int TournamentWins { get; set; }
 }
 
 public sealed record PetFood(string Id, string Name, int Price, int Fullness, int Xp, string Boost);
@@ -194,6 +198,9 @@ public static class PetGame
         p.Food = (p.Food ?? []).Where(kv => FoodOf(kv.Key) is not null && kv.Value > 0)
             .ToDictionary(kv => kv.Key, kv => Math.Min(kv.Value, 999));
         p.LastDailyDay ??= ""; p.ChatXpDay ??= "";
+        p.TournamentSlot ??= ""; p.TournamentWonSlot ??= "";
+        p.TournamentRound = Math.Clamp(p.TournamentRound, 0, PetTournament.RoundsPerTournament - 1);
+        p.TournamentWins = Math.Max(0, p.TournamentWins);
         PetCards.Normalize(p);
     }
 
@@ -558,7 +565,7 @@ public sealed class PetBattle
         var foe = Fighters[1 - side];
         if (move == "heal")
         {
-            int heal = Math.Min(me.Stats.MaxHp * 28 / 100, me.Stats.MaxHp - me.Hp);
+            int heal = Math.Min(me.Stats.MaxHp * 22 / 100, me.Stats.MaxHp - me.Hp);
             me.Hp += heal;
             me.Burn = 0;
             events.Add(new(side, "heal", move, heal, false, 100));

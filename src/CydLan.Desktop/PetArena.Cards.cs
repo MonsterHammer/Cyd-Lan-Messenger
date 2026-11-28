@@ -16,7 +16,11 @@ public sealed class CardBattleSession
     public required PetAppearance TheirLook { get; init; }
     public PetWorld.Stage? Stage { get; init; }
     public PetWorld.Enemy? Enemy { get; init; }
+    public PetTournament.Event? Tournament { get; init; }
+    public PetTournament.Contender? TournamentContender { get; init; }
+    public bool TournamentChampion { get; internal set; }
     public bool IsLan => PeerId is not null;
+    public bool IsTournament => Tournament is not null && TournamentContender is not null;
     public CardBattle.Side Me => Battle.Sides[MySide];
     public CardBattle.Side Them => Battle.Sides[1 - MySide];
     public List<int>? MyPicks { get; internal set; }
@@ -90,7 +94,16 @@ public sealed partial class PetArena
         return true;
     }
 
-    // ── Daily shop ───────────────────────────────────────────────────────
+    public int SellCard(string id)
+    {
+        if (InBattle) return 0;
+        int coins = PetCards.SellCard(Progress, id);
+        if (coins <= 0) return 0;
+        Save();
+        return coins;
+    }
+
+    // ── Daily shop & raffle ──────────────────────────────────────────────
 
     public static string Today => DateTime.Now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
@@ -104,13 +117,32 @@ public sealed partial class PetArena
         return true;
     }
 
-    // ── World ────────────────────────────────────────────────────────────
+    public PetCards.RaffleResult? SpinRaffle()
+    {
+        if (InBattle) return null;
+        var result = PetCards.SpinRaffle(Progress, random);
+        if (result is null) return null;
+        Save();
+        PetAction?.Invoke("spin", null);
+        return result;
+    }
+
+    // ── World & local tournament ─────────────────────────────────────────
 
     public PetWorld.Stage CurrentStage => PetWorld.StageOf(Progress.Seed, Progress.Stage);
+
+    public PetTournament.Event CurrentTournament => PetTournament.EventFor(Progress, DateTime.Now);
 
     public static PetAppearance EnemyLook(PetWorld.Enemy enemy, out string kind)
     {
         var preset = FloatingPetStyle.Presets[enemy.LookSeed % FloatingPetStyle.Presets.Count];
+        kind = preset.Name;
+        return preset.Appearance;
+    }
+
+    public static PetAppearance ContenderLook(PetTournament.Contender contender, out string kind)
+    {
+        var preset = FloatingPetStyle.Presets[contender.LookSeed % FloatingPetStyle.Presets.Count];
         kind = preset.Name;
         return preset.Appearance;
     }
@@ -143,6 +175,36 @@ public sealed partial class PetArena
             TheirLook = look,
             Stage = stage,
             Enemy = enemy
+        };
+        Changed(nameof(CurrentCard));
+        CardBattleStarted?.Invoke(CurrentCard);
+        PetAction?.Invoke("fired", null);
+    }
+
+    /// <summary>Starts the next match of the current local-time tournament bracket.</summary>
+    public void StartTournamentBattle()
+    {
+        if (InBattle || Current is { Finished: false }) return;
+        EnsureStarted();
+        if (!PetCards.DeckReady(Progress)) { SetStatus($"Deck needs {PetCards.DeckSize} cards"); return; }
+        _ = CancelCardChallengeAsync();
+        SetStatus("");
+        var ev = CurrentTournament;
+        PetTournament.SyncSlot(Progress, ev.Slot);
+        var contender = ev.Bracket[Progress.TournamentRound];
+        var look = ContenderLook(contender, out string kind);
+        var foe = PetTournament.LoadoutOf(Progress, contender, $"{contender.Name} {kind}", look.ToWireCode());
+        var mine = MyLoadout;
+        CurrentCard = new CardBattleSession
+        {
+            Id = NewId(),
+            MySide = 0,
+            Battle = new CardBattle(mine, foe, (ulong)random.NextInt64()),
+            OpponentName = foe.Name,
+            MyLook = BattleLook,
+            TheirLook = look,
+            Tournament = ev,
+            TournamentContender = contender
         };
         Changed(nameof(CurrentCard));
         CardBattleStarted?.Invoke(CurrentCard);
@@ -457,14 +519,25 @@ public sealed partial class PetArena
         int opponentLevel = s.Stage?.Number ?? s.Them.Loadout.Level;
         bool boss = s.Enemy?.Boss == true;
         Progress.Fullness = 100; Progress.FullnessAtUtc = DateTime.UtcNow;
-        s.Reward = reason == "You left" ? new PetGame.BattleReward(0, 0, 0) : PetGame.Reward(Progress, outcome, opponentLevel, friend: true, DateTime.UtcNow, boss);
-        if (outcome > 0) Progress.CardWins++; else if (outcome < 0) Progress.CardLosses++;
-        if (!s.IsLan && reason.Length == 0 && s.Stage is { } st && s.Enemy is { } en)
+        if (s.IsTournament && reason.Length == 0 && s.Tournament is { } tev && s.TournamentContender is { } tc)
         {
-            if (PetCards.RollDrop(Progress, random, st.Number, en.Boss, outcome > 0) is { } drop && PetCards.AddCard(Progress, drop.Id))
+            PetTournament.Advance(Progress, tev.Slot, outcome > 0, out bool champion, out bool firstClear);
+            s.TournamentChampion = champion;
+            s.Reward = PetTournament.Reward(Progress, outcome, tc.Round, champion, firstClear, DateTime.UtcNow);
+            if (champion && PetTournament.RollChampionCard(Progress, random, firstClear) is { } drop && PetCards.AddCard(Progress, drop.Id))
                 s.Drop = drop;
-            if (st.Number == Progress.Stage && en.Index == Progress.StageFight) s.StageCleared = PetWorld.Advance(Progress, outcome > 0);
         }
+        else
+        {
+            s.Reward = reason == "You left" ? new PetGame.BattleReward(0, 0, 0) : PetGame.Reward(Progress, outcome, opponentLevel, friend: true, DateTime.UtcNow, boss);
+            if (!s.IsLan && reason.Length == 0 && s.Stage is { } st && s.Enemy is { } en)
+            {
+                if (PetCards.RollDrop(Progress, random, st.Number, en.Boss, outcome > 0) is { } drop && PetCards.AddCard(Progress, drop.Id))
+                    s.Drop = drop;
+                if (st.Number == Progress.Stage && en.Index == Progress.StageFight) s.StageCleared = PetWorld.Advance(Progress, outcome > 0);
+            }
+        }
+        if (outcome > 0) Progress.CardWins++; else if (outcome < 0) Progress.CardLosses++;
         Save();
         s.RaiseEnded();
         s.RaiseState();

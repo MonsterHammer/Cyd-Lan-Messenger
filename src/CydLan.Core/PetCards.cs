@@ -110,12 +110,44 @@ public static partial class PetCards
     public static IEnumerable<PetCard> Obtainable(PetProgress p) => Cards.Where(c => !NeverDrops(p, c.Id));
 
     public static int Owned(PetProgress p, string id) => p.Cards.TryGetValue(id, out int n) ? n : 0;
+    public static int TotalOwned(PetProgress p) => p.Cards.Values.Sum();
     public static int InDeck(PetProgress p, string id) => p.Deck.Count(c => c == id);
+    public static int SellPrice(PetCard card) => Price(card) / 2;
+    public static bool CanSell(PetProgress p, string id) => IsCard(id) && Owned(p, id) > 0 && TotalOwned(p) > DeckSize;
 
     public static bool AddCard(PetProgress p, string id)
     {
         if (!IsCard(id) || Owned(p, id) >= MaxOwned) return false;
         p.Cards[id] = Owned(p, id) + 1;
+        return true;
+    }
+
+    /// <summary>Sells one copy of <paramref name="id"/> for half price, keeping at least <see cref="DeckSize"/> cards.</summary>
+    public static int SellCard(PetProgress p, string id)
+    {
+        if (!CanSell(p, id)) return 0;
+        var card = CardOf(id);
+        int left = Owned(p, id) - 1;
+        if (left <= 0) p.Cards.Remove(id); else p.Cards[id] = left;
+        while (InDeck(p, id) > Math.Min(left, CopyLimit(card))) p.Deck.Remove(id);
+        int coins = SellPrice(card);
+        p.Coins += coins;
+        return coins;
+    }
+
+    public static bool CanTrade(PetProgress p, string giveId, string takeId) =>
+        IsCard(giveId) && IsCard(takeId) && Owned(p, giveId) > 0 && (giveId == takeId || Owned(p, takeId) < MaxOwned);
+
+    /// <summary>Swaps one owned copy of <paramref name="giveId"/> for one copy of <paramref name="takeId"/>.</summary>
+    public static bool TradeCards(PetProgress p, string giveId, string takeId)
+    {
+        if (!CanTrade(p, giveId, takeId)) return false;
+        if (giveId == takeId) return true;
+        var giveCard = CardOf(giveId);
+        int left = Owned(p, giveId) - 1;
+        if (left <= 0) p.Cards.Remove(giveId); else p.Cards[giveId] = left;
+        while (InDeck(p, giveId) > Math.Min(left, CopyLimit(giveCard))) p.Deck.Remove(giveId);
+        p.Cards[takeId] = Owned(p, takeId) + 1;
         return true;
     }
 
@@ -231,6 +263,28 @@ public static partial class PetCards
         AddCard(p, offers[slot].Card.Id);
         p.ShopBought.Add(slot);
         return true;
+    }
+
+    // ── Spin raffle ──────────────────────────────────────────────────────
+
+    public const int SpinPrice = 80;
+    public sealed record RaffleResult(PetCard Card, int DuplicateCoins);
+
+    /// <summary>Spends <see cref="SpinPrice"/> coins to win a random card from the full catalog.</summary>
+    public static RaffleResult? SpinRaffle(PetProgress p, Random random)
+    {
+        if (p.Coins < SpinPrice) return null;
+        p.Coins -= SpinPrice;
+        int roll = random.Next(100);
+        string rarity = roll < 4 ? Legendary : roll < 17 ? Epic : roll < 50 ? Rare : Common;
+        var tier = Cards.Where(c => c.Rarity == rarity && Owned(p, c.Id) < MaxOwned).ToList();
+        if (tier.Count == 0) tier = Cards.Where(c => Owned(p, c.Id) < MaxOwned).ToList();
+        if (tier.Count == 0) tier = Cards.Where(c => c.Rarity == rarity).ToList();
+        var card = tier[random.Next(tier.Count)];
+        if (AddCard(p, card.Id)) return new(card, 0);
+        int refund = SellPrice(card);
+        p.Coins += refund;
+        return new(card, refund);
     }
 
     // ── Drops ────────────────────────────────────────────────────────────

@@ -46,10 +46,12 @@ public partial class PetArenaView : System.Windows.Controls.UserControl
         public string FeedName => "Feed " + Name;
         public string BuyName => $"Buy {Name} for {Price} coins";
     }
-    private sealed record FriendRow(Peer Peer, string Name, PetAppearance Appearance, bool Pending)
+    private sealed record FriendRow(Peer Peer, string Name, PetAppearance Appearance, bool Pending, bool PendingTrade)
     {
         public string ActionText => Pending ? "Cancel" : "Duel";
         public string ActionName => (Pending ? "Cancel duel challenge to " : "Invite ") + Name + (Pending ? "" : " to a duel");
+        public string TradeActionText => PendingTrade ? "Cancel" : "Trade";
+        public string TradeActionName => (PendingTrade ? "Cancel trade invite to " : "Trade cards with ") + Name;
     }
 
     private sealed class StagePet
@@ -95,11 +97,16 @@ public partial class PetArenaView : System.Windows.Controls.UserControl
         arena.PropertyChanged += ArenaChanged;
         arena.BattleStarted += ShowBattle;
         arena.CardBattleStarted += ShowCardBattle;
+        arena.TradeStarted += ShowTrade;
         arena.Invites.CollectionChanged += InvitesChanged;
         anim.Tick += (_, _) => Animate();
         slow.Tick += (_, _) =>
         {
-            if (LobbyPanel.IsVisible) RefreshFriends();
+            if (LobbyPanel.IsVisible)
+            {
+                RefreshFriends();
+                RefreshTournamentTimer();
+            }
             RefreshBattleControls();
         };
         // The module only animates while it is on screen.
@@ -108,7 +115,8 @@ public partial class PetArenaView : System.Windows.Controls.UserControl
             if (IsVisible)
             {
                 anim.Start(); slow.Start();
-                if (arena.CurrentCard is { } card) { if (cardSession != card) ShowCardBattle(card); }
+                if (arena.CurrentTrade is { } trade) { if (tradeSession != trade) ShowTrade(trade); }
+                else if (arena.CurrentCard is { } card) { if (cardSession != card) ShowCardBattle(card); }
                 else if (arena.Current is { } current) { if (session != current) ShowBattle(current); }
                 else ShowLobby();
             }
@@ -123,14 +131,18 @@ public partial class PetArenaView : System.Windows.Controls.UserControl
         arena.PropertyChanged -= ArenaChanged;
         arena.BattleStarted -= ShowBattle;
         arena.CardBattleStarted -= ShowCardBattle;
+        arena.TradeStarted -= ShowTrade;
         arena.Invites.CollectionChanged -= InvitesChanged;
         Detach();
         DetachCard();
+        DetachTrade();
     }
 
     private void ArenaChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if ((e.PropertyName == nameof(PetArena.Current) && arena.Current is null) || (e.PropertyName == nameof(PetArena.CurrentCard) && arena.CurrentCard is null)) ShowLobby();
+        if ((e.PropertyName == nameof(PetArena.Current) && arena.Current is null)
+            || (e.PropertyName == nameof(PetArena.CurrentCard) && arena.CurrentCard is null)
+            || (e.PropertyName == nameof(PetArena.CurrentTrade) && arena.CurrentTrade is null)) ShowLobby();
         else if (LobbyPanel.Visibility == Visibility.Visible) RefreshLobby();
     }
 
@@ -188,7 +200,8 @@ public partial class PetArenaView : System.Windows.Controls.UserControl
     {
         var rows = arena.BattleFriends.Select(peer => new FriendRow(peer, peer.Name,
             PetAppearance.FromWireCode(peer.PetCode) ?? PetAppearance.Default,
-            arena.CardChallengePeerId == peer.Id || arena.ChallengePeerId == peer.Id)).ToList();
+            arena.CardChallengePeerId == peer.Id || arena.ChallengePeerId == peer.Id,
+            arena.TradeChallengePeerId == peer.Id)).ToList();
         if (FriendList.ItemsSource is not List<FriendRow> old || !old.SequenceEqual(rows)) FriendList.ItemsSource = rows;
         NoFriendsText.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         InvitesSection.Visibility = arena.Invites.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -308,6 +321,14 @@ public partial class PetArenaView : System.Windows.Controls.UserControl
         RefreshFriends();
     }
 
+    private async void Trade_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: FriendRow row }) return;
+        if (row.PendingTrade) await arena.CancelTradeInviteAsync();
+        else await arena.InviteTradeAsync(row.Peer);
+        RefreshFriends();
+    }
+
     private async void AcceptInvite_Click(object sender, RoutedEventArgs e) { if (sender is FrameworkElement { Tag: PetInvite i }) await arena.AcceptAsync(i); }
     private async void DeclineInvite_Click(object sender, RoutedEventArgs e) { if (sender is FrameworkElement { Tag: PetInvite i }) await arena.DeclineAsync(i); }
 
@@ -317,10 +338,12 @@ public partial class PetArenaView : System.Windows.Controls.UserControl
     {
         Detach();
         DetachCard();
+        DetachTrade();
         CardBar.Visibility = Visibility.Collapsed;
         MoveRow.Visibility = Visibility.Visible;
         LeftChargeTrack.Visibility = RightChargeTrack.Visibility = Visibility.Visible;
         BattlePanel.Visibility = Visibility.Collapsed;
+        TradePanel.Visibility = Visibility.Collapsed;
         LobbyPanel.Visibility = Visibility.Visible;
         RefreshLobby();
     }
@@ -338,12 +361,14 @@ public partial class PetArenaView : System.Windows.Controls.UserControl
     private void ShowBattle(PetBattleSession s)
     {
         Detach();
+        DetachTrade();
         session = s;
         lastOpponentPeer = s.PeerId;
         s.TurnResolved += OnTurn;
         s.Ended += OnEnded;
         s.StateChanged += OnState;
         LobbyPanel.Visibility = Visibility.Collapsed;
+        TradePanel.Visibility = Visibility.Collapsed;
         BattlePanel.Visibility = Visibility.Visible;
         ResultCard.Visibility = Visibility.Collapsed;
         CardBar.Visibility = Visibility.Collapsed;
@@ -433,9 +458,11 @@ public partial class PetArenaView : System.Windows.Controls.UserControl
         if (cardSession is not null)
         {
             string? duelPeerId = cardSession.PeerId;
+            bool wasTournament = cardSession.IsTournament;
             arena.DismissCardBattle();
             ShowLobby();
-            if (duelPeerId is null) arena.StartCardBattle();
+            if (wasTournament) arena.StartTournamentBattle();
+            else if (duelPeerId is null) arena.StartCardBattle();
             else if (model.Peers.FirstOrDefault(p => p.Id == duelPeerId) is { } peer) await arena.ChallengeCardDuelAsync(peer);
             return;
         }

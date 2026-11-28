@@ -1577,6 +1577,7 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
         TargetAura.Configure(
             Settings.TargetAura, Settings.TargetAuraIntensity,
             Settings.AuraSelectedModuleEnabled, Settings.AuraSelectedPersonEnabled, Settings.AuraHighlightButtonsEnabled, Settings.AuraOverflowEnabled);
+        Settings.CursorEffect = InteractionEffects.NormalizeCursor(Settings.CursorEffect);
         InteractionEffects.Configure(Settings.HoverEffect, Settings.HoverIntensity, Settings.CursorEffect, Settings.CursorIntensity, Settings.WordPopColor);
         if (lan is not null) lan.AutoAcceptDirectory = Settings.AutoAcceptFiles ? ReceivedFilesFolder : null;
     }
@@ -1630,6 +1631,7 @@ public sealed partial class MainViewModel : Observable, IAsyncDisposable
         Settings.LastAppearanceTab = SettingsWindow.NormalizeAppearanceTab(Settings.LastAppearanceTab);
         Settings.TypingEffect = ChatEffects.Normalize(Settings.TypingEffect, typing: true);
         Settings.ClickEffect = ChatEffects.Normalize(Settings.ClickEffect);
+        Settings.CursorEffect = InteractionEffects.NormalizeCursor(Settings.CursorEffect);
         FloatingPetStyle.Apply(PetAppearance.From(Settings), Settings);
         Settings.PetTraits = PetTraits.Normalize(Settings.PetTraits);
         Changed(nameof(PetTraitList));

@@ -27,6 +27,9 @@ internal static partial class Program
         await TestArenaLockstepAsync(artifacts);
         Console.WriteLine("PASS  Two arenas battle in lockstep; desync, leaving and disconnects end cleanly");
 
+        await TestRaffleSellTournamentAsync(artifacts);
+        Console.WriteLine("PASS  Spin raffle, card selling with 20-card minimum, local tournament and uninstall stats reset");
+
         await TestCardBattleAsync(artifacts);
         Console.WriteLine("PASS  Starter deck, deck building, stat re-roll, daily shop, right-click details, and a world card battle");
 
@@ -35,6 +38,136 @@ internal static partial class Program
 
         await TestPetsModuleAsync(artifacts);
         Console.WriteLine("PASS  Pets is a module on the rail with its own sidebar and the arena inside the main window");
+    }
+
+    private static async Task RunPetFeaturesVerificationAsync()
+    {
+        string artifacts = Path.GetFullPath("artifacts");
+        Directory.CreateDirectory(artifacts);
+        await TestRaffleSellTournamentAsync(artifacts);
+        Console.WriteLine("PASS  Spin raffle, card selling with 20-card minimum, local tournament and uninstall stats reset");
+    }
+
+    private static async Task TestRaffleSellTournamentAsync(string artifacts)
+    {
+        await using var model = new MainViewModel(preview: true);
+        var arena = model.Arena;
+        var p = arena.Progress;
+        p.Level = 5; p.Coins = 1000;
+        arena.EnsureStarted();
+        var (host, window) = OpenArenaView(model);
+        await Task.Delay(300);
+        void Tab(string name) { ((System.Windows.Controls.Primitives.ToggleButton)window.FindName(name + "TabButton")).IsChecked = true; window.UpdateLayout(); }
+        var collection = (ItemsControl)window.FindName("CollectionList");
+
+        // Spin raffle: spends SpinPrice, spins wheel, shows won card, increases total owned above 20.
+        Tab("Shop");
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        int coinsBeforeSpin = p.Coins, totalBeforeSpin = PetCards.TotalOwned(p);
+        var spinBtn = (Button)window.FindName("SpinButton");
+        Check(spinBtn.IsEnabled, "Spin button is enabled with enough coins.");
+        spinBtn.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var raffleCard = (FrameworkElement)window.FindName("RaffleResultCard");
+        await WaitFor(() => raffleCard.Visibility == Visibility.Visible, 4000);
+        Check(p.Coins == coinsBeforeSpin - PetCards.SpinPrice && PetCards.TotalOwned(p) == totalBeforeSpin + 1, "Spinning the raffle awards a card.");
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        CaptureElement(window, Path.Combine(artifacts, "cards-raffle.png"));
+
+        // Selling cards: allowed above 20 cards, blocked once back at 20.
+        Tab("Deck");
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        var sellButtons = FindAll<Button>(collection).Where(b => (b.Content as string)?.StartsWith("Sell") == true).ToList();
+        Check(sellButtons.Count > 0 && sellButtons.All(b => b.IsEnabled), "Cards can be sold when owning more than 20 cards.");
+        CaptureElement(window, Path.Combine(artifacts, "cards-deck-sell.png"));
+        while (PetCards.TotalOwned(p) > PetCards.DeckSize)
+        {
+            var btn = FindAll<Button>(collection).First(b => (b.Content as string)?.StartsWith("Sell") == true && b.IsEnabled);
+            int beforeSell = p.Coins;
+            btn.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            Check(p.Coins > beforeSell, "Selling a card pays coins.");
+        }
+        Check(PetCards.TotalOwned(p) == PetCards.DeckSize && FindAll<Button>(collection).Where(b => (b.Content as string)?.StartsWith("Sell") == true).All(b => !b.IsEnabled),
+            "Selling stops at the 20-card minimum.");
+        while (!PetCards.DeckReady(p))
+        {
+            var addBtn = FindAll<Button>(collection).First(b => Equals(b.Content, "Add") && b.IsEnabled);
+            addBtn.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        }
+
+        // Tournament tab shows the 3-round local bracket and starts a local tournament fight.
+        Tab("Tournament");
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        var tourneyFights = (ItemsControl)window.FindName("TournamentFights");
+        Check(tourneyFights.Items.Count == PetTournament.RoundsPerTournament, "Tournament tab displays the 3-round local bracket.");
+        CaptureElement(window, Path.Combine(artifacts, "cards-tournament.png"));
+        arena.StartTournamentBattle();
+        Check(arena.CurrentCard is { IsTournament: true, Finished: false }, "Tournament fight starts cleanly.");
+        await Task.Delay(350);
+        CaptureElement(window, Path.Combine(artifacts, "cards-tournament-battle.png"));
+        arena.LeaveCardBattle();
+        arena.DismissCardBattle();
+
+        // Reinstall preserves stats; uninstall reset (--reset-stats / ResetPetStats) resets stats while preserving display settings.
+        string resetDir = Path.Combine(Path.GetTempPath(), "CydLan-reset-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var resetStore = new LocalStore(resetDir);
+            var saved = new AppSettings { DisplayName = "Tester", Theme = "dark" };
+            saved.PetGame.Level = 12; saved.PetGame.Coins = 444; saved.PetGame.TournamentWins = 3;
+            resetStore.SaveSettings(saved);
+            Check(resetStore.LoadSettings().PetGame.Level == 12, "Re-loading settings preserves PetGame stats.");
+            Check(App.ResetPetStats(resetDir), "ResetPetStats finds and resets saved stats.");
+            var afterReset = resetStore.LoadSettings();
+            Check(afterReset.DisplayName == "Tester" && afterReset.Theme == "dark" && afterReset.PetGame.Level == 1 && afterReset.PetGame.Coins == PetGame.StartingCoins && afterReset.PetGame.TournamentWins == 0,
+                "Uninstall reset clears PetGame stats while keeping profile settings.");
+        }
+        finally { if (Directory.Exists(resetDir)) Directory.Delete(resetDir, true); }
+
+        window.Release(); host.Close();
+
+        // Two CydLan users invite, accept, offer, lock and complete a 1-for-1 card trade over lockstep transport.
+        await using var alexModel = new MainViewModel(preview: true);
+        await using var jamieModel = new MainViewModel(preview: true);
+        var alex = alexModel.Arena; var jamie = jamieModel.Arena;
+        alex.EnsureStarted(); jamie.EnsureStarted();
+        PetCards.AddCard(alex.Progress, "hellfire");
+        PetCards.AddCard(jamie.Progress, "archangel");
+        var jamieInAlex = alexModel.Peers.First(peer => peer.Id == "2");
+        const string alexInJamie = "3";
+        alex.Transport = (peer, op, bid, fields) => DeliverTrade(jamie, alexInJamie, op, bid, fields);
+        jamie.Transport = (peer, op, bid, fields) => DeliverTrade(alex, jamieInAlex.Id, op, bid, fields);
+        Task<bool> DeliverTrade(PetArena to, string from, string op, string bid, Dictionary<string, string>? fields)
+        {
+            var all = new Dictionary<string, string>(fields ?? []) { ["op"] = op, ["bid"] = bid };
+            System.Windows.Application.Current.Dispatcher.BeginInvoke(() => to.OnMessage(from, all), DispatcherPriority.Background);
+            return Task.FromResult(true);
+        }
+
+        PetInvite? tradeInvite = null;
+        jamie.InviteReceived += inv => tradeInvite = inv;
+        await alex.InviteTradeAsync(jamieInAlex);
+        Check(alex.TradeChallengePeerId == "2", "Trade invite is pending.");
+        await WaitFor(() => tradeInvite is not null);
+        Check(tradeInvite!.IsTrade, "Jamie receives Alex's trade invite.");
+        await jamie.AcceptAsync(tradeInvite);
+        await WaitFor(() => alex.CurrentTrade is not null && jamie.CurrentTrade is not null);
+
+        var (tradeHost, tradeView) = OpenArenaView(alexModel);
+        await Task.Delay(250);
+        await alex.SetTradeOfferAsync("hellfire");
+        await jamie.SetTradeOfferAsync("archangel");
+        await WaitFor(() => alex.CurrentTrade!.TheirOffer == "archangel" && jamie.CurrentTrade!.TheirOffer == "hellfire");
+        CaptureElement(tradeView, Path.Combine(artifacts, "cards-trade.png"));
+        await alex.ToggleTradeLockAsync();
+        await jamie.ToggleTradeLockAsync();
+        await WaitFor(() => alex.CurrentTrade!.Completed && jamie.CurrentTrade!.Completed);
+        Check(PetCards.Owned(alex.Progress, "archangel") >= 1 && PetCards.Owned(alex.Progress, "hellfire") == 0
+            && PetCards.Owned(jamie.Progress, "hellfire") >= 1 && PetCards.Owned(jamie.Progress, "archangel") == 0,
+            "Both peers swap cards when both lock.");
+        alex.DismissTrade(); jamie.DismissTrade();
+        tradeView.Release(); tradeHost.Close();
     }
 
     private static FloatingPetVisual PetOf(PetAppearance look, string mood = "", double w = 150, double h = 136) =>

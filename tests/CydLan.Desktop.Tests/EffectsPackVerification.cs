@@ -241,6 +241,7 @@ internal static partial class Program
     {
         Check(ChatEffects.Normalize("wordpop", typing: true) == "wordpop" && ChatEffects.Normalize("wordpop") == "off", "Word pop is a typing effect only.");
         Check(ChatEffects.Normalize("shockwave") == "shockwave" && ChatEffects.Normalize("shockwave", typing: true) == "off", "Shockwave is a click effect only.");
+        Check(InteractionEffects.NormalizeCursor("spotlight") == "off", "Removed spotlight cursor effect normalizes to off.");
 
         await using var model = new MainViewModel(preview: true);
         model.Settings.TypingEffect = "wordpop";

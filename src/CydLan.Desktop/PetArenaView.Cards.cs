@@ -23,10 +23,12 @@ public partial class PetArenaView
         public string RemoveName => $"Remove {Name} from deck";
     }
 
-    private sealed record CollectionRow(string Id, string Name, string Text, int Cost, int Owned, int Used, ImageSource? Art, Brush KindBrush, Brush RarityBrush, bool CanAdd)
+    private sealed record CollectionRow(string Id, string Name, string Text, int Cost, int Owned, int Used, int SellPrice, ImageSource? Art, Brush KindBrush, Brush RarityBrush, bool CanAdd, bool CanSell)
     {
         public string CountText => $"{Used}/{Owned}";
         public string AddName => $"Add {Name} to deck";
+        public string SellText => $"Sell · {SellPrice}";
+        public string SellName => $"Sell {Name} for {SellPrice} coins";
     }
 
     private sealed record FightRow(string Name, string Detail, string Tag, PetAppearance Look, Brush Edge, double Fade);
@@ -130,11 +132,13 @@ public partial class PetArenaView
 
         var filter = CollectionFilters[Math.Clamp(CollectionFilter.SelectedIndex, 0, CollectionFilters.Length - 1)].Match;
         var owned = p.Cards.Select(kv => PetCards.CardOf(kv.Key)).Where(filter).ToList();
-        CollectionTitle.Text = $"Collection · {p.Cards.Count} of {PetCards.Cards.Count}";
+        int totalOwned = PetCards.TotalOwned(p);
+        CollectionTitle.Text = $"Collection · {p.Cards.Count}/{PetCards.Cards.Count} · {totalOwned} cards";
         CollectionList.ItemsSource = owned
             .OrderByDescending(c => PetCards.RarityRank(c.Rarity)).ThenBy(c => c.Element).ThenBy(c => c.Cost).ThenBy(c => c.Name)
-            .Select(c => new CollectionRow(c.Id, c.Name, c.Text, c.Cost, PetCards.Owned(p, c.Id), PetCards.InDeck(p, c.Id), CardArt.For(c),
-                KindBrush(c.Kind), RarityBrush(c.Rarity), !busy && PetCards.CanAddToDeck(p, c.Id)))
+            .Select(c => new CollectionRow(c.Id, c.Name, c.Text, c.Cost, PetCards.Owned(p, c.Id), PetCards.InDeck(p, c.Id),
+                PetCards.SellPrice(c), CardArt.For(c), KindBrush(c.Kind), RarityBrush(c.Rarity),
+                !busy && PetCards.CanAddToDeck(p, c.Id), !busy && PetCards.CanSell(p, c.Id)))
             .ToList();
 
         var stage = arena.CurrentStage;
@@ -155,8 +159,35 @@ public partial class PetArenaView
         bool ready = PetCards.DeckReady(p);
         PracticeButton.IsEnabled = !busy && ready;
         int missing = PetCards.DeckSize - p.Deck.Count;
-        DeckNeededText.Text = $"Deck needs {missing} more card{(missing == 1 ? "" : "s")} to fight";
+        string missingText = $"Deck needs {missing} more card{(missing == 1 ? "" : "s")} to fight";
+        DeckNeededText.Text = missingText;
         DeckNeededButton.Visibility = ready ? Visibility.Collapsed : Visibility.Visible;
+
+        var tourney = arena.CurrentTournament;
+        var tourneyElement = PetGame.ElementOf(tourney.Element);
+        int currentRound = p.TournamentSlot == tourney.Slot ? p.TournamentRound : 0;
+        bool clearedSlot = p.TournamentWonSlot == tourney.Slot;
+        TourneySlotText.Text = clearedSlot
+            ? $"Round {currentRound + 1}/{PetTournament.RoundsPerTournament} · Cleared · Wins: {p.TournamentWins}"
+            : $"Round {currentRound + 1}/{PetTournament.RoundsPerTournament} · Wins: {p.TournamentWins}";
+        TourneyNameText.Text = tourney.Name;
+        TourneyBadgeText.Text = tourneyElement.Name;
+        TourneyBadge.Background = BrushOf(tourneyElement.Color);
+        RefreshTournamentTimer();
+        TournamentFights.ItemsSource = tourney.Bracket.Select(c =>
+        {
+            var look = PetArena.ContenderLook(c, out string kind);
+            bool done = c.Round < currentRound, next = c.Round == currentRound;
+            return new FightRow($"{c.RoundName} · {c.Name} {kind}", PetGame.ElementOf(c.Element).Name,
+                done ? "Cleared" : next ? "Next" : "", look, next ? accent : line, done ? .55 : 1);
+        }).ToList();
+        TournamentFightButton.IsEnabled = !busy && ready;
+        TournamentDeckNeededText.Text = missingText;
+        TournamentDeckNeededButton.Visibility = ready ? Visibility.Collapsed : Visibility.Visible;
+
+        EnsureRaffleWheel();
+        SpinButton.Content = $"Spin · {PetCards.SpinPrice}";
+        SpinButton.IsEnabled = !busy && !raffleSpinning && p.Coins >= PetCards.SpinPrice;
 
         ShopList.ItemsSource = arena.ShopOffers.Select(o => new ShopRow(o.Slot, o.Card.Id, o.Card.Name,
             $"{RarityName(o.Card.Rarity)} · {ElementName(o.Card)} · {o.Card.Text}", o.Price, CardArt.For(o.Card), KindBrush(o.Card.Kind), RarityBrush(o.Card.Rarity),
@@ -165,10 +196,19 @@ public partial class PetArenaView
         MyPetVisual.PetStyle = arena.BattleLook;
     }
 
+    private void RefreshTournamentTimer()
+    {
+        if (TourneyTimerText is null) return;
+        var left = PetTournament.TimeRemaining(DateTime.Now);
+        int mins = Math.Max(1, (int)Math.Ceiling(left.TotalMinutes));
+        TourneyTimerText.Text = $"{mins}m left";
+    }
+
     private void LobbyTab_Checked(object sender, RoutedEventArgs e)
     {
         if (WorldTab is null) return;
         WorldTab.Visibility = WorldTabButton.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+        TournamentTab.Visibility = TournamentTabButton.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
         PetTab.Visibility = PetTabButton.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
         DeckTab.Visibility = DeckTabButton.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
         ShopTab.Visibility = ShopTabButton.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
@@ -178,8 +218,95 @@ public partial class PetArenaView
 
     private void DeckCard_Click(object sender, RoutedEventArgs e) { if (sender is FrameworkElement { Tag: string id }) arena.RemoveFromDeck(id); }
     private void AddToDeck_Click(object sender, RoutedEventArgs e) { if (sender is FrameworkElement { Tag: string id }) arena.AddToDeck(id); }
+    private void SellCard_Click(object sender, RoutedEventArgs e) { if (sender is FrameworkElement { Tag: string id }) arena.SellCard(id); }
     private void BuyCard_Click(object sender, RoutedEventArgs e) { if (sender is FrameworkElement { Tag: int slot }) arena.BuyCard(slot); }
     private void CollectionFilter_SelectionChanged(object sender, SelectionChangedEventArgs e) { if (IsLoaded) RefreshCards(); }
+
+    private static readonly string[] WheelSlots =
+    [
+        PetCards.Common, PetCards.Rare, PetCards.Common, PetCards.Epic,
+        PetCards.Common, PetCards.Rare, PetCards.Common, PetCards.Legendary,
+        PetCards.Common, PetCards.Rare, PetCards.Common, PetCards.Epic
+    ];
+    private bool raffleBuilt, raffleSpinning;
+
+    private void EnsureRaffleWheel()
+    {
+        if (raffleBuilt || RaffleWheel is null) return;
+        raffleBuilt = true;
+        const double cx = 58, cy = 58, r = 54;
+        for (int i = 0; i < WheelSlots.Length; i++)
+        {
+            double a0 = (i * 30 - 90) * Math.PI / 180;
+            double a1 = ((i + 1) * 30 - 90) * Math.PI / 180;
+            var p0 = new Point(cx + r * Math.Cos(a0), cy + r * Math.Sin(a0));
+            var p1 = new Point(cx + r * Math.Cos(a1), cy + r * Math.Sin(a1));
+            var seg = new PathFigure(new Point(cx, cy), [new LineSegment(p0, true), new ArcSegment(p1, new Size(r, r), 0, false, SweepDirection.Clockwise, true)], true);
+            var wedge = new System.Windows.Shapes.Path
+            {
+                Data = new PathGeometry([seg]),
+                Fill = RarityBrush(WheelSlots[i]),
+                Stroke = Brushes.White,
+                StrokeThickness = 1.2
+            };
+            RaffleWheel.Children.Add(wedge);
+        }
+        var rim = new System.Windows.Shapes.Ellipse { Width = r * 2, Height = r * 2, Stroke = Brushes.White, StrokeThickness = 2 };
+        Canvas.SetLeft(rim, cx - r); Canvas.SetTop(rim, cy - r);
+        RaffleWheel.Children.Add(rim);
+        var hub = new System.Windows.Shapes.Ellipse { Width = 20, Height = 20, Fill = Brushes.White, Stroke = Frozen("#334155"), StrokeThickness = 2 };
+        Canvas.SetLeft(hub, cx - 10); Canvas.SetTop(hub, cy - 10);
+        RaffleWheel.Children.Add(hub);
+    }
+
+    private void SpinRaffle_Click(object sender, RoutedEventArgs e)
+    {
+        if (raffleSpinning) return;
+        if (arena.SpinRaffle() is not { } result) return;
+        EnsureRaffleWheel();
+        var matching = Enumerable.Range(0, WheelSlots.Length).Where(i => WheelSlots[i] == result.Card.Rarity).ToArray();
+        int slot = matching[Random.Shared.Next(matching.Length)];
+        double targetMod = (360 - (slot * 30 + 15)) % 360;
+        double current = RaffleWheelRotate.Angle;
+        double currentMod = ((current % 360) + 360) % 360;
+        double delta = (targetMod - currentMod + 360) % 360;
+        double endAngle = current + 360 * 3 + delta;
+
+        raffleSpinning = true;
+        SpinButton.IsEnabled = false;
+        RaffleResultCard.Visibility = Visibility.Collapsed;
+
+        var anim = new DoubleAnimation(current, endAngle, TimeSpan.FromMilliseconds(950))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+        };
+        anim.Completed += (_, _) =>
+        {
+            raffleSpinning = false;
+            ShowRaffleResult(result);
+            RefreshCards();
+        };
+        RaffleWheelRotate.BeginAnimation(RotateTransform.AngleProperty, anim);
+    }
+
+    private void ShowRaffleResult(PetCards.RaffleResult result)
+    {
+        var c = result.Card;
+        RaffleResultCard.Tag = c.Id;
+        RaffleResultCard.BorderBrush = RarityBrush(c.Rarity);
+        RaffleCardBg.Background = KindBrush(c.Kind);
+        RaffleCardArt.Source = CardArt.For(c);
+        RaffleCardCost.Text = c.Cost.ToString();
+        RaffleCardName.Text = c.Name;
+        RaffleCardDetail.Text = $"{RarityName(c.Rarity)} · {ElementName(c)} · {c.Text}";
+        if (result.DuplicateCoins > 0)
+        {
+            RaffleCardExtra.Text = $"+{result.DuplicateCoins} coins";
+            RaffleCardExtra.Visibility = Visibility.Visible;
+        }
+        else RaffleCardExtra.Visibility = Visibility.Collapsed;
+        RaffleResultCard.Visibility = Visibility.Visible;
+    }
 
     private void Reroll_Click(object sender, RoutedEventArgs e)
     {
@@ -190,6 +317,7 @@ public partial class PetArenaView
     }
 
     private void CardBattle_Click(object sender, RoutedEventArgs e) => arena.StartCardBattle();
+    private void TournamentBattle_Click(object sender, RoutedEventArgs e) => arena.StartTournamentBattle();
 
     // ── Battle view ──────────────────────────────────────────────────────
 
@@ -197,6 +325,7 @@ public partial class PetArenaView
     {
         DetachCard();
         Detach();
+        DetachTrade();
         cardSession = s;
         s.RoundPlayed += OnCardRound;
         s.Ended += OnCardEnded;
@@ -205,6 +334,7 @@ public partial class PetArenaView
         board.Clear();
         dealPending = true;
         LobbyPanel.Visibility = Visibility.Collapsed;
+        TradePanel.Visibility = Visibility.Collapsed;
         BattlePanel.Visibility = Visibility.Visible;
         CardBar.Visibility = Visibility.Visible;
         MoveRow.Visibility = Visibility.Collapsed;
@@ -231,6 +361,12 @@ public partial class PetArenaView
             RightLevel.Text = $"{(enemy.Boss ? "Boss" : $"Stage {stage.Number}")} · {PetGame.ElementOf(s.Them.Loadout.Element).Name}";
             LogText.Text = $"{stage.Name}: {s.OpponentName} appears!";
             PaintTerrain(stage.Element, stage.Name, stage.Number, enemy.Boss);
+        }
+        else if (s.Tournament is { } tev && s.TournamentContender is { } tc)
+        {
+            RightLevel.Text = $"{tc.RoundName} · {PetGame.ElementOf(s.Them.Loadout.Element).Name}";
+            LogText.Text = $"{tev.Name}: {s.OpponentName} steps up!";
+            PaintTerrain(tev.Element, tev.Name, (tc.Round + 1) * 5, tc.Round == PetTournament.RoundsPerTournament - 1);
         }
         else
         {
@@ -1301,12 +1437,13 @@ public partial class PetArenaView
         RefreshHand();
         left.ShownHp = s.Me.Hp; right.ShownHp = s.Them.Hp;
         UpdateCardBars();
-        ResultTitle.Text = s.Reward is null ? "Battle ended" : s.Outcome > 0 ? "You win!" : s.Outcome < 0 ? "You lost" : "Draw";
+        ResultTitle.Text = s.Reward is null ? "Battle ended" : s.TournamentChampion ? "Champion!" : s.Outcome > 0 ? "You win!" : s.Outcome < 0 ? "You lost" : "Draw";
         ResultReason.Text = s.EndReason;
         ResultReason.Visibility = s.EndReason.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         string reward = s.Reward is { } r ? $"+{r.Xp} XP · +{r.Coins} coins" + (r.LevelsGained > 0 ? $" · Level {arena.Progress.Level}!" : "") : "";
         if (s.Drop is { } drop) reward += $"\nFound {drop.Name} ({RarityName(drop.Rarity)})";
         if (s.StageCleared && s.Stage is { } st) reward += $"\nStage {st.Number} cleared";
+        if (s.TournamentChampion && s.Tournament is { } tev) reward += $"\n{tev.Name} won";
         ResultReward.Text = reward;
         ResultReward.TextAlignment = TextAlignment.Center;
         RematchButton.Visibility = !s.IsLan || model.Peers.Any(p => p.Id == s.PeerId && p.Online) ? Visibility.Visible : Visibility.Collapsed;
